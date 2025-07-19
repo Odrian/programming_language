@@ -1,0 +1,3 @@
+asd = 5
+dsx = d + asd
+x = 5 + dsx + 1
