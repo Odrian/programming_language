@@ -2,12 +2,16 @@ use std::fmt::Display;
 use crate::error::CompilationError as CE;
 use std::fs;
 
-pub fn tokenize(filepath: &str) -> Result<Vec<TokenWithPos>, CE> {
+pub fn tokenize_file(filepath: &str) -> Result<Vec<TokenWithPos>, CE> {
     let text = fs::read_to_string(filepath).map_err(|error| CE::FileIO {
         filepath: filepath.to_string(),
         error,
     })?;
+    
+    tokenize(&text)
+}
 
+pub fn tokenize(text: &str) -> Result<Vec<TokenWithPos>, CE> {
     let tokens = split_text(&text);
 
     Ok(tokens)
@@ -99,6 +103,7 @@ fn split_text(text: &str) -> Vec<TokenWithPos> {
 
     while let Some(c) = chars.next() {
         split_state.update_place_info(PositionInFile::new(line, column));
+        column += 1;
         match c {
             '\n' => {
                 split_state.flush_buffer();
@@ -120,7 +125,6 @@ fn split_text(text: &str) -> Vec<TokenWithPos> {
                 split_state.add_char(c);
             }
         }
-        column += 1;
     }
     split_state.flush_buffer();
     split_state.tokens
