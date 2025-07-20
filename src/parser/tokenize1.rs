@@ -22,6 +22,8 @@ pub enum Token {
     String(String),         // any String
     NumberLiteral(String),  // any String starting with a digit
     Comma,                  // ,
+    Colon,                  // :
+    DoubleColon,            // ::
     Equal,                  // =
     Plus,                   // +
     CurlyBracketOpen,       // {
@@ -122,6 +124,16 @@ fn split_text(text: &str) -> Vec<TokenWithPos> {
                 split_state.flush_buffer();
                 split_state.add(Token::Equal);
             }
+            ':' => {
+                let token = if chars.peek() == Some(&':') {
+                    chars.next();
+                    Token::DoubleColon
+                } else {
+                    Token::Colon
+                };
+                split_state.flush_buffer();
+                split_state.add(token);
+            }
             ',' | '+' | '{' | '}' | '(' | ')' => {
                 let token = match c {
                     ',' => Token::Comma,
@@ -172,6 +184,24 @@ mod tests {
             Token::RoundBracketClose,
             Token::Comma,
             Token::CurlyBracketClose,
+        ];
+        let actual = tokenize_text(text);
+        assert_eq!(actual.unwrap(), expected);
+    }
+    #[test]
+    fn test_token_colon() {
+        let text = ":::dog::cat: :dog::::";
+        let expected = vec![
+            Token::DoubleColon,
+            Token::Colon,
+            Token::String("dog".to_string()),
+            Token::DoubleColon,
+            Token::String("cat".to_string()),
+            Token::Colon,
+            Token::Colon,
+            Token::String("dog".to_string()),
+            Token::DoubleColon,
+            Token::DoubleColon,
         ];
         let actual = tokenize_text(text);
         assert_eq!(actual.unwrap(), expected);

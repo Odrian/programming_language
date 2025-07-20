@@ -104,7 +104,7 @@ fn parse_statement(tokens: &[Token2WithPos]) -> Result<(Statement, &[Token2WithP
     }
     let token1 = &tokens[0];
     match &token1.token {
-        Token2::TwoSidedOperation(_) | Token2::NumberLiteral(_) | Token2::Comma => {
+        Token2::TwoSidedOperation(_) | Token2::NumberLiteral(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
             Err(CE::SyntacticsError(token1.position, String::from("expected statement")))
         }
         Token2::String(string) => {
@@ -144,12 +144,12 @@ fn parse_statement2(tokens: &[Token2WithPos], expression1: Expression, previous_
     }
     let token2 = &tokens[0];
     match &token2.token {
-        Token2::NumberLiteral(_) | Token2::String(_) | Token2::Comma => {
+        Token2::NumberLiteral(_) | Token2::String(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
             Ok((Statement::Expression(expression1), tokens))
         }
         Token2::TwoSidedOperation(TwoSidedOperation::Equal) => {
             let (expression2, tokens) = parse_expression(&tokens[1..], token2.position)?;
-            let statement = Statement::SetVariable { expression1, expression2 };
+            let statement = Statement::new_set(expression1, expression2);
             Ok((statement, tokens))
         }
         Token2::TwoSidedOperation(_) => {
@@ -167,7 +167,7 @@ fn parse_expression(tokens: &[Token2WithPos], previous_place_info: PositionInFil
     }
     let token1 = &tokens[0];
     match &token1.token {
-        Token2::TwoSidedOperation(_) | Token2::Comma => {
+        Token2::TwoSidedOperation(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
             Err(CE::SyntacticsError(token1.position, String::from("expected expression")))
         }
         Token2::String(string) => {
@@ -199,7 +199,7 @@ fn parse_expression2(tokens: &[Token2WithPos], expression1: Expression) -> Resul
     }
     let token2 = &tokens[0];
     match &token2.token {
-        Token2::String(_) | Token2::NumberLiteral(_) | Token2::Comma => {
+        Token2::String(_) | Token2::NumberLiteral(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
             Ok((expression1, tokens))
         }
         Token2::TwoSidedOperation(TwoSidedOperation::Equal) => {
@@ -264,15 +264,15 @@ mod tests {
 
         let variable = Expression::Variable(String::from("cat"));
         assert_eq!(parse("cat = cat + (cat + cat)"),
-                   Ok(vec![Statement::SetVariable {
-                       expression1: variable.clone(),
-                       expression2: Expression::plus(
+                   Ok(vec![Statement::new_set(
+                       variable.clone(),
+                       Expression::plus(
                            variable.clone(),
                            Expression::round_bracket(
                                Expression::plus(variable.clone(), variable.clone())
                            )
                        )
-                   }])
+                   )])
         );
 
         assert_eq!(parse("if cat { }"),

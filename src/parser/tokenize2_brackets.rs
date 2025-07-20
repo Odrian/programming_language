@@ -33,6 +33,8 @@ pub enum Token2 {
     String(String),
     NumberLiteral(String),
     Comma,
+    Colon,
+    DoubleColon,
     TwoSidedOperation(TwoSidedOperation),
     Bracket(Vec<Token2WithPos>, BracketType),
 }
@@ -76,6 +78,9 @@ fn parse_inside_brackets(
             Token::NumberLiteral(s) => Token2::NumberLiteral(s.clone()),
 
             Token::Comma => Token2::Comma,
+            Token::Colon => Token2::Colon,
+            Token::DoubleColon => Token2::DoubleColon,
+
             Token::Plus => Token2::TwoSidedOperation(TwoSidedOperation::Plus),
             Token::Equal => Token2::TwoSidedOperation(TwoSidedOperation::Equal),
 

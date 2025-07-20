@@ -1,10 +1,10 @@
 # TODO
 * parse "x = y" (done)
 * parse if, while (done)
-* parse function
+* parse function (in progress)
 * add print, read function
 * linking
-* compile(only int8 type)
+* compile with int8 type only
 * add types
 * add arrays
 
@@ -37,3 +37,19 @@ name :: (argument : type) -> result_type {
 
 name(argument)
 ```
+
+# Parsing algorithm
+
+input file must contain any number of statements
+
+## valid statements
+
+* text = expression
+* if expression { 'any number of statements' }
+
+## valid expression
+
+* text
+* number
+* (expression)
+* expression + expression
