@@ -32,6 +32,7 @@ impl Debug for Token2WithPos {
 pub enum Token2 {
     String(String),
     NumberLiteral(String),
+    Comma,
     TwoSidedOperation(TwoSidedOperation),
     Bracket(Vec<Token2WithPos>, BracketType),
 }
@@ -74,6 +75,7 @@ fn parse_inside_brackets(
             Token::String(s) => Token2::String(s.clone()),
             Token::NumberLiteral(s) => Token2::NumberLiteral(s.clone()),
 
+            Token::Comma => Token2::Comma,
             Token::Plus => Token2::TwoSidedOperation(TwoSidedOperation::Plus),
             Token::Equal => Token2::TwoSidedOperation(TwoSidedOperation::Equal),
 
@@ -146,6 +148,9 @@ mod tests {
         );
         assert_eq!(parse(vec![Token::RoundBracketOpen, Token::RoundBracketClose]),
             Ok(vec![Token2::Bracket(vec![], BracketType::Round)])
+        );
+        assert_eq!(parse(vec![Token::Comma, Token::Plus]),
+           Ok(vec![Token2::Comma, Token2::TwoSidedOperation(TwoSidedOperation::Plus)])
         );
 
         assert_eq!(parse(vec![Token::CurlyBracketOpen, Token::Plus, Token::String(string.clone()), Token::Equal, Token::String(string.clone()), Token::CurlyBracketClose]).unwrap(),

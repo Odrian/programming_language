@@ -104,7 +104,7 @@ fn parse_statement(tokens: &[Token2WithPos]) -> Result<(Statement, &[Token2WithP
     }
     let token1 = &tokens[0];
     match &token1.token {
-        Token2::TwoSidedOperation(_) | Token2::NumberLiteral(_) => {
+        Token2::TwoSidedOperation(_) | Token2::NumberLiteral(_) | Token2::Comma => {
             Err(CE::SyntacticsError(token1.position, String::from("expected statement")))
         }
         Token2::String(string) => {
@@ -116,10 +116,10 @@ fn parse_statement(tokens: &[Token2WithPos]) -> Result<(Statement, &[Token2WithP
                         return Err(CE::SyntacticsError(tokens.last().unwrap().position, format!("expected {name} body after that")));
                     }
                     let next_token = &tokens_[0];
-                    let Token2::Bracket(boxed, BracketType::Curly) = &next_token.token else {
+                    let Token2::Bracket(vec, BracketType::Curly) = &next_token.token else {
                         return Err(CE::SyntacticsError(token1.position, String::from("expected statement")))
                     };
-                    let body = parse_statements(boxed)?;
+                    let body = parse_statements(vec)?;
 
                     if name == "if" {
                         Ok((Statement::new_if(condition, body), &tokens_[1..]))
@@ -135,9 +135,6 @@ fn parse_statement(tokens: &[Token2WithPos]) -> Result<(Statement, &[Token2WithP
         }
         Token2::Bracket(_, _) => {
             Err(CE::SyntacticsError(token1.position, format!("unexpected bracket open at {}, expected statement", token1.position)))
-            // let statements = parse_statements(boxed)?;
-            // let statement = Statement::Bracket(Box::new(statements), *bracket);
-            // Ok((statement, &tokens[1..]))
         }
     }
 }
@@ -147,7 +144,7 @@ fn parse_statement2(tokens: &[Token2WithPos], expression1: Expression, previous_
     }
     let token2 = &tokens[0];
     match &token2.token {
-        Token2::NumberLiteral(_) | Token2::String(_) => {
+        Token2::NumberLiteral(_) | Token2::String(_) | Token2::Comma => {
             Ok((Statement::Expression(expression1), tokens))
         }
         Token2::TwoSidedOperation(TwoSidedOperation::Equal) => {
@@ -170,7 +167,7 @@ fn parse_expression(tokens: &[Token2WithPos], previous_place_info: PositionInFil
     }
     let token1 = &tokens[0];
     match &token1.token {
-        Token2::TwoSidedOperation(_) => {
+        Token2::TwoSidedOperation(_) | Token2::Comma => {
             Err(CE::SyntacticsError(token1.position, String::from("expected expression")))
         }
         Token2::String(string) => {
@@ -181,8 +178,8 @@ fn parse_expression(tokens: &[Token2WithPos], previous_place_info: PositionInFil
             let expression1 = Expression::NumberLiteral(value.to_string());
             parse_expression2(&tokens[1..], expression1)
         }
-        Token2::Bracket(boxed, BracketType::Round) => {
-            let (expression, tokens_) = parse_expression(&boxed, token1.position)?;
+        Token2::Bracket(vec, BracketType::Round) => {
+            let (expression, tokens_) = parse_expression(vec, token1.position)?;
             if tokens_.is_empty() {
                 let expression1 = Expression::round_bracket(expression);
                 parse_expression2(&tokens[1..], expression1)
@@ -202,7 +199,7 @@ fn parse_expression2(tokens: &[Token2WithPos], expression1: Expression) -> Resul
     }
     let token2 = &tokens[0];
     match &token2.token {
-        Token2::String(_) | Token2::NumberLiteral(_) => {
+        Token2::String(_) | Token2::NumberLiteral(_) | Token2::Comma => {
             Ok((expression1, tokens))
         }
         Token2::TwoSidedOperation(TwoSidedOperation::Equal) => {

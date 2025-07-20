@@ -21,6 +21,7 @@ pub fn tokenize(text: &str) -> Result<Vec<TokenWithPos>, CE> {
 pub enum Token {
     String(String),         // any String
     NumberLiteral(String),  // any String starting with a digit
+    Comma,                  // ,
     Equal,                  // =
     Plus,                   // +
     CurlyBracketOpen,       // {
@@ -121,8 +122,9 @@ fn split_text(text: &str) -> Vec<TokenWithPos> {
                 split_state.flush_buffer();
                 split_state.add(Token::Equal);
             }
-            '+' | '{' | '}' | '(' | ')' => {
+            ',' | '+' | '{' | '}' | '(' | ')' => {
                 let token = match c {
+                    ',' => Token::Comma,
                     '+' => Token::Plus,
                     '{' => Token::CurlyBracketOpen,
                     '}' => Token::CurlyBracketClose,
@@ -155,11 +157,12 @@ mod tests {
 
     #[test]
     fn test_tokens() {
-        let text = "cat+323 dog=3d{({)}";
+        let text = "cat+323,dog=3d{({),}";
         let expected = vec![
             Token::String("cat".to_string()),
             Token::Plus,
             Token::NumberLiteral("323".to_string()),
+            Token::Comma,
             Token::String("dog".to_string()),
             Token::Equal,
             Token::NumberLiteral("3d".to_string()),
@@ -167,6 +170,7 @@ mod tests {
             Token::RoundBracketOpen,
             Token::CurlyBracketOpen,
             Token::RoundBracketClose,
+            Token::Comma,
             Token::CurlyBracketClose,
         ];
         let actual = tokenize_text(text);
