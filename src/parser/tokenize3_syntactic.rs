@@ -20,17 +20,20 @@ pub fn parse_statements(tokens: &[Token2WithPos]) -> Result<Vec<Statement>, CE> 
 pub enum Statement {
     SetVariable { expression1: Expression, expression2: Expression },
     // Bracket(Box<Vec<Statement>>, BracketType),
-    IF { condition: Expression, body: Box<Vec<Statement>> },
-    WHILE { condition: Expression, body: Box<Vec<Statement>> },
+    If { condition: Expression, body: Vec<Statement> },
+    While { condition: Expression, body: Vec<Statement> },
     Expression(Expression),
 }
 
 impl Statement {
-    fn new_if(condition: Expression, body: Vec<Statement>) -> Statement {
-        Statement::IF { condition, body: Box::new(body) }
+    pub fn new_set(expression1: Expression, expression2: Expression) -> Self {
+        Statement::SetVariable { expression1, expression2 }
     }
-    fn new_while(condition: Expression, body: Vec<Statement>) -> Statement {
-        Statement::WHILE { condition, body: Box::new(body) }
+    pub fn new_if(condition: Expression, body: Vec<Statement>) -> Statement {
+        Statement::If { condition, body }
+    }
+    pub fn new_while(condition: Expression, body: Vec<Statement>) -> Statement {
+        Statement::While { condition, body }
     }
 }
 
@@ -44,6 +47,9 @@ pub enum Expression {
 impl Expression {
     pub fn plus(expression1: Expression, expression2: Expression) -> Self {
         Expression::Plus(Box::new(expression1), Box::new(expression2))
+    }
+    pub fn round_bracket(expression: Expression) -> Self {
+        Expression::RoundBracket(Box::new(expression))
     }
 }
 
@@ -59,11 +65,11 @@ impl Display for Statement {
             Self::Expression(expression) => {
                 write!(f, "{}", expression)
             }
-            Self::IF { condition, body } => {
+            Self::If { condition, body } => {
                 let inside = body.iter().map(|s| add_tab(s.to_string())).collect::<Vec<_>>().join("\n");
                 write!(f, "if {} {{\n{}\n}}", condition, inside)
             }
-            Self::WHILE { condition, body } => {
+            Self::While { condition, body } => {
                 let inside = body.iter().map(|s| add_tab(s.to_string())).collect::<Vec<_>>().join("\n");
                 write!(f, "while {} {{\n{}\n}}", condition, inside)
             }
@@ -178,7 +184,7 @@ fn parse_expression(tokens: &[Token2WithPos], previous_place_info: PositionInFil
         Token2::Bracket(boxed, BracketType::Round) => {
             let (expression, tokens_) = parse_expression(&boxed, token1.position)?;
             if tokens_.is_empty() {
-                let expression1 = Expression::RoundBracket(Box::new(expression));
+                let expression1 = Expression::round_bracket(expression);
                 parse_expression2(&tokens[1..], expression1)
             } else {
                 Err(CE::SyntacticsError(tokens_[0].position, String::from("expected ')'")))
@@ -207,7 +213,7 @@ fn parse_expression2(tokens: &[Token2WithPos], expression1: Expression) -> Resul
                 TwoSidedOperation::Equal => unreachable!(),
                 TwoSidedOperation::Plus => {
                     let (expression2, tokens) = parse_expression(&tokens[1..], token2.position)?;
-                    let expression = Expression::Plus(Box::new(expression1), Box::new(expression2));
+                    let expression = Expression::plus(expression1, expression2);
                     Ok((expression, tokens))
                 }
             }
@@ -215,5 +221,89 @@ fn parse_expression2(tokens: &[Token2WithPos], expression1: Expression) -> Resul
         Token2::Bracket(_, _) => {
             Ok((expression1, tokens))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::{tokenize1, tokenize2_brackets};
+
+    #[test]
+    fn test_statements() {
+        fn parse(text: &str) -> Result<Vec<Statement>, CE> {
+            let tokens = tokenize1::tokenize(text)?;
+            let tokens2 = tokenize2_brackets::parse_brackets(tokens)?;
+            let statements = parse_statements(&tokens2)?;
+            Ok(statements)
+        }
+        assert_eq!(parse("cat = cat").err(), None);
+        assert_eq!(parse("cat = 4").err(), None);
+        assert_eq!(parse("cat = cat + cat").err(), None);
+        assert_eq!(parse("cat = cat + 4").err(), None);
+        assert_eq!(parse("cat = 4 + cat").err(), None);
+        assert_eq!(parse("cat = 4 + 4").err(), None);
+        assert_eq!(parse("cat = cat + cat + cat").err(), None);
+        assert_eq!(parse("cat = cat + cat + cat + cat").err(), None);
+
+        assert_ne!(parse("4 = cat").err(), None);
+        assert_ne!(parse("cat = cat = cat").err(), None);
+        assert_ne!(parse("cat + cat = cat").err(), None);
+        assert_ne!(parse("cat + 4 = cat").err(), None);
+        assert_ne!(parse("cat + cat").err(), None);
+        assert_ne!(parse("cat += cat").err(), None);
+        assert_ne!(parse("cat =+ cat").err(), None);
+        assert_ne!(parse("cat = +cat").err(), None);
+        assert_ne!(parse("cat == cat").err(), None);
+
+        assert_eq!(parse("cat = (4 + 4)").err(), None);
+        assert_eq!(parse("cat = ((4 + 4))").err(), None);
+        assert_eq!(parse("cat = 4 + (4 + 4)").err(), None);
+        assert_eq!(parse("cat = (4 + 4) + 4").err(), None);
+        assert_eq!(parse("cat = cat \n cat = cat").err(), None);
+
+        assert_ne!(parse("(cat + cat) = cat").err(), None);
+        assert_ne!(parse("(4 + 4) = 4").err(), None);
+
+        let variable = Expression::Variable(String::from("cat"));
+        assert_eq!(parse("cat = cat + (cat + cat)"),
+                   Ok(vec![Statement::SetVariable {
+                       expression1: variable.clone(),
+                       expression2: Expression::plus(
+                           variable.clone(),
+                           Expression::round_bracket(
+                               Expression::plus(variable.clone(), variable.clone())
+                           )
+                       )
+                   }])
+        );
+
+        assert_eq!(parse("if cat { }"),
+            Ok(vec![Statement::new_if(variable.clone(), vec![], )])
+        );
+        assert_eq!(parse("if cat { cat = cat }"),
+            Ok(vec![Statement::new_if(variable.clone(),
+                vec![Statement::new_set(variable.clone(), variable.clone())],
+            )])
+        );
+        assert_eq!(parse("if cat { cat = cat cat = cat }"),
+           Ok(vec![Statement::new_if(variable.clone(),
+                vec![
+                    Statement::new_set(variable.clone(), variable.clone()),
+                    Statement::new_set(variable.clone(), variable.clone())
+                ],
+           )])
+        );
+        assert_eq!(parse("while cat { }"),
+           Ok(vec![Statement::new_while(variable.clone(), vec![], )])
+        );
+        assert_eq!(parse("while cat { cat = cat }"),
+            Ok(vec![Statement::new_while(variable.clone(),
+                vec![Statement::new_set(variable.clone(), variable.clone())],
+            )])
+        );
+
+        assert_ne!(parse("if cat = cat { cat = cat }").err(), None);
+        assert_ne!(parse("if { cat = cat }").err(), None);
     }
 }

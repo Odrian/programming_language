@@ -1,6 +1,6 @@
 # TODO
 * parse "x = y" (done)
-* parse if, while
+* parse if, while (done)
 * parse function
 * add print, read function
 * linking

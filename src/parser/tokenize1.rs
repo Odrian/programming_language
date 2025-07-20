@@ -12,7 +12,7 @@ pub fn tokenize_file(filepath: &str) -> Result<Vec<TokenWithPos>, CE> {
 }
 
 pub fn tokenize(text: &str) -> Result<Vec<TokenWithPos>, CE> {
-    let tokens = split_text(&text);
+    let tokens = split_text(text);
 
     Ok(tokens)
 }
@@ -143,4 +143,39 @@ fn split_text(text: &str) -> Vec<TokenWithPos> {
     }
     split_state.flush_buffer();
     split_state.tokens
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tokenize_text(text: &str) -> Result<Vec<Token>, CE> {
+        tokenize(text).map(|v| v.into_iter().map(|t| t.token).collect())
+    }
+
+    #[test]
+    fn test_tokens() {
+        let text = "cat+323 dog=3d{({)}";
+        let expected = vec![
+            Token::String("cat".to_string()),
+            Token::Plus,
+            Token::NumberLiteral("323".to_string()),
+            Token::String("dog".to_string()),
+            Token::Equal,
+            Token::NumberLiteral("3d".to_string()),
+            Token::CurlyBracketOpen,
+            Token::RoundBracketOpen,
+            Token::CurlyBracketOpen,
+            Token::RoundBracketClose,
+            Token::CurlyBracketClose,
+        ];
+        let actual = tokenize_text(text);
+        assert_eq!(actual.unwrap(), expected);
+    }
+
+    #[test]
+    fn text_empty_string() {
+        assert_eq!(tokenize_text(""), Ok(Vec::new()));
+        assert_eq!(tokenize_text(" "), Ok(Vec::new()));
+    }
 }

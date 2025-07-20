@@ -9,7 +9,7 @@ pub fn parse_brackets(tokens: Vec<TokenWithPos>) -> Result<Vec<Token2WithPos>, C
         unreachable!("")
     }
     let Token2::Bracket(boxed, _) = token.token else { unreachable!() };
-    Ok(*boxed)
+    Ok(boxed)
 }
 
 #[derive(Eq, PartialEq)]
@@ -33,7 +33,7 @@ pub enum Token2 {
     String(String),
     NumberLiteral(String),
     TwoSidedOperation(TwoSidedOperation),
-    Bracket(Box<Vec<Token2WithPos>>, BracketType),
+    Bracket(Vec<Token2WithPos>, BracketType),
 }
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum BracketType {
@@ -45,13 +45,6 @@ pub enum BracketType {
     // DoubleQuotes
 }
 impl BracketType {
-    fn from_char(c: char) -> BracketType {
-        match c {
-            '{' | '}' => BracketType::Curly,
-            '(' | ')' => BracketType::Round,
-            _ => panic!("Unexpected character in bracket_type"),
-        }
-    }
     fn from_token(token: &Token) -> BracketType {
         match token {
             Token::CurlyBracketClose | Token::CurlyBracketOpen => BracketType::Curly,
@@ -88,7 +81,7 @@ fn parse_inside_brackets(
                 let bracket_type = BracketType::from_token(&token.token);
                 let (new_token, new_index) =
                     parse_inside_brackets(tokens, index + 1, bracket_type)?;
-                index = new_index - 1; // -1 because later will be index += 1
+                index = new_index - 1; // -1 because later will be 'index += 1'
                 new_token.token
             }
             Token::CurlyBracketClose | Token::RoundBracketClose => {
@@ -101,7 +94,7 @@ fn parse_inside_brackets(
                         end_bracket_type: bracket_type,
                     });
                 }
-                let result_token = Token2::Bracket(Box::new(result_tokens), bracket_type);
+                let result_token = Token2::Bracket(result_tokens, bracket_type);
                 return Ok((Token2WithPos::new(result_token, PositionInFile::default()), index + 1));
             }
         };
@@ -110,7 +103,7 @@ fn parse_inside_brackets(
     }
 
     if open_bracket_type == BracketType::None {
-        let result_token = Token2::Bracket(Box::new(result_tokens), BracketType::None);
+        let result_token = Token2::Bracket(result_tokens, BracketType::None);
         Ok((Token2WithPos::new(result_token, PositionInFile::default()), tokens.len()))
     } else {
         Err(CE::BracketNotClosed(
@@ -132,12 +125,11 @@ mod tests {
     }
     fn parse(tokens: Vec<Token>) -> Result<Vec<Token2>, CE> {
         let tokens = tokens.into_iter().map(|x| TokenWithPos::new(x, PositionInFile::default())).collect();
-        parse_brackets(tokens).map(|v| map_remove_place(v))
+        parse_brackets(tokens).map(map_remove_place)
     }
     fn bracket_token2(vec: Vec<Token2>, bracket_type: BracketType) -> Token2 {
         let vec = map_add_place(vec);
-        let token = Token2::Bracket(Box::new(vec), bracket_type);
-        token
+        Token2::Bracket(vec, bracket_type)
     }
     #[test]
     fn test_parse_brackets() {
@@ -150,10 +142,10 @@ mod tests {
         assert_ne!(parse(vec![Token::CurlyBracketOpen, Token::CurlyBracketClose, Token::RoundBracketOpen]).err(), None);
 
         assert_eq!(parse(vec![Token::CurlyBracketOpen, Token::CurlyBracketClose]),
-            Ok(vec![Token2::Bracket(Box::new(vec![]), BracketType::Curly)])
+            Ok(vec![Token2::Bracket(vec![], BracketType::Curly)])
         );
         assert_eq!(parse(vec![Token::RoundBracketOpen, Token::RoundBracketClose]),
-            Ok(vec![Token2::Bracket(Box::new(vec![]), BracketType::Round)])
+            Ok(vec![Token2::Bracket(vec![], BracketType::Round)])
         );
 
         assert_eq!(parse(vec![Token::CurlyBracketOpen, Token::Plus, Token::String(string.clone()), Token::Equal, Token::String(string.clone()), Token::CurlyBracketClose]).unwrap(),
