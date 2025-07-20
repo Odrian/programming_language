@@ -20,9 +20,18 @@ pub fn parse_statements(tokens: &[Token2WithPos]) -> Result<Vec<Statement>, CE> 
 pub enum Statement {
     SetVariable { expression1: Expression, expression2: Expression },
     // Bracket(Box<Vec<Statement>>, BracketType),
-    // IF { condition: Box<Statement>, body: Box<Vec<Statement>>
-    // WHEN { condition: Box<Statement>, body: Box<Vec<Statement>>
+    IF { condition: Expression, body: Box<Vec<Statement>> },
+    WHILE { condition: Expression, body: Box<Vec<Statement>> },
     Expression(Expression),
+}
+
+impl Statement {
+    fn new_if(condition: Expression, body: Vec<Statement>) -> Statement {
+        Statement::IF { condition, body: Box::new(body) }
+    }
+    fn new_while(condition: Expression, body: Vec<Statement>) -> Statement {
+        Statement::WHILE { condition, body: Box::new(body) }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -40,12 +49,23 @@ impl Expression {
 
 impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn add_tab(s: String) -> String {
+            "    ".to_owned() + s.as_str()
+        }
         match self {
             Self::SetVariable { expression1, expression2 } => {
                 write!(f, "{} = {}", expression1, expression2)
             }
             Self::Expression(expression) => {
                 write!(f, "{}", expression)
+            }
+            Self::IF { condition, body } => {
+                let inside = body.iter().map(|s| add_tab(s.to_string())).collect::<Vec<_>>().join("\n");
+                write!(f, "if {} {{\n{}\n}}", condition, inside)
+            }
+            Self::WHILE { condition, body } => {
+                let inside = body.iter().map(|s| add_tab(s.to_string())).collect::<Vec<_>>().join("\n");
+                write!(f, "while {} {{\n{}\n}}", condition, inside)
             }
             // Self::Bracket(statements, bracket) => {
             //     match bracket {
@@ -79,11 +99,33 @@ fn parse_statement(tokens: &[Token2WithPos]) -> Result<(Statement, &[Token2WithP
     let token1 = &tokens[0];
     match &token1.token {
         Token2::TwoSidedOperation(_) | Token2::NumberLiteral(_) => {
-            Err(CE::SyntacticsError(token1.position, format!("expected statement at {}", token1.position)))
+            Err(CE::SyntacticsError(token1.position, String::from("expected statement")))
         }
         Token2::String(string) => {
-            let expression1 = Expression::Variable(string.clone());
-            parse_statement2(&tokens[1..], expression1, token1.position)
+            match string.as_str() {
+                "if" | "while" => {
+                    let name = string.as_str();
+                    let (condition, tokens_) = parse_expression(&tokens[1..], token1.position)?;
+                    if tokens_.is_empty() {
+                        return Err(CE::SyntacticsError(tokens.last().unwrap().position, format!("expected {name} body after that")));
+                    }
+                    let next_token = &tokens_[0];
+                    let Token2::Bracket(boxed, BracketType::Curly) = &next_token.token else {
+                        return Err(CE::SyntacticsError(token1.position, String::from("expected statement")))
+                    };
+                    let body = parse_statements(boxed)?;
+
+                    if name == "if" {
+                        Ok((Statement::new_if(condition, body), &tokens_[1..]))
+                    } else {
+                        Ok((Statement::new_while(condition, body), &tokens_[1..]))
+                    }
+                }
+                _ => {
+                    let expression1 = Expression::Variable(string.clone());
+                    parse_statement2(&tokens[1..], expression1, token1.position)
+                }
+            }
         }
         Token2::Bracket(_, _) => {
             Err(CE::SyntacticsError(token1.position, format!("unexpected bracket open at {}, expected statement", token1.position)))

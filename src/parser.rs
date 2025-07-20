@@ -1,6 +1,6 @@
 use crate::error::CompilationError as CE;
 
-mod syntactical;
+mod tokenize3_syntactic;
 mod tokenize2_brackets;
 mod tokenize1;
 
@@ -19,7 +19,7 @@ pub fn parse(filepath: &str) -> Result<(), CE> {
     if DEBUG {
         println!("{tokens2:?}")
     }
-    let statements = syntactical::parse_statements(&tokens2)?;
+    let statements = tokenize3_syntactic::parse_statements(&tokens2)?;
 
     for statement in statements {
         println!("{statement}");
@@ -31,7 +31,7 @@ pub fn parse(filepath: &str) -> Result<(), CE> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::syntactical::{Expression, Statement};
+    use crate::parser::tokenize3_syntactic::{Expression, Statement};
     use crate::parser::tokenize1::Token;
 
     fn tokenize_text(text: &str) -> Result<Vec<Token>, CE> {
@@ -57,7 +57,7 @@ mod tests {
         fn parse(text: &str) -> Result<Vec<Statement>, CE> {
             let tokens = tokenize1::tokenize(text)?;
             let tokens2 = tokenize2_brackets::parse_brackets(tokens)?;
-            let statements = syntactical::parse_statements(&tokens2)?;
+            let statements = tokenize3_syntactic::parse_statements(&tokens2)?;
             Ok(statements)
         }
         assert_eq!(parse("cat = cat").err(), None);
