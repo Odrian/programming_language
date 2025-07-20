@@ -5,9 +5,9 @@ use std::fs;
 pub fn tokenize_file(filepath: &str) -> Result<Vec<TokenWithPos>, CE> {
     let text = fs::read_to_string(filepath).map_err(|error| CE::FileIO {
         filepath: filepath.to_string(),
-        error,
+        error: error.kind(), 
     })?;
-    
+
     tokenize(&text)
 }
 
@@ -17,22 +17,29 @@ pub fn tokenize(text: &str) -> Result<Vec<TokenWithPos>, CE> {
     Ok(tokens)
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
-    String(String), // any String
-    NumberLiteral(String), // any String starting with a digit
-    Equal,   //  =
-    Plus,    //  +
+    String(String),         // any String
+    NumberLiteral(String),  // any String starting with a digit
+    Equal,                  // =
+    Plus,                   // +
+    CurlyBracketOpen,       // {
+    CurlyBracketClose,      // }
+    RoundBracketOpen,       // (
+    RoundBracketClose,      // )
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct PositionInFile {
     line: u32,
     column: u32,
 }
 impl PositionInFile {
-    fn new(line: u32, column: u32) -> Self {
+    pub fn new(line: u32, column: u32) -> Self {
         Self { line, column }
+    }
+    pub fn default() -> Self {
+        Self::new(0, 0)
     }
 }
 impl Display for PositionInFile {
@@ -46,7 +53,7 @@ pub struct TokenWithPos {
     pub position: PositionInFile,
 }
 impl TokenWithPos {
-    fn new(token: Token, place: PositionInFile) -> Self {
+    pub fn new(token: Token, place: PositionInFile) -> Self {
         Self { token, position: place }
     }
 }
@@ -62,8 +69,8 @@ impl TokenizeState {
         Self {
             tokens: Vec::new(),
             buffer: String::new(),
-            buffer_place_info: PositionInFile::new(0, 0),
-            now_place_info: PositionInFile::new(0, 0),
+            buffer_place_info: PositionInFile::default(),
+            now_place_info: PositionInFile::default(),
         }
     }
     fn add_char(&mut self, c: char) {
@@ -114,9 +121,17 @@ fn split_text(text: &str) -> Vec<TokenWithPos> {
                 split_state.flush_buffer();
                 split_state.add(Token::Equal);
             }
-            '+' => {
+            '+' | '{' | '}' | '(' | ')' => {
+                let token = match c {
+                    '+' => Token::Plus,
+                    '{' => Token::CurlyBracketOpen,
+                    '}' => Token::CurlyBracketClose,
+                    '(' => Token::RoundBracketOpen,
+                    ')' => Token::RoundBracketClose,
+                    _ => unreachable!()
+                };
                 split_state.flush_buffer();
-                split_state.add(Token::Plus);
+                split_state.add(token);
             }
             _ if c.is_ascii_whitespace() => {
                 split_state.flush_buffer();

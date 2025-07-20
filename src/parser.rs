@@ -1,13 +1,25 @@
 use crate::error::CompilationError as CE;
 
 mod syntactical;
-mod tokenizer;
+mod tokenize2_brackets;
+mod tokenize1;
 
-pub use tokenizer::PositionInFile;
+pub use tokenize1::PositionInFile;
+pub use tokenize2_brackets::BracketType;
+
+const DEBUG: bool = false;
 
 pub fn parse(filepath: &str) -> Result<(), CE> {
-    let tokens = tokenizer::tokenize_file(filepath)?;
-    let statements = syntactical::parse(&tokens)?;
+    let tokens = tokenize1::tokenize_file(filepath)?;
+    if DEBUG {
+        let tokens_: Vec<_> = tokens.iter().map(|t| t.token.clone()).collect();
+        println!("{tokens_:?}")
+    }
+    let tokens2 = tokenize2_brackets::parse_brackets(tokens)?;
+    if DEBUG {
+        println!("{tokens2:?}")
+    }
+    let statements = syntactical::parse_statements(&tokens2)?;
 
     for statement in statements {
         println!("{statement}");
@@ -19,11 +31,11 @@ pub fn parse(filepath: &str) -> Result<(), CE> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::syntactical::Statement;
-    use crate::parser::tokenizer::Token;
+    use crate::parser::syntactical::{Expression, Statement};
+    use crate::parser::tokenize1::Token;
 
     fn tokenize_text(text: &str) -> Result<Vec<Token>, CE> {
-        tokenizer::tokenize(text).map(|v| v.into_iter().map(|t| t.token).collect())
+        tokenize1::tokenize(text).map(|v| v.into_iter().map(|t| t.token).collect())
     }
 
     #[test]
@@ -43,14 +55,50 @@ mod tests {
     #[test]
     fn test_statements() {
         fn parse(text: &str) -> Result<Vec<Statement>, CE> {
-            let tokens = tokenizer::tokenize(text)?;
-            let statements = syntactical::parse(&tokens)?;
+            let tokens = tokenize1::tokenize(text)?;
+            let tokens2 = tokenize2_brackets::parse_brackets(tokens)?;
+            let statements = syntactical::parse_statements(&tokens2)?;
             Ok(statements)
         }
-        assert!(parse("cat = cat").is_ok());
-        assert!(parse("cat = 4").is_ok());
+        assert_eq!(parse("cat = cat").err(), None);
+        assert_eq!(parse("cat = 4").err(), None);
+        assert_eq!(parse("cat = cat + cat").err(), None);
+        assert_eq!(parse("cat = cat + 4").err(), None);
+        assert_eq!(parse("cat = 4 + cat").err(), None);
+        assert_eq!(parse("cat = 4 + 4").err(), None);
+        assert_eq!(parse("cat = cat + cat + cat").err(), None);
+        assert_eq!(parse("cat = cat + cat + cat + cat").err(), None);
 
-        assert!(parse("4 = cat").is_err());
-        assert!(parse("cat = cat = cat").is_err());
+        assert_ne!(parse("4 = cat").err(), None);
+        assert_ne!(parse("cat = cat = cat").err(), None);
+        assert_ne!(parse("cat + cat = cat").err(), None);
+        assert_ne!(parse("cat + 4 = cat").err(), None);
+        assert_ne!(parse("cat + cat").err(), None);
+        assert_ne!(parse("cat += cat").err(), None);
+        assert_ne!(parse("cat =+ cat").err(), None);
+        assert_ne!(parse("cat = +cat").err(), None);
+        assert_ne!(parse("cat == cat").err(), None);
+
+        assert_eq!(parse("cat = (4 + 4)").err(), None);
+        assert_eq!(parse("cat = ((4 + 4))").err(), None);
+        assert_eq!(parse("cat = 4 + (4 + 4)").err(), None);
+        assert_eq!(parse("cat = (4 + 4) + 4").err(), None);
+        assert_eq!(parse("cat = cat \n cat = cat").err(), None);
+
+        assert_ne!(parse("(cat + cat) = cat").err(), None);
+        assert_ne!(parse("(4 + 4) = 4").err(), None);
+
+        let variable = Expression::Variable(String::from("cat"));
+        assert_eq!(parse("cat = cat + (cat + cat)"),
+            Ok(vec![Statement::SetVariable {
+                expression1: variable.clone(),
+                expression2: Expression::plus(
+                    variable.clone(),
+                    Expression::RoundBracket(Box::new(
+                        Expression::plus(variable.clone(), variable.clone())
+                    ))
+                )
+            }])
+        )
     }
 }
