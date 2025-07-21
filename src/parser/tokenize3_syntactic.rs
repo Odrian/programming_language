@@ -55,8 +55,9 @@ impl Expression {
 
 impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn add_tab(s: String) -> String {
-            "    ".to_owned() + s.as_str()
+        fn statements_to_string_with_tabs(statements: &[Statement]) -> String {
+            let string = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
+            "    ".to_string() + string.replace("\n", "\n    ").as_str()
         }
         match self {
             Self::SetVariable { expression1, expression2 } => {
@@ -66,11 +67,11 @@ impl Display for Statement {
                 write!(f, "{}", expression)
             }
             Self::If { condition, body } => {
-                let inside = body.iter().map(|s| add_tab(s.to_string())).collect::<Vec<_>>().join("\n");
+                let inside = statements_to_string_with_tabs(body);
                 write!(f, "if {} {{\n{}\n}}", condition, inside)
             }
             Self::While { condition, body } => {
-                let inside = body.iter().map(|s| add_tab(s.to_string())).collect::<Vec<_>>().join("\n");
+                let inside = statements_to_string_with_tabs(body);
                 write!(f, "while {} {{\n{}\n}}", condition, inside)
             }
             // Self::Bracket(statements, bracket) => {
