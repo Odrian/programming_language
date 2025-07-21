@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use crate::error::CompilationError as CE;
-use crate::parser::tokenize2_brackets::{Token2WithPos, Token2, TwoSidedOperation, BracketType};
-use crate::parser::tokenize1::PositionInFile;
+use crate::parser::parse2_brackets::{Token2WithPos, Token2, TwoSidedOperation, BracketType};
+use crate::parser::parse1_tokenize::PositionInFile;
 
 pub fn parse_statements(tokens: &[Token2WithPos]) -> Result<Vec<Statement>, CE> {
     let mut statements = Vec::new();
@@ -80,7 +80,7 @@ impl Display for Statement {
             }
             Self::Function { name, args, body } => {
                 let inside = statements_to_string_with_tabs(body);
-                write!(f, "{} :: ({}) {{\n{}\n}}", name, args.join(","), inside)
+                write!(f, "{} :: ({}) {{\n{}\n}}", name, args.join(", "), inside)
             }
             // Self::Bracket(statements, bracket) => {
             //     match bracket {
@@ -287,11 +287,11 @@ fn parse_function(tokens: &[Token2WithPos], name: String, previous_place_info: P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::{tokenize1, tokenize2_brackets};
+    use super::super::{parse1_tokenize, parse2_brackets};
 
     fn parse(text: &str) -> Result<Vec<Statement>, CE> {
-        let tokens = tokenize1::tokenize(text)?;
-        let tokens2 = tokenize2_brackets::parse_brackets(tokens)?;
+        let tokens = parse1_tokenize::tokenize(text)?;
+        let tokens2 = parse2_brackets::parse_brackets(tokens)?;
         let statements = parse_statements(&tokens2)?;
         Ok(statements)
     }

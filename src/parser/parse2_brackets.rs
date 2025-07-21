@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use super::tokenize1::{Token, TokenWithPos};
+use super::parse1_tokenize::{Token, TokenWithPos};
 use crate::error::CompilationError as CE;
 use crate::parser::PositionInFile;
 
