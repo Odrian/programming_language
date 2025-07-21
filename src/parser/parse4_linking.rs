@@ -16,9 +16,9 @@ pub fn link_variables(statement: Vec<Statement>) -> Result<Vec<LinkedStatement>,
 
 pub enum LinkedStatement {
     VariableDeclaration { object: Object, value: LinkedExpression },
+    SetVariable { object: Object, value: LinkedExpression },
     If { condition: LinkedExpression, body: Vec<LinkedStatement> },
     While { condition: LinkedExpression, body: Vec<LinkedStatement> },
-    Expression(LinkedExpression),
     Function { object: Object, args: Vec<Object>, body: Vec<LinkedStatement> },
 }
 pub enum LinkedExpression {
@@ -36,13 +36,10 @@ impl Display for LinkedStatement {
         }
         match self {
             Self::VariableDeclaration { object, value } => {
-                write!(f, "${} = {}", object.id, value)
+                write!(f, "${} := {}", object.id, value)
             }
-            // Self::SetVariable { expression1, expression2 } => {
-            //     write!(f, "{} = {}", expression1, expression2)
-            // }
-            Self::Expression(expression) => {
-                write!(f, "{}", expression)
+            Self::SetVariable { object, value } => {
+                write!(f, "${} = {}", object.id, value)
             }
             Self::If { condition, body } => {
                 let inside = statements_to_string_with_tabs(body);
@@ -159,6 +156,14 @@ fn link_statements_recursive(statements: &[Statement], object_context_window: &m
                 let object = object_context_window.add(name.clone(), ObjType::Variable);
                 LinkedStatement::VariableDeclaration { object, value }
             }
+            Statement::SetVariable { name, value } => {
+                let value = parse_expression(value, object_context_window)?;
+                let Some(&object) = object_context_window.get(name) else {
+                    let context = format!("{object_context_window:?}");
+                    return Err(CE::LinkingError { name: name.clone(), context });
+                };
+                LinkedStatement::SetVariable { object, value }
+            }
             Statement::If { condition, body } => {
                 let condition = parse_expression(condition, object_context_window)?;
                 object_context_window.step_in();
@@ -172,10 +177,6 @@ fn link_statements_recursive(statements: &[Statement], object_context_window: &m
                 let body = link_statements_recursive(body, object_context_window)?;
                 object_context_window.step_out();
                 LinkedStatement::While { condition, body }
-            }
-            Statement::Expression(expression) => {
-                let expression = parse_expression(expression, object_context_window)?;
-                LinkedStatement::Expression(expression)
             }
             Statement::Function { name, args, body } => {
                 let object = object_context_window.add(name.clone(), ObjType::Function);
@@ -233,39 +234,44 @@ mod test {
     }
     #[test]
     fn test_variables() {
-        assert_eq!(parse("cat = 0").err(), None);
-        assert_eq!(parse("cat = (0 + 0)").err(), None);
+        assert_eq!(parse("cat := 0").err(), None);
+        assert_eq!(parse("cat := (0 + 0)").err(), None);
 
-        assert_ne!(parse("cat = cat").err(), None);
-        assert_ne!(parse("dog = cat").err(), None);
+        assert_ne!(parse("cat = 0").err(), None);
         assert_ne!(parse("cat = (cat + 0)").err(), None);
+        assert_ne!(parse("cat := cat").err(), None);
+        assert_ne!(parse("dog := cat").err(), None);
+        assert_ne!(parse("cat := (cat + 0)").err(), None);
 
-        assert_eq!(parse("cat = 0 cat = 0").err(), None);
-        assert_eq!(parse("cat = 0 dog = cat").err(), None);
-        assert_eq!(parse("cat = 0 dog = (cat + cat)").err(), None);
-        assert_eq!(parse("cat = 0 dog = (cat + cat)").err(), None);
+        assert_eq!(parse("cat := 0 cat = 0").err(), None);
+        assert_eq!(parse("cat := 0 cat := 0").err(), None);
+        assert_eq!(parse("cat := 0 dog := cat").err(), None);
+        assert_eq!(parse("cat := 0 dog := (cat + cat)").err(), None);
+        assert_eq!(parse("cat := 0 dog := (cat + cat)").err(), None);
     }
 
     #[test]
     fn test_functions() {
         assert_eq!(parse("a :: () { }").err(), None);
         assert_eq!(parse("a :: (arg1) { }").err(), None);
-        assert_eq!(parse("a :: (arg1) { x = arg1 }").err(), None);
-        assert_eq!(parse("a :: (arg1, arg2) { x = arg1 + arg2 }").err(), None);
+        assert_eq!(parse("a :: (arg1) { x := arg1 }").err(), None);
+        assert_eq!(parse("a :: (arg1, arg2) { x := arg1 + arg2 }").err(), None);
 
-        assert_ne!(parse("a :: () { x = a }").err(), None);
+        assert_ne!(parse("a :: (arg1) { x = arg1 }").err(), None);
+        assert_ne!(parse("a :: () { a = x }").err(), None);
+        assert_ne!(parse("a :: () { x := a }").err(), None);
 
-        assert_eq!(parse("a :: () { a = 0 x = a }").err(), None);
+        assert_eq!(parse("a :: () { a := 0 x := a }").err(), None);
     }
 
     #[test]
     fn test_function_with_while() {
-        assert_ne!(parse("a :: () { if 0 { x = 0 } e = x }").err(), None);
-        assert_ne!(parse("a :: () { while 0 { x = 0 } e = x }").err(), None);
-        assert_ne!(parse("a :: (b) { while b { x = 0 } e = x }").err(), None);
-        assert_ne!(parse("a :: (b) { if b { x = 0 } e = x }").err(), None);
+        assert_ne!(parse("a :: ()  { if 0    { x := 0 } e := x }").err(), None);
+        assert_ne!(parse("a :: (b) { if b    { x := 0 } e := x }").err(), None);
+        assert_ne!(parse("a :: ()  { while 0 { x := 0 } e := x }").err(), None);
+        assert_ne!(parse("a :: (b) { while b { x := 0 } e := x }").err(), None);
 
-        let text = "a :: (b) { c = b while c { с = b } }";
+        let text = "a :: (b) { c := b while c { c = b } }";
         let result = parse(text);
         let Ok(statements) = result else {
             let err = result.err().unwrap();
@@ -294,7 +300,7 @@ mod test {
             panic!("expected variable declaration");
         };
         assert_eq!(while_body.len(), 1);
-        let LinkedStatement::VariableDeclaration { object: _, value: value2 } = &while_body[0] else {
+        let LinkedStatement::SetVariable { object: var2, value: value2 } = &while_body[0] else {
             panic!("expected variable declaration");
         };
         let LinkedExpression::Variable(value2) = value2 else {
@@ -310,6 +316,6 @@ mod test {
         assert_eq!(arg, value1);
         assert_eq!(arg, value2);
         assert_eq!(var1, condition);
-        assert_eq!(var1, value2);
+        assert_eq!(var1, var2);
     }
 }

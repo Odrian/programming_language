@@ -12,6 +12,12 @@
 Variable declaration
 ```
 name : type = value
+name := value
+```
+
+Set variable
+```
+name = value
 ```
 
 If statement
@@ -43,8 +49,10 @@ input file must contain any number of statements
 
 ## valid statements
 
+* name := expression
 * name = expression
 * if expression { 'any number of statements' }
+* while expression { 'any number of statements' }
 * name :: ('arguments') { 'any number of statements' }\
   'arguments' - any number of name seperated with comma
 

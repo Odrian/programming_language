@@ -25,6 +25,7 @@ pub enum Token {
     Colon,                  // :
     DoubleColon,            // ::
     Equal,                  // =
+    ColonEqual,             // :=
     Plus,                   // +
     CurlyBracketOpen,       // {
     CurlyBracketClose,      // }
@@ -128,6 +129,9 @@ fn split_text(text: &str) -> Vec<TokenWithPos> {
                 let token = if chars.peek() == Some(&':') {
                     chars.next();
                     Token::DoubleColon
+                } else if chars.peek() == Some(&'=') {
+                    chars.next();
+                    Token::ColonEqual
                 } else {
                     Token::Colon
                 };
@@ -202,6 +206,20 @@ mod tests {
             Token::String("dog".to_string()),
             Token::DoubleColon,
             Token::DoubleColon,
+        ];
+        let actual = tokenize_text(text);
+        assert_eq!(actual.unwrap(), expected);
+    }
+    #[test]
+    fn test_token_colon_equal() {
+        let text = ":= dog ::= :==";
+        let expected = vec![
+            Token::ColonEqual,
+            Token::String("dog".to_string()),
+            Token::DoubleColon,
+            Token::Equal,
+            Token::ColonEqual,
+            Token::Equal,
         ];
         let actual = tokenize_text(text);
         assert_eq!(actual.unwrap(), expected);

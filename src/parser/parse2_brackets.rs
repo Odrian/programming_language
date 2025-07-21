@@ -35,6 +35,7 @@ pub enum Token2 {
     Comma,
     Colon,
     DoubleColon,
+    EqualOperation(EqualOperation),
     TwoSidedOperation(TwoSidedOperation),
     Bracket(Vec<Token2WithPos>, BracketType),
 }
@@ -59,8 +60,12 @@ impl BracketType {
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TwoSidedOperation {
-    Equal = 0,
-    Plus = 1,
+    Plus,
+}
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum EqualOperation {
+    Equal,
+    ColonEqual,
 }
 
 fn parse_inside_brackets(
@@ -82,7 +87,9 @@ fn parse_inside_brackets(
             Token::DoubleColon => Token2::DoubleColon,
 
             Token::Plus => Token2::TwoSidedOperation(TwoSidedOperation::Plus),
-            Token::Equal => Token2::TwoSidedOperation(TwoSidedOperation::Equal),
+
+            Token::Equal => Token2::EqualOperation(EqualOperation::Equal),
+            Token::ColonEqual => Token2::EqualOperation(EqualOperation::ColonEqual),
 
             Token::CurlyBracketOpen | Token::RoundBracketOpen => {
                 let bracket_type = BracketType::from_token(&token.token);
@@ -158,11 +165,12 @@ mod tests {
            Ok(vec![Token2::Comma, Token2::TwoSidedOperation(TwoSidedOperation::Plus)])
         );
 
-        assert_eq!(parse(vec![Token::CurlyBracketOpen, Token::Plus, Token::String(string.clone()), Token::Equal, Token::String(string.clone()), Token::CurlyBracketClose]).unwrap(),
+        assert_eq!(parse(vec![Token::CurlyBracketOpen, Token::ColonEqual, Token::Plus, Token::String(string.clone()), Token::Equal, Token::String(string.clone()), Token::CurlyBracketClose]).unwrap(),
             vec![bracket_token2(vec![
+                Token2::EqualOperation(EqualOperation::ColonEqual),
                 Token2::TwoSidedOperation(TwoSidedOperation::Plus),
                 Token2::String(string.clone()),
-                Token2::TwoSidedOperation(TwoSidedOperation::Equal),
+                Token2::EqualOperation(EqualOperation::Equal),
                 Token2::String(string.clone()),
             ], BracketType::Curly)]
         );
