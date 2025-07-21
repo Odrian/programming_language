@@ -1,1 +1,7 @@
-a::(){x=5 while x {x=x+1}}
+foo :: () {
+    x=5
+    while x {
+        x=x+1
+    }
+}
+a :: (arg1, arg2) {b :: (arg1, arg2) {c :: (arg1, arg2) {while arg1 {arg1 = arg1 + arg2}}}}

@@ -18,7 +18,8 @@ pub fn parse_statements(tokens: &[Token2WithPos]) -> Result<Vec<Statement>, CE> 
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Statement {
-    SetVariable { expression1: Expression, expression2: Expression },
+    VariableDeclaration { name: String, value: Expression },
+    // SetVariable { expression1: Expression, expression2: Expression },
     // Bracket(Box<Vec<Statement>>, BracketType),
     If { condition: Expression, body: Vec<Statement> },
     While { condition: Expression, body: Vec<Statement> },
@@ -27,9 +28,12 @@ pub enum Statement {
 }
 
 impl Statement {
-    pub fn new_set(expression1: Expression, expression2: Expression) -> Self {
-        Statement::SetVariable { expression1, expression2 }
+    pub fn new_variable(name: String, value: Expression) -> Self {
+        Statement::VariableDeclaration { name, value }
     }
+    // pub fn new_set(expression1: Expression, expression2: Expression) -> Self {
+    //     Statement::SetVariable { expression1, expression2 }
+    // }
     pub fn new_if(condition: Expression, body: Vec<Statement>) -> Statement {
         Statement::If { condition, body }
     }
@@ -64,9 +68,12 @@ impl Display for Statement {
             "    ".to_string() + string.replace("\n", "\n    ").as_str()
         }
         match self {
-            Self::SetVariable { expression1, expression2 } => {
-                write!(f, "{} = {}", expression1, expression2)
+            Self::VariableDeclaration { name, value } => {
+                write!(f, "{} = {}", name, value)
             }
+            // Self::SetVariable { expression1, expression2 } => {
+            //     write!(f, "{} = {}", expression1, expression2)
+            // }
             Self::Expression(expression) => {
                 write!(f, "{}", expression)
             }
@@ -120,29 +127,37 @@ fn parse_statement(tokens: &[Token2WithPos]) -> Result<(Statement, &[Token2WithP
             match string.as_str() {
                 "if" | "while" => {
                     let name = string.as_str();
-                    let (condition, tokens_) = parse_expression(&tokens[1..], token1.position)?;
-                    if tokens_.is_empty() {
+                    let (condition, new_tokens) = parse_expression(&tokens[1..], token1.position)?;
+                    if new_tokens.is_empty() {
                         return Err(CE::SyntacticsError(tokens.last().unwrap().position, format!("expected {name} body after that")));
                     }
-                    let next_token = &tokens_[0];
+                    let next_token = &new_tokens[0];
                     let Token2::Bracket(vec, BracketType::Curly) = &next_token.token else {
                         return Err(CE::SyntacticsError(token1.position, String::from("expected statement")))
                     };
                     let body = parse_statements(vec)?;
 
                     if name == "if" {
-                        Ok((Statement::new_if(condition, body), &tokens_[1..]))
+                        Ok((Statement::new_if(condition, body), &new_tokens[1..]))
                     } else {
-                        Ok((Statement::new_while(condition, body), &tokens_[1..]))
+                        Ok((Statement::new_while(condition, body), &new_tokens[1..]))
                     }
                 }
                 _ => {
                     let next_token = tokens.get(1).map(|t| &t.token);
-                    if next_token == Some(&Token2::DoubleColon) {
-                        parse_function(&tokens[2..], string.clone(), token1.position)
-                    } else {
-                        let expression1 = Expression::Variable(string.clone());
-                        parse_statement2(&tokens[1..], expression1, token1.position)
+                    match next_token {
+                        Some(Token2::DoubleColon) => {
+                            parse_function(&tokens[2..], string.clone(), token1.position)
+                        },
+                        Some(Token2::TwoSidedOperation(TwoSidedOperation::Equal)) => {
+                            let (expression2, new_tokens) = parse_expression(&tokens[2..], tokens[1].position)?;
+                            let statement = Statement::VariableDeclaration { name: string.clone(), value: expression2 };
+                            Ok((statement, new_tokens))
+                        }
+                        _ => {
+                            let expression1 = Expression::Variable(string.clone());
+                            parse_statement2(&tokens[1..], expression1, token1.position)
+                        }
                     }
                 }
             }
@@ -162,9 +177,10 @@ fn parse_statement2(tokens: &[Token2WithPos], expression1: Expression, previous_
             Ok((Statement::Expression(expression1), tokens))
         }
         Token2::TwoSidedOperation(TwoSidedOperation::Equal) => {
-            let (expression2, tokens) = parse_expression(&tokens[1..], token2.position)?;
-            let statement = Statement::new_set(expression1, expression2);
-            Ok((statement, tokens))
+            todo!("expression = expression is not supported");
+            // let (expression2, new_tokens) = parse_expression(&tokens[1..], token2.position)?;
+            // let statement = Statement::new_set(expression1, expression2);
+            // Ok((statement, new_tokens))
         }
         Token2::TwoSidedOperation(_) => {
             Err(CE::SyntacticsError(token2.position, String::from("unexpected operation, expected '='")))
@@ -193,12 +209,12 @@ fn parse_expression(tokens: &[Token2WithPos], previous_place_info: PositionInFil
             parse_expression2(&tokens[1..], expression1)
         }
         Token2::Bracket(vec, BracketType::Round) => {
-            let (expression, tokens_) = parse_expression(vec, token1.position)?;
-            if tokens_.is_empty() {
+            let (expression, new_tokens) = parse_expression(vec, token1.position)?;
+            if new_tokens.is_empty() {
                 let expression1 = Expression::round_bracket(expression);
                 parse_expression2(&tokens[1..], expression1)
             } else {
-                Err(CE::SyntacticsError(tokens_[0].position, String::from("expected ')'")))
+                Err(CE::SyntacticsError(new_tokens[0].position, String::from("expected ')'")))
             }
         }
         Token2::Bracket(_, _) => {
@@ -223,9 +239,9 @@ fn parse_expression2(tokens: &[Token2WithPos], expression1: Expression) -> Resul
             match op {
                 TwoSidedOperation::Equal => unreachable!(),
                 TwoSidedOperation::Plus => {
-                    let (expression2, tokens) = parse_expression(&tokens[1..], token2.position)?;
+                    let (expression2, new_tokens) = parse_expression(&tokens[1..], token2.position)?;
                     let expression = Expression::plus(expression1, expression2);
-                    Ok((expression, tokens))
+                    Ok((expression, new_tokens))
                 }
             }
         }
@@ -329,37 +345,39 @@ mod tests {
         assert_ne!(parse("(cat + cat) = cat").err(), None);
         assert_ne!(parse("(4 + 4) = 4").err(), None);
 
-        let variable = Expression::Variable(String::from("cat"));
+        let variable_name = String::from("cat");
+        let variable = Expression::Variable(variable_name.clone());
         assert_eq!(parse("cat = cat + (cat + cat)"),
-                   Ok(vec![Statement::new_set(
-                       variable.clone(),
-                       Expression::plus(
-                           variable.clone(),
-                           Expression::round_bracket(
-                               Expression::plus(variable.clone(), variable.clone())
-                           )
-                       )
-                   )])
+            Ok(vec![Statement::new_variable(
+                variable_name.clone(),
+                Expression::plus(
+                    variable.clone(),
+                    Expression::round_bracket(
+                        Expression::plus(variable.clone(), variable.clone())
+                    )
+                )
+            )])
         );
     }
 
     #[test]
     fn test_if_while() {
-        let variable = Expression::Variable(String::from("cat"));
+        let variable_name = String::from("cat");
+        let variable = Expression::Variable(variable_name.clone());
 
         assert_eq!(parse("if cat { }"),
             Ok(vec![Statement::new_if(variable.clone(), vec![], )])
         );
         assert_eq!(parse("if cat { cat = cat }"),
             Ok(vec![Statement::new_if(variable.clone(),
-                vec![Statement::new_set(variable.clone(), variable.clone())],
+                vec![Statement::new_variable(variable_name.clone(), variable.clone())],
             )])
         );
         assert_eq!(parse("if cat { cat = cat cat = cat }"),
            Ok(vec![Statement::new_if(variable.clone(),
                 vec![
-                    Statement::new_set(variable.clone(), variable.clone()),
-                    Statement::new_set(variable.clone(), variable.clone())
+                    Statement::new_variable(variable_name.clone(), variable.clone()),
+                    Statement::new_variable(variable_name.clone(), variable.clone())
                 ],
            )])
         );
@@ -368,7 +386,7 @@ mod tests {
         );
         assert_eq!(parse("while cat { cat = cat }"),
             Ok(vec![Statement::new_while(variable.clone(),
-                vec![Statement::new_set(variable.clone(), variable.clone())],
+                vec![Statement::new_variable(variable_name.clone(), variable.clone())],
             )])
         );
 
@@ -390,7 +408,7 @@ mod tests {
         assert_eq!(parse("foo :: (arg1, arg2) { }"),
                    Ok(vec![Statement::new_function(name.clone(), vec![arg1.clone(), arg2.clone()], vec![])])
         );
-        let set_expr = Statement::new_set(Expression::Variable("cat".to_owned()), Expression::Variable("dog".to_owned()));
+        let set_expr = Statement::new_variable("cat".to_owned(), Expression::Variable("dog".to_owned()));
         assert_eq!(parse("foo :: (arg1, arg2) { cat = dog }"),
            Ok(vec![Statement::new_function(name.clone(), vec![arg1.clone(), arg2.clone()], vec![
                set_expr.clone(),
@@ -403,7 +421,7 @@ mod tests {
                set_expr.clone(),
            ])])
         );
-        let another_set_expr = Statement::new_set(Expression::Variable("owl".to_owned()), Expression::plus(
+        let another_set_expr = Statement::new_variable("owl".to_owned(), Expression::plus(
             Expression::Variable("dog".to_owned()), Expression::Variable("kitten".to_owned())
         ));
         assert_eq!(parse("foo :: (arg1, arg2) { owl = dog + kitten cat = dog owl = dog + kitten }"),
@@ -420,8 +438,8 @@ mod tests {
         let name = String::from("foo");
         let arg1 = String::from("arg1");
         let arg2 = String::from("arg2");
-        let set_statement = Statement::new_set(
-            Expression::Variable(arg2.clone()),
+        let set_statement = Statement::new_variable(
+            arg2.clone(),
             Expression::plus(
                 Expression::Variable(arg2.clone()),
                 Expression::NumberLiteral("1".to_owned()),
