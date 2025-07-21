@@ -1,3 +1,1 @@
-asd = 5
-dsx = d + asd
-x = 5 + dsx + 1
+a::(){x=5 while x {x=x+1}}

@@ -1,8 +1,7 @@
 # TODO
 * parse "x = y" (done)
 * parse if, while (done)
-* parse function (in progress)
-* add print, read function
+* parse function (done)
 * linking
 * compile with int8 type only
 * add types
@@ -44,12 +43,14 @@ input file must contain any number of statements
 
 ## valid statements
 
-* text = expression
+* name = expression
 * if expression { 'any number of statements' }
+* name :: ('arguments') { 'any number of statements' }\
+  'arguments' - any number of name seperated with comma
 
 ## valid expression
 
-* text
+* name
 * number
 * (expression)
 * expression + expression
