@@ -20,6 +20,7 @@ pub fn parse_statements(tokens: &[Token2WithPos]) -> Result<Vec<Statement>, CE> 
 pub enum Statement {
     VariableDeclaration { name: String, value: Expression },
     SetVariable { name: String, value: Expression },
+    Expression(Expression),
     // Bracket(Box<Vec<Statement>>, BracketType),
     If { condition: Expression, body: Vec<Statement> },
     While { condition: Expression, body: Vec<Statement> },
@@ -29,6 +30,9 @@ pub enum Statement {
 impl Statement {
     pub fn new_variable(name: String, value: Expression) -> Self {
         Statement::VariableDeclaration { name, value }
+    }
+    pub fn new_set(name: String, value: Expression) -> Self {
+        Statement::SetVariable { name, value }
     }
     pub fn new_if(condition: Expression, body: Vec<Statement>) -> Statement {
         Statement::If { condition, body }
@@ -47,6 +51,7 @@ pub enum Expression {
     NumberLiteral(String),
     Variable(String),
     RoundBracket(Box<Expression>),
+    FunctionCall { name: String, args: Vec<Expression> },
 }
 impl Expression {
     pub fn plus(expression1: Expression, expression2: Expression) -> Self {
@@ -54,6 +59,9 @@ impl Expression {
     }
     pub fn round_bracket(expression: Expression) -> Self {
         Expression::RoundBracket(Box::new(expression))
+    }
+    pub fn new_function_call(name: String, args: Vec<Expression>) -> Self {
+        Expression::FunctionCall { name, args }
     }
 }
 
@@ -69,6 +77,9 @@ impl Display for Statement {
             }
             Self::SetVariable { name, value } => {
                 write!(f, "{} = {}", name, value)
+            }
+            Self::Expression(expression) => {
+                write!(f, "{}", expression)
             }
             Self::If { condition, body } => {
                 let inside = statements_to_string_with_tabs(body);
@@ -103,6 +114,10 @@ impl Display for Expression {
             Expression::NumberLiteral(n) => write!(f, "{}", n),
             Expression::Variable(name) => write!(f, "{}", name),
             Expression::RoundBracket(boxed) => write!(f, "({})", boxed),
+            Expression::FunctionCall { name, args } => {
+                let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
+                write!(f, "{} ({})", name, args)
+            }
         }
     }
 }
@@ -158,10 +173,16 @@ fn parse_statement2<'a>(tokens: &'a [Token2WithPos], string: &String, previous_p
         Token2::EqualOperation(equal_operation) => {
             let (expression2, new_tokens) = parse_expression(&tokens[1..], tokens[0].position)?;
             let statement = match equal_operation {
-                EqualOperation::ColonEqual => Statement::VariableDeclaration { name: string.clone(), value: expression2 },
-                EqualOperation::Equal => Statement::SetVariable { name: string.clone(), value: expression2 },
+                EqualOperation::ColonEqual => Statement::new_variable(string.clone(), expression2),
+                EqualOperation::Equal => Statement::new_set(string.clone(), expression2),
             };
             Ok((statement, new_tokens))
+        }
+        Token2::Bracket(vec, BracketType::Round) => {
+            let name = string.clone();
+            let args = parse_function_arguments(vec, tokens[0].position)?;
+            let statement = Statement::Expression(Expression::FunctionCall { name, args });
+            Ok((statement, &tokens[1..]))
         }
         _ => {
             Err(CE::SyntacticsError(tokens[0].position, format!("expected statement, got '{string}' '{new_token:?}'")))
@@ -218,6 +239,14 @@ fn parse_expression2(tokens: &[Token2WithPos], expression1: Expression) -> Resul
                     Ok((expression, new_tokens))
                 }
             }
+        }
+        Token2::Bracket(vec, BracketType::Round) => {
+            let Expression::Variable(name) = expression1 else {
+                return Err(CE::SyntacticsError(tokens[0].position, String::from("unexpected round brackets after expression")));
+            };
+            let args = parse_function_arguments(vec, token.position)?;
+            let expression = Expression::FunctionCall { name, args };
+            Ok((expression, &tokens[1..]))
         }
         Token2::Bracket(_, _) => {
             Ok((expression1, tokens))
@@ -276,6 +305,26 @@ fn parse_function(tokens: &[Token2WithPos], name: String, previous_place_info: P
 
     let statement = Statement::new_function(name, arguments, body);
     Ok((statement, &tokens[2..]))
+}
+
+fn parse_function_arguments(tokens: &[Token2WithPos], previous_place_info: PositionInFile) -> Result<Vec<Expression>, CE> {
+    let mut args = Vec::new();
+
+    let mut tokens = tokens;
+    while !tokens.is_empty() {
+        let (expression, new_tokens) = parse_expression(tokens, previous_place_info)?;
+        args.push(expression);
+
+        if new_tokens.is_empty() {
+            tokens = new_tokens;
+        } else if new_tokens[0].token == Token2::Comma {
+            tokens = &new_tokens[1..];
+        } else {
+            return Err(CE::SyntacticsError(tokens[0].position, format!("expected ',' or ')', got {:?}", new_tokens[0].token)));
+        }
+    }
+
+    Ok(args)
 }
 
 #[cfg(test)]
@@ -464,5 +513,18 @@ mod tests {
                set_statement.clone(),
            ])])
         );
+    }
+
+    #[test]
+    fn test_function_call() {
+        assert_eq!(parse("foo()").err(), None);
+        assert_eq!(parse("cat = foo()").err(), None);
+        assert_eq!(parse("foo(arg1)").err(), None);
+        assert_eq!(parse("foo(arg1, arg2)").err(), None);
+        assert_eq!(parse("foo(0, 1)").err(), None);
+        assert_eq!(parse("foo((0 + 1))").err(), None);
+        assert_eq!(parse("foo(foo(0))").err(), None);
+
+        assert_ne!(parse("foo(cat := cat)").err(), None);
     }
 }

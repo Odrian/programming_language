@@ -2,7 +2,7 @@
 * parse "x = y" (done)
 * parse if, while (done)
 * parse function (done)
-* linking (in progress)
+* linking (done)
 * compile with int8 type only
 * add types
 * add arrays
@@ -49,6 +49,7 @@ input file must contain any number of statements
 
 ## valid statements
 
+* 'any expression'
 * name := expression
 * name = expression
 * if expression { 'any number of statements' }
@@ -62,3 +63,4 @@ input file must contain any number of statements
 * number
 * (expression)
 * expression + expression
+* name()

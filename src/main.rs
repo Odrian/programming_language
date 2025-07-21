@@ -9,7 +9,7 @@ fn main() -> Result<(), CE> {
     }
     let filepath = &args[1];
 
-    let debug = false;
+    let debug = true;
     parse(filepath, debug)?;
 
     Ok(())

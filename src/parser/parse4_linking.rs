@@ -1,8 +1,8 @@
+use crate::error::CompilationError as CE;
+use crate::parser::parse3_syntactic::{Expression, Statement};
+
 use std::collections::HashMap;
 use std::fmt::Display;
-use crate::error::CompilationError as CE;
-use crate::parser::parse3_syntactic::{Statement, Expression};
-
 use std::sync::atomic;
 
 pub fn link_variables(statement: Vec<Statement>) -> Result<Vec<LinkedStatement>, CE> {
@@ -17,6 +17,7 @@ pub fn link_variables(statement: Vec<Statement>) -> Result<Vec<LinkedStatement>,
 pub enum LinkedStatement {
     VariableDeclaration { object: Object, value: LinkedExpression },
     SetVariable { object: Object, value: LinkedExpression },
+    Expression(LinkedExpression),
     If { condition: LinkedExpression, body: Vec<LinkedStatement> },
     While { condition: LinkedExpression, body: Vec<LinkedStatement> },
     Function { object: Object, args: Vec<Object>, body: Vec<LinkedStatement> },
@@ -26,6 +27,7 @@ pub enum LinkedExpression {
     NumberLiteral(String),
     Variable(Object),
     RoundBracket(Box<LinkedExpression>),
+    FunctionCall { object: Object, args: Vec<LinkedExpression> },
 }
 
 impl Display for LinkedStatement {
@@ -40,6 +42,9 @@ impl Display for LinkedStatement {
             }
             Self::SetVariable { object, value } => {
                 write!(f, "${} = {}", object.id, value)
+            }
+            Self::Expression(expression) => {
+                write!(f, "{}", expression)
             }
             Self::If { condition, body } => {
                 let inside = statements_to_string_with_tabs(body);
@@ -75,6 +80,10 @@ impl Display for LinkedExpression {
             LinkedExpression::NumberLiteral(n) => write!(f, "{}", n),
             LinkedExpression::Variable(object) => write!(f, "${}", object.id),
             LinkedExpression::RoundBracket(boxed) => write!(f, "({})", boxed),
+            LinkedExpression::FunctionCall { object, args } => {
+                let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+                write!(f, "${} ({})", object.id, args.join(", "))
+            },
         }
     }
 }
@@ -164,6 +173,10 @@ fn link_statements_recursive(statements: &[Statement], object_context_window: &m
                 };
                 LinkedStatement::SetVariable { object, value }
             }
+            Statement::Expression(expression) => {
+                let expression = parse_expression(expression, object_context_window)?;
+                LinkedStatement::Expression(expression)
+            }
             Statement::If { condition, body } => {
                 let condition = parse_expression(condition, object_context_window)?;
                 object_context_window.step_in();
@@ -215,15 +228,28 @@ fn parse_expression(expression: &Expression, object_context_window: &ObjectConte
                 return Err(CE::LinkingError { name: name.clone(), context });
             }
         },
+        Expression::FunctionCall { name, args } => {
+            let Some(object) = object_context_window.get(name) else {
+                let context = format!("{object_context_window:?}");
+                return Err(CE::LinkingError { name: name.clone(), context });
+            };
+            if object.obj_type != ObjType::Function {
+                let context = format!("{object_context_window:?}");
+                return Err(CE::LinkingError { name: name.clone(), context });
+            }
+            let args = args.iter().map(|x| parse_expression(x, object_context_window)).collect::<Result<Vec<_>, _>>()?;
+
+            LinkedExpression::FunctionCall { object: *object, args }
+        }
     };
     Ok(linked)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::parser::{parse1_tokenize, parse2_brackets};
-    use crate::parser::parse3_syntactic::parse_statements;
     use super::*;
+    use crate::parser::parse3_syntactic::parse_statements;
+    use crate::parser::{parse1_tokenize, parse2_brackets};
 
     fn parse(text: &str) -> Result<Vec<LinkedStatement>, CE> {
         let tokens = parse1_tokenize::tokenize(text)?;
@@ -317,5 +343,11 @@ mod test {
         assert_eq!(arg, value2);
         assert_eq!(var1, condition);
         assert_eq!(var1, var2);
+    }
+    
+    #[test]
+    fn test_function_call() {
+        assert_eq!(parse("a :: () {} a()").err(), None);
+        assert_eq!(parse("a :: () {} b :: () { a() }").err(), None);
     }
 }
