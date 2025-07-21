@@ -2,7 +2,7 @@
 * parse "x = y" (done)
 * parse if, while (done)
 * parse function (done)
-* linking
+* linking (in progress)
 * compile with int8 type only
 * add types
 * add arrays

@@ -3,6 +3,7 @@ use crate::error::CompilationError as CE;
 mod parse1_tokenize;
 mod parse2_brackets;
 mod parse3_syntactic;
+mod parse4_linking;
 
 pub use parse1_tokenize::PositionInFile;
 pub use parse2_brackets::BracketType;
@@ -19,8 +20,15 @@ pub fn parse(filepath: &str, debug: bool) -> Result<(), CE> {
     }
     let statements = parse3_syntactic::parse_statements(&tokens2)?;
 
-    for statement in statements {
+    for statement in &statements {
         println!("{statement}");
+    }
+
+    let linked_statement = parse4_linking::link_variables(statements)?;
+
+    println!("linked statements:");
+    for linked_statement in &linked_statement {
+        println!("{linked_statement}");
     }
 
     Ok(())

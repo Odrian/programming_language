@@ -14,6 +14,9 @@ pub enum CompilationError {
         start_bracket_type: BracketType,
         end_bracket_type: BracketType,
     },
+
+    LinkingError { name: String, context: String },
+    LinkingErrorFunctionUsage { name: String },
 }
 
 impl fmt::Display for CompilationError {
@@ -37,6 +40,12 @@ impl fmt::Display for CompilationError {
                 let start_name = bracket_type_to_string(start_bracket_type);
                 let end_name = bracket_type_to_string(end_bracket_type);
                 write!(f, "Error: at {end} expected {start_name} bracket, but have {end_name} bracket. Open bracket at {start}")
+            }
+            CompilationError::LinkingError { name, context } => {
+                write!(f, "Linking Error: can't find {name} in {context}")
+            }
+            CompilationError::LinkingErrorFunctionUsage { name } => {
+                write!(f, "Linking Error: can't use function {name} as variable value")
             }
         }
     }
