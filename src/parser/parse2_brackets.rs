@@ -8,36 +8,36 @@ pub fn parse_brackets(tokens: Vec<TokenWithPos>) -> Result<Vec<Token2WithPos>, C
     if end_index != tokens.len() {
         unreachable!("")
     }
-    let Token2::Bracket(boxed, _) = token.token else { unreachable!() };
-    Ok(boxed)
+    let Token2::Bracket(vec, _) = token.token else { unreachable!() };
+    Ok(vec)
 }
 
-#[derive(Eq, PartialEq)]
-pub struct Token2WithPos {
-    pub token: Token2,
+#[derive(Eq, PartialEq, Clone)]
+pub struct Token2WithPos<'x> {
+    pub token: Token2<'x>,
     pub position: PositionInFile,
 }
-impl Token2WithPos {
-    fn new(token: Token2, position: PositionInFile) -> Self {
+impl<'x> Token2WithPos<'x> {
+    fn new(token: Token2<'x>, position: PositionInFile) -> Token2WithPos<'x> {
         Self { token, position }
     }
 }
-impl Debug for Token2WithPos {
+impl<'x> Debug for Token2WithPos<'x> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.token)
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum Token2 {
-    String(String),
-    NumberLiteral(String),
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Token2<'x> {
+    String(&'x [char]),
+    NumberLiteral(&'x [char]),
     Comma,
     Colon,
     DoubleColon,
     EqualOperation(EqualOperation),
     TwoSidedOperation(TwoSidedOperation),
-    Bracket(Vec<Token2WithPos>, BracketType),
+    Bracket(Vec<Token2WithPos<'x>>, BracketType),
 }
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum BracketType {
@@ -68,19 +68,19 @@ pub enum EqualOperation {
     ColonEqual,
 }
 
-fn parse_inside_brackets(
-    tokens: &Vec<TokenWithPos>,
+fn parse_inside_brackets<'x>(
+    tokens: &Vec<TokenWithPos<'x>>,
     start_index: usize,
     open_bracket_type: BracketType,
-) -> Result<(Token2WithPos, usize), CE> {
+) -> Result<(Token2WithPos<'x>, usize), CE> {
     let mut result_tokens = Vec::new();
 
     let mut index = start_index;
     while index < tokens.len() {
         let token = &tokens[index];
         let result_token = match &token.token {
-            Token::String(s) => Token2::String(s.clone()),
-            Token::NumberLiteral(s) => Token2::NumberLiteral(s.clone()),
+            Token::String(s) => Token2::String(s),
+            Token::NumberLiteral(s) => Token2::NumberLiteral(s),
 
             Token::Comma => Token2::Comma,
             Token::Colon => Token2::Colon,
@@ -147,7 +147,8 @@ mod tests {
     }
     #[test]
     fn test_parse_brackets() {
-        let string = String::from("cat");
+        assert_eq!(parse(vec![]).err(), None);
+        assert_eq!(parse(vec![Token::Equal, Token::ColonEqual, Token::Comma]).err(), None);
 
         assert_ne!(parse(vec![Token::CurlyBracketOpen]).err(), None);
         assert_ne!(parse(vec![Token::CurlyBracketClose]).err(), None);
@@ -165,14 +166,24 @@ mod tests {
            Ok(vec![Token2::Comma, Token2::TwoSidedOperation(TwoSidedOperation::Plus)])
         );
 
-        assert_eq!(parse(vec![Token::CurlyBracketOpen, Token::ColonEqual, Token::Plus, Token::String(string.clone()), Token::Equal, Token::String(string.clone()), Token::CurlyBracketClose]).unwrap(),
-            vec![bracket_token2(vec![
+        let v_cat = &"cat".chars().collect::<Vec<_>>();
+        assert_eq!(
+            parse(vec![
+                Token::CurlyBracketOpen,
+                Token::ColonEqual,
+                Token::Plus,
+                Token::String(v_cat),
+                Token::Equal,
+                Token::String(v_cat),
+                Token::CurlyBracketClose
+            ]),
+            Ok(vec![bracket_token2(vec![
                 Token2::EqualOperation(EqualOperation::ColonEqual),
                 Token2::TwoSidedOperation(TwoSidedOperation::Plus),
-                Token2::String(string.clone()),
+                Token2::String(v_cat),
                 Token2::EqualOperation(EqualOperation::Equal),
-                Token2::String(string.clone()),
-            ], BracketType::Curly)]
+                Token2::String(v_cat),
+            ], BracketType::Curly)])
         );
     }
 }

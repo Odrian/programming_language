@@ -14,23 +14,25 @@ pub fn link_variables(statement: Vec<Statement>) -> Result<Vec<LinkedStatement>,
     result
 }
 
-pub enum LinkedStatement {
-    VariableDeclaration { object: Object, value: LinkedExpression },
-    SetVariable { object: Object, value: LinkedExpression },
-    Expression(LinkedExpression),
-    If { condition: LinkedExpression, body: Vec<LinkedStatement> },
-    While { condition: LinkedExpression, body: Vec<LinkedStatement> },
-    Function { object: Object, args: Vec<Object>, body: Vec<LinkedStatement> },
+#[derive(Debug, Eq, PartialEq)]
+pub enum LinkedStatement<'x> {
+    VariableDeclaration { object: Object, value: LinkedExpression<'x> },
+    SetVariable { object: Object, value: LinkedExpression<'x> },
+    Expression(LinkedExpression<'x>),
+    If { condition: LinkedExpression<'x>, body: Vec<LinkedStatement<'x>> },
+    While { condition: LinkedExpression<'x>, body: Vec<LinkedStatement<'x>> },
+    Function { object: Object, args: Vec<Object>, body: Vec<LinkedStatement<'x>> },
 }
-pub enum LinkedExpression {
-    Plus(Box<LinkedExpression>, Box<LinkedExpression>),
-    NumberLiteral(String),
+#[derive(Debug, Eq, PartialEq)]
+pub enum LinkedExpression<'x> {
+    Plus(Box<LinkedExpression<'x>>, Box<LinkedExpression<'x>>),
+    NumberLiteral(&'x [char]),
     Variable(Object),
-    RoundBracket(Box<LinkedExpression>),
-    FunctionCall { object: Object, args: Vec<LinkedExpression> },
+    RoundBracket(Box<LinkedExpression<'x>>),
+    FunctionCall { object: Object, args: Vec<LinkedExpression<'x>> },
 }
 
-impl Display for LinkedStatement {
+impl<'x> Display for LinkedStatement<'x> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fn statements_to_string_with_tabs(statements: &[LinkedStatement]) -> String {
             let string = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
@@ -44,15 +46,15 @@ impl Display for LinkedStatement {
                 write!(f, "${} = {}", object.id, value)
             }
             Self::Expression(expression) => {
-                write!(f, "{}", expression)
+                write!(f, "{expression}")
             }
             Self::If { condition, body } => {
                 let inside = statements_to_string_with_tabs(body);
-                write!(f, "if {} {{\n{}\n}}", condition, inside)
+                write!(f, "if {condition} {{\n{inside}\n}}")
             }
             Self::While { condition, body } => {
                 let inside = statements_to_string_with_tabs(body);
-                write!(f, "while {} {{\n{}\n}}", condition, inside)
+                write!(f, "while {condition} {{\n{inside}\n}}")
             }
             Self::Function { object, args, body } => {
                 let inside = statements_to_string_with_tabs(body);
@@ -73,13 +75,13 @@ impl Display for LinkedStatement {
         }
     }
 }
-impl Display for LinkedExpression {
+impl<'x> Display for LinkedExpression<'x> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LinkedExpression::Plus(a, b) => write!(f, "({} + {})", a, b),
-            LinkedExpression::NumberLiteral(n) => write!(f, "{}", n),
+            LinkedExpression::Plus(a, b) => write!(f, "({a} + {b})"),
+            LinkedExpression::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
             LinkedExpression::Variable(object) => write!(f, "${}", object.id),
-            LinkedExpression::RoundBracket(boxed) => write!(f, "({})", boxed),
+            LinkedExpression::RoundBracket(expression) => write!(f, "({expression})"),
             LinkedExpression::FunctionCall { object, args } => {
                 let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>();
                 write!(f, "${} ({})", object.id, args.join(", "))
@@ -156,20 +158,22 @@ impl ObjectContextWindow {
     }
 }
 
-fn link_statements_recursive(statements: &[Statement], object_context_window: &mut ObjectContextWindow) -> Result<Vec<LinkedStatement>, CE> {
+fn link_statements_recursive<'x>(statements: &[Statement<'x>], object_context_window: &mut ObjectContextWindow) -> Result<Vec<LinkedStatement<'x>>, CE> {
     let mut result = vec![];
     for statement in statements {
         let linked = match statement {
             Statement::VariableDeclaration { name, value } => {
                 let value = parse_expression(value, object_context_window)?;
-                let object = object_context_window.add(name.clone(), ObjType::Variable);
+                let name: String = name.iter().collect();
+                let object = object_context_window.add(name, ObjType::Variable);
                 LinkedStatement::VariableDeclaration { object, value }
             }
             Statement::SetVariable { name, value } => {
                 let value = parse_expression(value, object_context_window)?;
-                let Some(&object) = object_context_window.get(name) else {
+                let name: String = name.iter().collect();
+                let Some(&object) = object_context_window.get(&name) else {
                     let context = format!("{object_context_window:?}");
-                    return Err(CE::LinkingError { name: name.clone(), context });
+                    return Err(CE::LinkingError { name, context });
                 };
                 LinkedStatement::SetVariable { object, value }
             }
@@ -192,9 +196,12 @@ fn link_statements_recursive(statements: &[Statement], object_context_window: &m
                 LinkedStatement::While { condition, body }
             }
             Statement::Function { name, args, body } => {
-                let object = object_context_window.add(name.clone(), ObjType::Function);
+                let name: String = name.iter().collect();
+                let object = object_context_window.add(name, ObjType::Function);
                 object_context_window.step_in();
-                let args = args.iter().map(|x| object_context_window.add(x.clone(), ObjType::Variable)).collect();
+                let args: Vec<Object> = args.iter().map(|x|
+                    object_context_window.add(x.iter().collect::<String>(), ObjType::Variable)
+                ).collect();
                 let body = link_statements_recursive(body, object_context_window)?;
                 object_context_window.step_out();
                 LinkedStatement::Function { object, args, body }
@@ -205,37 +212,39 @@ fn link_statements_recursive(statements: &[Statement], object_context_window: &m
     Ok(result)
 }
 
-fn parse_expression(expression: &Expression, object_context_window: &ObjectContextWindow) -> Result<LinkedExpression, CE> {
+fn parse_expression<'x>(expression: &Expression<'x>, object_context_window: &ObjectContextWindow) -> Result<LinkedExpression<'x>, CE> {
     let linked = match expression {
         Expression::Plus(expression1, expression2) => {
             let ex1 = parse_expression(expression1, object_context_window)?;
             let ex2 = parse_expression(expression2, object_context_window)?;
             LinkedExpression::Plus(Box::new(ex1), Box::new(ex2))
         }
-        Expression::NumberLiteral(string) => LinkedExpression::NumberLiteral(string.to_string()),
+        Expression::NumberLiteral(string) => LinkedExpression::NumberLiteral(string),
         Expression::RoundBracket(ex1) => {
             let ex1 = parse_expression(ex1, object_context_window)?;
             LinkedExpression::RoundBracket(Box::new(ex1))
         }
         Expression::Variable(name) => {
-            if let Some(object) = object_context_window.get(name) {
+            let name: String = name.iter().collect();
+            if let Some(object) = object_context_window.get(&name) {
                 if object.obj_type == ObjType::Function {
-                    return Err(CE::LinkingErrorFunctionUsage { name: name.clone() });
+                    return Err(CE::LinkingErrorFunctionUsage { name });
                 }
                 LinkedExpression::Variable(*object)
             } else {
                 let context = format!("{object_context_window:?}");
-                return Err(CE::LinkingError { name: name.clone(), context });
+                return Err(CE::LinkingError { name, context });
             }
         },
         Expression::FunctionCall { name, args } => {
-            let Some(object) = object_context_window.get(name) else {
+            let name: String = name.iter().collect();
+            let Some(object) = object_context_window.get(&name) else {
                 let context = format!("{object_context_window:?}");
-                return Err(CE::LinkingError { name: name.clone(), context });
+                return Err(CE::LinkingError { name, context });
             };
             if object.obj_type != ObjType::Function {
                 let context = format!("{object_context_window:?}");
-                return Err(CE::LinkingError { name: name.clone(), context });
+                return Err(CE::LinkingError { name, context });
             }
             let args = args.iter().map(|x| parse_expression(x, object_context_window)).collect::<Result<Vec<_>, _>>()?;
 
@@ -251,54 +260,63 @@ mod test {
     use crate::parser::parse3_syntactic::parse_statements;
     use crate::parser::{parse1_tokenize, parse2_brackets};
 
-    fn parse(text: &str) -> Result<Vec<LinkedStatement>, CE> {
+    fn parse(text: &[char]) -> Result<Vec<LinkedStatement>, CE> {
         let tokens = parse1_tokenize::tokenize(text)?;
         let tokens2 = parse2_brackets::parse_brackets(tokens)?;
         let statements = parse_statements(&tokens2)?;
         let linked_statements = link_variables(statements)?;
         Ok(linked_statements)
     }
+    fn string_to_chars(s: &str) -> Vec<char> {
+        s.chars().collect()
+    }
+    fn assert_has_error(str: &str) {
+        assert_ne!(parse(&string_to_chars(str)).err(), None);
+    }
+    fn assert_no_error(str: &str) {
+        assert_eq!(parse(&string_to_chars(str)).err(), None);
+    }
     #[test]
     fn test_variables() {
-        assert_eq!(parse("cat := 0").err(), None);
-        assert_eq!(parse("cat := (0 + 0)").err(), None);
+        assert_no_error("cat := 0");
+        assert_no_error("cat := (0 + 0)");
 
-        assert_ne!(parse("cat = 0").err(), None);
-        assert_ne!(parse("cat = (cat + 0)").err(), None);
-        assert_ne!(parse("cat := cat").err(), None);
-        assert_ne!(parse("dog := cat").err(), None);
-        assert_ne!(parse("cat := (cat + 0)").err(), None);
+        assert_has_error("cat = 0");
+        assert_has_error("cat = (cat + 0)");
+        assert_has_error("cat := cat");
+        assert_has_error("dog := cat");
+        assert_has_error("cat := (cat + 0)");
 
-        assert_eq!(parse("cat := 0 cat = 0").err(), None);
-        assert_eq!(parse("cat := 0 cat := 0").err(), None);
-        assert_eq!(parse("cat := 0 dog := cat").err(), None);
-        assert_eq!(parse("cat := 0 dog := (cat + cat)").err(), None);
-        assert_eq!(parse("cat := 0 dog := (cat + cat)").err(), None);
+        assert_no_error("cat := 0 cat = 0");
+        assert_no_error("cat := 0 cat := 0");
+        assert_no_error("cat := 0 dog := cat");
+        assert_no_error("cat := 0 dog := (cat + cat)");
+        assert_no_error("cat := 0 dog := (cat + cat)");
     }
 
     #[test]
     fn test_functions() {
-        assert_eq!(parse("a :: () { }").err(), None);
-        assert_eq!(parse("a :: (arg1) { }").err(), None);
-        assert_eq!(parse("a :: (arg1) { x := arg1 }").err(), None);
-        assert_eq!(parse("a :: (arg1, arg2) { x := arg1 + arg2 }").err(), None);
+        assert_no_error("a :: () { }");
+        assert_no_error("a :: (arg1) { }");
+        assert_no_error("a :: (arg1) { x := arg1 }");
+        assert_no_error("a :: (arg1, arg2) { x := arg1 + arg2 }");
 
-        assert_ne!(parse("a :: (arg1) { x = arg1 }").err(), None);
-        assert_ne!(parse("a :: () { a = x }").err(), None);
-        assert_ne!(parse("a :: () { x := a }").err(), None);
+        assert_has_error("a :: (arg1) { x = arg1 }");
+        assert_has_error("a :: () { a = x }");
+        assert_has_error("a :: () { x := a }");
 
-        assert_eq!(parse("a :: () { a := 0 x := a }").err(), None);
+        assert_no_error("a :: () { a := 0 x := a }");
     }
 
     #[test]
     fn test_function_with_while() {
-        assert_ne!(parse("a :: ()  { if 0    { x := 0 } e := x }").err(), None);
-        assert_ne!(parse("a :: (b) { if b    { x := 0 } e := x }").err(), None);
-        assert_ne!(parse("a :: ()  { while 0 { x := 0 } e := x }").err(), None);
-        assert_ne!(parse("a :: (b) { while b { x := 0 } e := x }").err(), None);
+        assert_has_error("a :: ()  { if 0    { x := 0 } e := x }");
+        assert_has_error("a :: (b) { if b    { x := 0 } e := x }");
+        assert_has_error("a :: ()  { while 0 { x := 0 } e := x }");
+        assert_has_error("a :: (b) { while b { x := 0 } e := x }");
 
-        let text = "a :: (b) { c := b while c { c = b } }";
-        let result = parse(text);
+        let text = string_to_chars("a :: (b) { c := b while c { c = b } }");
+        let result = parse(&text);
         let Ok(statements) = result else {
             let err = result.err().unwrap();
             panic!("parsing error: {err}");
@@ -347,7 +365,7 @@ mod test {
     
     #[test]
     fn test_function_call() {
-        assert_eq!(parse("a :: () {} a()").err(), None);
-        assert_eq!(parse("a :: () {} b :: () { a() }").err(), None);
+        assert_no_error("a :: () {} a()");
+        assert_no_error("a :: () {} b :: () { a() }");
     }
 }

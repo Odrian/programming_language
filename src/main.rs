@@ -1,5 +1,5 @@
 use programming_language::parse;
-use std::env;
+use std::{env, fs};
 use programming_language::error::CompilationError as CE;
 
 fn main() -> Result<(), CE> {
@@ -7,10 +7,21 @@ fn main() -> Result<(), CE> {
     if args.len() != 2 {
         panic!("WRONG ARGUMENTS, USE: programming_language <filepath>");
     }
-    let filepath = &args[1];
+    let file_path = &args[1];
+    let file_text = read_file(file_path);
 
     let debug = true;
-    parse(filepath, debug)?;
+    parse(&file_text, debug)?;
 
     Ok(())
+}
+
+fn read_file(path: &str) -> Vec<char> {
+    let result = fs::read_to_string(path);
+    match result {
+        Ok(text) => text.chars().collect(),
+        Err(error) => {
+            panic!("{error:?}");
+        }
+    }
 }

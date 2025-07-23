@@ -8,18 +8,20 @@ mod parse4_linking;
 pub use parse1_tokenize::PositionInFile;
 pub use parse2_brackets::BracketType;
 
-pub fn parse(filepath: &str, debug: bool) -> Result<(), CE> {
-    let tokens = parse1_tokenize::tokenize_file(filepath)?;
+pub fn parse(text: &[char], debug: bool) -> Result<(), CE> {
+    let tokens = parse1_tokenize::tokenize(text)?;
     if debug {
-        let tokens_: Vec<_> = tokens.iter().map(|t| t.token.clone()).collect();
-        println!("{tokens_:?}")
+        let tokens: Vec<_> = tokens.iter().map(|t| t.token.clone()).collect();
+        println!("{tokens:?}")
     }
     let tokens2 = parse2_brackets::parse_brackets(tokens)?;
     if debug {
+        let tokens2: Vec<_> = tokens2.iter().map(|t| t.token.clone()).collect();
         println!("{tokens2:?}")
     }
     let statements = parse3_syntactic::parse_statements(&tokens2)?;
 
+    println!("statements:");
     for statement in &statements {
         println!("{statement}");
     }
