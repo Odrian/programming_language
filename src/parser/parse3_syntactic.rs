@@ -6,10 +6,10 @@ use crate::parser::parse1_tokenize::PositionInFile;
 pub fn parse_statements<'x>(tokens: &[Token2WithPos<'x>]) -> Result<Vec<Statement<'x>>, CE> {
     let mut statements = Vec::new();
 
-    let mut tokens = tokens;
-    while !tokens.is_empty() {
-        let (statement, new_tokens) = parse_statement(tokens)?;
-        tokens = new_tokens;
+    let mut index = 0;
+    while index < tokens.len() {
+        let (statement, new_index) = parse_statement(tokens, index)?;
+        index = new_index;
         statements.push(statement);
     }
 
@@ -125,11 +125,11 @@ impl<'x> Display for Expression<'x> {
     }
 }
 
-fn parse_statement<'x, 'a>(tokens: &'a [Token2WithPos<'x>]) -> Result<(Statement<'x>, &'a [Token2WithPos<'x>]), CE> {
-    if tokens.is_empty() {
+fn parse_statement<'x>(tokens: &[Token2WithPos<'x>], index: usize) -> Result<(Statement<'x>, usize), CE> {
+    if index >= tokens.len() {
         panic!("tokens should not be empty");
     }
-    let token = &tokens[0];
+    let token = &tokens[index];
     match &token.token {
         Token2::NumberLiteral(_) | Token2::TwoSidedOperation(_) | Token2::EqualOperation(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
             Err(CE::SyntacticsError(token.position, String::from("expected statement")))
@@ -138,25 +138,24 @@ fn parse_statement<'x, 'a>(tokens: &'a [Token2WithPos<'x>]) -> Result<(Statement
             let string = chars.iter().collect::<String>();
             match string.as_str() {
                 "if" | "while" => {
-                    // let name = chars.as_str();
-                    let (condition, new_tokens) = parse_expression(&tokens[1..], token.position)?;
-                    if new_tokens.is_empty() {
+                    let (condition, new_index) = parse_expression(tokens, index + 1, token.position)?;
+                    if new_index >= tokens.len() {
                         return Err(CE::SyntacticsError(tokens.last().unwrap().position, format!("expected {string} body after that")));
                     }
-                    let next_token = &new_tokens[0];
+                    let next_token = &tokens[new_index];
                     let Token2::Bracket(vec, BracketType::Curly) = &next_token.token else {
                         return Err(CE::SyntacticsError(token.position, format!("expected {string} body")))
                     };
                     let body = parse_statements(vec)?;
 
                     if string.as_str() == "if" {
-                        Ok((Statement::new_if(condition, body), &new_tokens[1..]))
+                        Ok((Statement::new_if(condition, body), new_index + 1))
                     } else {
-                        Ok((Statement::new_while(condition, body), &new_tokens[1..]))
+                        Ok((Statement::new_while(condition, body), new_index + 1))
                     }
                 }
                 _ => {
-                    parse_statement2(&tokens[1..], chars, token.position)
+                    parse_statement2(tokens, index + 1, chars, token.position)
                 }
             }
         }
@@ -165,17 +164,17 @@ fn parse_statement<'x, 'a>(tokens: &'a [Token2WithPos<'x>]) -> Result<(Statement
         }
     }
 }
-fn parse_statement2<'x, 'a>(tokens: &'a [Token2WithPos<'x>], string: &'x [char], previous_place_info: PositionInFile) -> Result<(Statement<'x>, &'a [Token2WithPos<'x>]), CE> {
+fn parse_statement2<'x>(tokens: &[Token2WithPos<'x>], index: usize, string: &'x [char], previous_place_info: PositionInFile) -> Result<(Statement<'x>, usize), CE> {
     if tokens.is_empty() {
         return Err(CE::SyntacticsError(previous_place_info, String::from("expected statement")));
     }
-    let new_token = &tokens[0].token;
+    let new_token = &tokens[index].token;
     match new_token {
         Token2::DoubleColon => {
-            parse_function(&tokens[1..], string, tokens[0].position)
+            parse_function(tokens, index+1, string, tokens[index].position)
         },
         Token2::EqualOperation(equal_operation) => {
-            let (expression2, new_tokens) = parse_expression(&tokens[1..], tokens[0].position)?;
+            let (expression2, new_tokens) = parse_expression(tokens, index+1, tokens[index].position)?;
             let statement = match equal_operation {
                 EqualOperation::ColonEqual => Statement::new_variable(string, expression2),
                 EqualOperation::Equal => Statement::new_set(string, expression2),
@@ -184,41 +183,41 @@ fn parse_statement2<'x, 'a>(tokens: &'a [Token2WithPos<'x>], string: &'x [char],
         }
         Token2::Bracket(vec, BracketType::Round) => {
             let name = string;
-            let args = parse_function_arguments(vec, tokens[0].position)?;
+            let args = parse_function_arguments(vec, tokens[index].position)?;
             let statement = Statement::Expression(Expression::FunctionCall { name, args });
-            Ok((statement, &tokens[1..]))
+            Ok((statement, index + 1))
         }
         _ => {
             let string = string.iter().collect::<String>();
-            Err(CE::SyntacticsError(tokens[0].position, format!("expected statement, got '{string}' '{new_token:?}'")))
+            Err(CE::SyntacticsError(tokens[index].position, format!("expected statement, got '{string}' '{new_token:?}'")))
         }
     }
 }
 
-fn parse_expression<'x, 'a>(tokens: &'a [Token2WithPos<'x>], previous_place_info: PositionInFile) -> Result<(Expression<'x>, &'a [Token2WithPos<'x>]), CE> {
-    if tokens.is_empty() {
+fn parse_expression<'x>(tokens: &[Token2WithPos<'x>], index: usize, previous_place_info: PositionInFile) -> Result<(Expression<'x>, usize), CE> {
+    if index >= tokens.len() {
         return Err(CE::SyntacticsError(previous_place_info, String::from("expected expression after that")));
     }
-    let token = &tokens[0];
+    let token = &tokens[index];
     match &token.token {
         Token2::TwoSidedOperation(_) | Token2::EqualOperation(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
             Err(CE::SyntacticsError(token.position, String::from("expected expression")))
         }
         Token2::String(string) => {
             let expression1 = Expression::Variable(string);
-            parse_expression2(&tokens[1..], expression1)
+            parse_expression2(tokens, index+1, expression1)
         }
         Token2::NumberLiteral(value) => {
             let expression1 = Expression::NumberLiteral(value);
-            parse_expression2(&tokens[1..], expression1)
+            parse_expression2(tokens, index+1, expression1)
         }
         Token2::Bracket(vec, BracketType::Round) => {
-            let (expression, new_tokens) = parse_expression(vec, token.position)?;
-            if new_tokens.is_empty() {
+            let (expression, new_index) = parse_expression(vec, 0, token.position)?;
+            if new_index >= vec.len() {
                 let expression1 = Expression::round_bracket(expression);
-                parse_expression2(&tokens[1..], expression1)
+                parse_expression2(tokens, index + 1, expression1)
             } else {
-                Err(CE::SyntacticsError(new_tokens[0].position, String::from("expected ')'")))
+                Err(CE::SyntacticsError(vec[new_index].position, String::from("expected ')'")))
             }
         }
         Token2::Bracket(_, _) => {
@@ -227,19 +226,19 @@ fn parse_expression<'x, 'a>(tokens: &'a [Token2WithPos<'x>], previous_place_info
     }
 }
 // parse "expression1 twoSidedOp expression2"
-fn parse_expression2<'x, 'a>(tokens: &'a [Token2WithPos<'x>], expression1: Expression<'x>) -> Result<(Expression<'x>, &'a [Token2WithPos<'x>]), CE> {
-    if tokens.is_empty() {
-        return Ok((expression1, tokens));
+fn parse_expression2<'x>(tokens: &[Token2WithPos<'x>], index: usize, expression1: Expression<'x>) -> Result<(Expression<'x>, usize), CE> {
+    if index >= tokens.len() {
+        return Ok((expression1, index));
     }
-    let token = &tokens[0];
+    let token = &tokens[index];
     match &token.token {
         Token2::String(_) | Token2::NumberLiteral(_) | Token2::EqualOperation(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
-            Ok((expression1, tokens))
+            Ok((expression1, index))
         }
         Token2::TwoSidedOperation(op) => {
             match op {
                 TwoSidedOperation::Plus => {
-                    let (expression2, new_tokens) = parse_expression(&tokens[1..], token.position)?;
+                    let (expression2, new_tokens) = parse_expression(tokens, index+1, token.position)?;
                     let expression = Expression::plus(expression1, expression2);
                     Ok((expression, new_tokens))
                 }
@@ -247,24 +246,24 @@ fn parse_expression2<'x, 'a>(tokens: &'a [Token2WithPos<'x>], expression1: Expre
         }
         Token2::Bracket(vec, BracketType::Round) => {
             let Expression::Variable(name) = expression1 else {
-                return Err(CE::SyntacticsError(tokens[0].position, String::from("unexpected round brackets after expression")));
+                return Err(CE::SyntacticsError(tokens[index].position, String::from("unexpected round brackets after expression")));
             };
             let args = parse_function_arguments(vec, token.position)?;
             let expression = Expression::FunctionCall { name, args };
-            Ok((expression, &tokens[1..]))
+            Ok((expression, index + 1))
         }
         Token2::Bracket(_, _) => {
-            Ok((expression1, tokens))
+            Ok((expression1, index))
         }
     }
 }
 
-fn parse_function<'x, 'a>(tokens: &'a [Token2WithPos<'x>], name: &'x [char], previous_place_info: PositionInFile) -> Result<(Statement<'x>, &'a [Token2WithPos<'x>]), CE> {
-    if tokens.is_empty() {
+fn parse_function<'x>(tokens: &[Token2WithPos<'x>], index: usize, name: &'x [char], previous_place_info: PositionInFile) -> Result<(Statement<'x>, usize), CE> {
+    if index >= tokens.len() {
         return Err(CE::SyntacticsError(previous_place_info, String::from("expected function declaration")));
     }
-    let Token2::Bracket(args, BracketType::Round) = &tokens[0].token else {
-        return Err(CE::SyntacticsError(tokens[0].position, String::from("expected function declaration")));
+    let Token2::Bracket(args, BracketType::Round) = &tokens[index].token else {
+        return Err(CE::SyntacticsError(tokens[index].position, String::from("expected function declaration")));
     };
 
     // parse arguments
@@ -298,34 +297,34 @@ fn parse_function<'x, 'a>(tokens: &'a [Token2WithPos<'x>], name: &'x [char], pre
         arguments
     };
 
-    if tokens.len() == 1 {
-        return Err(CE::SyntacticsError(tokens[0].position, String::from("expected curly brackets after function declaration")));
+    if index + 1 >= tokens.len() {
+        return Err(CE::SyntacticsError(tokens[index].position, String::from("expected curly brackets after function declaration")));
     }
 
     // parse inside
-    let Token2::Bracket(body, BracketType::Curly) = &tokens[1].token else {
-        return Err(CE::SyntacticsError(tokens[1].position, String::from("expected curly brackets after function declaration")));
+    let Token2::Bracket(body, BracketType::Curly) = &tokens[index + 1].token else {
+        return Err(CE::SyntacticsError(tokens[index + 1].position, String::from("expected curly brackets after function declaration")));
     };
     let body = parse_statements(body)?;
 
     let statement = Statement::new_function(name, arguments, body);
-    Ok((statement, &tokens[2..]))
+    Ok((statement, index + 2))
 }
 
 fn parse_function_arguments<'x>(tokens: &[Token2WithPos<'x>], previous_place_info: PositionInFile) -> Result<Vec<Expression<'x>>, CE> {
     let mut args = Vec::new();
 
-    let mut tokens = tokens;
-    while !tokens.is_empty() {
-        let (expression, new_tokens) = parse_expression(tokens, previous_place_info)?;
+    let mut index = 0;
+    while index < tokens.len() {
+        let (expression, new_index) = parse_expression(tokens, index, previous_place_info)?;
         args.push(expression);
 
-        if new_tokens.is_empty() {
-            tokens = new_tokens;
-        } else if new_tokens[0].token == Token2::Comma {
-            tokens = &new_tokens[1..];
+        if new_index == tokens.len() {
+            index = new_index;
+        } else if tokens[new_index].token == Token2::Comma {
+            index = new_index + 1;
         } else {
-            return Err(CE::SyntacticsError(tokens[0].position, format!("expected ',' or ')', got {:?}", new_tokens[0].token)));
+            return Err(CE::SyntacticsError(tokens[new_index].position, format!("expected ',' or ')', got {:?}", tokens[new_index].token)));
         }
     }
 
