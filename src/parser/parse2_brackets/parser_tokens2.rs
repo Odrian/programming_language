@@ -5,10 +5,7 @@ use super::super::parse1_tokenize::token::*;
 use super::token2::*;
 
 pub fn parse_brackets(tokens: Vec<TokenWithPos>) -> Result<Vec<Token2WithPos>, CE> {
-    let (token, end_index) = parse_inside_brackets(&tokens, 0, BracketType::None)?;
-    if end_index != tokens.len() {
-        unreachable!("")
-    }
+    let (token, _) = parse_inside_brackets(&tokens, 0, None)?;
     let Token2::Bracket(vec, _) = token.token else { unreachable!() };
     Ok(vec)
 }
@@ -16,7 +13,7 @@ pub fn parse_brackets(tokens: Vec<TokenWithPos>) -> Result<Vec<Token2WithPos>, C
 pub fn parse_inside_brackets<'x>(
     tokens: &Vec<TokenWithPos<'x>>,
     start_index: usize,
-    open_bracket_type: BracketType,
+    open_bracket_type: Option<BracketType>,
 ) -> Result<(Token2WithPos<'x>, usize), CE> {
     let mut result_tokens = Vec::new();
 
@@ -37,7 +34,7 @@ pub fn parse_inside_brackets<'x>(
             Token::ColonEqual => Token2::EqualOperation(EqualOperation::ColonEqual),
 
             Token::CurlyBracketOpen | Token::RoundBracketOpen => {
-                let bracket_type = BracketType::from_token(&token.token);
+                let bracket_type = Some(BracketType::from_token(&token.token));
                 let (new_token, new_index) =
                     parse_inside_brackets(tokens, index + 1, bracket_type)?;
                 index = new_index - 1; // -1 because later will be 'index += 1'
@@ -45,6 +42,11 @@ pub fn parse_inside_brackets<'x>(
             }
             Token::CurlyBracketClose | Token::RoundBracketClose => {
                 let bracket_type = BracketType::from_token(&token.token);
+                if open_bracket_type.is_none() {
+                    return Err(CE::BracketNotOpened(token.position, bracket_type));
+                }
+                let open_bracket_type = open_bracket_type.unwrap();
+
                 if bracket_type != open_bracket_type {
                     return Err(CE::WrongBracketClosed {
                         start: tokens[start_index].position,
@@ -61,14 +63,16 @@ pub fn parse_inside_brackets<'x>(
         index += 1;
     }
 
-    if open_bracket_type == BracketType::None {
-        let result_token = Token2::Bracket(result_tokens, BracketType::None);
-        Ok((Token2WithPos::new(result_token, PositionInFile::default()), tokens.len()))
-    } else {
+    if let Some(open_bracket_type) = open_bracket_type {
         Err(CE::BracketNotClosed(
             tokens[start_index - 1].position,
             open_bracket_type,
         ))
+    } else {
+        let unused_bracket_type = BracketType::Round;
+        let unused_number = 0;
+        let result_token = Token2::Bracket(result_tokens, unused_bracket_type);
+        Ok((Token2WithPos::new(result_token, PositionInFile::default()), unused_number))
     }
 }
 

@@ -51,11 +51,10 @@ impl fmt::Display for CompilationError {
     }
 }
 
-fn bracket_type_to_string(bracket_type: &BracketType) -> String {
+fn bracket_type_to_string(bracket_type: &BracketType) -> &'static str {
     match bracket_type {
-        BracketType::Round => String::from("round"),
-        BracketType::Curly => String::from("curly"),
-        BracketType::None => panic!("BracketType::None should not be here"),
+        BracketType::Round => "round",
+        BracketType::Curly => "curly",
     }
 }
 
