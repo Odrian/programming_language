@@ -5,8 +5,11 @@ mod parse2_brackets;
 mod parse3_syntactic;
 mod parse4_linking;
 
-pub use parse1_tokenize::PositionInFile;
-pub use parse2_brackets::BracketType;
+mod position_in_file;
+pub use position_in_file::PositionInFile;
+
+mod bracket_type;
+pub use bracket_type::BracketType;
 
 pub fn parse(text: &[char], debug: bool) -> Result<(), CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
