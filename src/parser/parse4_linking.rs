@@ -16,20 +16,20 @@ pub fn link_variables(statement: Vec<Statement>) -> Result<Vec<LinkedStatement>,
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum LinkedStatement<'x> {
-    VariableDeclaration { object: Object, value: LinkedExpression<'x> },
-    SetVariable { object: Object, value: LinkedExpression<'x> },
+    VariableDeclaration { object: Object<'x>, value: LinkedExpression<'x> },
+    SetVariable { object: Object<'x>, value: LinkedExpression<'x> },
     Expression(LinkedExpression<'x>),
     If { condition: LinkedExpression<'x>, body: Vec<LinkedStatement<'x>> },
     While { condition: LinkedExpression<'x>, body: Vec<LinkedStatement<'x>> },
-    Function { object: Object, args: Vec<Object>, body: Vec<LinkedStatement<'x>> },
+    Function { object: Object<'x>, args: Vec<Object<'x>>, body: Vec<LinkedStatement<'x>> },
 }
 #[derive(Debug, Eq, PartialEq)]
 pub enum LinkedExpression<'x> {
     Plus(Box<LinkedExpression<'x>>, Box<LinkedExpression<'x>>),
     NumberLiteral(&'x [char]),
-    Variable(Object),
+    Variable(Object<'x>),
     RoundBracket(Box<LinkedExpression<'x>>),
-    FunctionCall { object: Object, args: Vec<LinkedExpression<'x>> },
+    FunctionCall { object: Object<'x>, args: Vec<LinkedExpression<'x>> },
 }
 
 impl<'x> Display for LinkedStatement<'x> {
@@ -40,10 +40,10 @@ impl<'x> Display for LinkedStatement<'x> {
         }
         match self {
             Self::VariableDeclaration { object, value } => {
-                write!(f, "${} := {}", object.id, value)
+                write!(f, "{object} := {value}")
             }
             Self::SetVariable { object, value } => {
-                write!(f, "${} = {}", object.id, value)
+                write!(f, "{object} = {value}")
             }
             Self::Expression(expression) => {
                 write!(f, "{expression}")
@@ -58,20 +58,9 @@ impl<'x> Display for LinkedStatement<'x> {
             }
             Self::Function { object, args, body } => {
                 let inside = statements_to_string_with_tabs(body);
-                let args: Vec<_> = args.iter().map(|x| format!("${}", x.id)).collect();
-                write!(f, "${} :: ({}) {{\n{}\n}}", object.id, args.join(", "), inside)
+                let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
+                write!(f, "{object} :: ({args}) {{\n{inside}\n}}")
             }
-            // Self::Bracket(statements, bracket) => {
-            //     match bracket {
-            //         BracketType::Curly => {
-            //             write!(f, "{{\n{}\n}}", statements.iter().map(|s| s.to_string()).collect::<Vec<String>>().join("\n"))
-            //         }
-            //         BracketType::Round => {
-            //             write!(f, "({})", statements.iter().map(|s| s.to_string()).collect::<Vec<String>>().join("\n"))
-            //         }
-            //         BracketType::None => panic!("should not be used")
-            //     }
-            // }
         }
     }
 }
@@ -80,11 +69,11 @@ impl<'x> Display for LinkedExpression<'x> {
         match self {
             LinkedExpression::Plus(a, b) => write!(f, "({a} + {b})"),
             LinkedExpression::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
-            LinkedExpression::Variable(object) => write!(f, "${}", object.id),
+            LinkedExpression::Variable(object) => write!(f, "{object}"),
             LinkedExpression::RoundBracket(expression) => write!(f, "({expression})"),
             LinkedExpression::FunctionCall { object, args } => {
                 let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-                write!(f, "${} ({})", object.id, args.join(", "))
+                write!(f, "{} ({})", object, args.join(", "))
             },
         }
     }
@@ -97,14 +86,27 @@ pub enum ObjType {
     Function
 }
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct Object {
+pub struct Object<'x> {
     id: u32,
+    name: &'x [char],
+    name_id: u32,
     obj_type: ObjType,
 }
-impl Object {
-    pub fn new(obj_type: ObjType) -> Object {
+impl<'x> Display for Object<'x> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = self.name.iter().collect::<String>();
+        if self.name_id == 0 {
+            write!(f, "{name}")
+        } else {
+            write!(f, "{}#{}", name, self.name_id)
+        }
+    }
+}
+
+impl<'x> Object<'x> {
+    pub fn new(name: &'x [char], name_id: u32, obj_type: ObjType) -> Self {
         let id = Self::get_unique_id();
-        Object { id, obj_type }
+        Object { id, name, name_id, obj_type }
     }
     fn get_unique_id() -> u32 {
         static COUNTER: atomic::AtomicU32 = atomic::AtomicU32::new(0);
@@ -113,26 +115,26 @@ impl Object {
 }
 
 #[derive(Debug, Default)]
-struct ObjectsContext(HashMap<String, Object>);
+struct ObjectsContext<'x>(HashMap<String, Object<'x>>);
 
-impl ObjectsContext {
-    fn add(&mut self, name: String, v_type: ObjType) -> Object {
-        let object = Object::new(v_type);
-        self.0.insert(name, object);
+impl<'x> ObjectsContext<'x> {
+    fn add(&mut self, name_string: String, name: &'x [char], name_id: u32, v_type: ObjType) -> Object<'x> {
+        let object = Object::new(name, name_id, v_type);
+        self.0.insert(name_string, object);
         object
     }
-    fn get(&self, name: &String) -> Option<&Object> {
+    fn get(&self, name: &String) -> Option<&Object<'x>> {
         self.0.get(name)
     }
 }
 
 #[derive(Debug)]
-struct ObjectContextWindow {
-    contexts: Vec<ObjectsContext>,
+struct ObjectContextWindow<'x> {
+    contexts: Vec<ObjectsContext<'x>>,
 }
 
-impl ObjectContextWindow {
-    fn new() -> ObjectContextWindow {
+impl<'x> ObjectContextWindow<'x> {
+    fn new() -> Self {
         ObjectContextWindow { contexts: vec![] }
     }
     fn step_in(&mut self) {
@@ -144,7 +146,7 @@ impl ObjectContextWindow {
         }
         self.contexts.pop();
     }
-    fn get(&self, name: &String) -> Option<&Object> {
+    fn get(&self, name: &String) -> Option<&Object<'x>> {
         for object_context in self.contexts.iter().rev() {
             let object = object_context.get(name);
             if object.is_some() {
@@ -153,18 +155,22 @@ impl ObjectContextWindow {
         }
         None
     }
-    fn add(&mut self, name: String, v_type: ObjType) -> Object {
-        self.contexts.last_mut().unwrap().add(name, v_type)
+    fn add(&mut self, name: &'x [char], v_type: ObjType) -> Object<'x> {
+        let name_string = name.iter().collect::<String>();
+        let name_id = self.contexts.iter().rev().find_map(|context|
+            context.0.get(&name_string).map(|obj| obj.name_id + 1)
+        ).unwrap_or(0);
+
+        self.contexts.last_mut().unwrap().add(name_string, name, name_id, v_type)
     }
 }
 
-fn link_statements_recursive<'x>(statements: &[Statement<'x>], object_context_window: &mut ObjectContextWindow) -> Result<Vec<LinkedStatement<'x>>, CE> {
+fn link_statements_recursive<'x>(statements: &[Statement<'x>], object_context_window: &mut ObjectContextWindow<'x>) -> Result<Vec<LinkedStatement<'x>>, CE> {
     let mut result = vec![];
     for statement in statements {
         let linked = match statement {
             Statement::VariableDeclaration { name, value } => {
                 let value = parse_expression(value, object_context_window)?;
-                let name: String = name.iter().collect();
                 let object = object_context_window.add(name, ObjType::Variable);
                 LinkedStatement::VariableDeclaration { object, value }
             }
@@ -196,11 +202,10 @@ fn link_statements_recursive<'x>(statements: &[Statement<'x>], object_context_wi
                 LinkedStatement::While { condition, body }
             }
             Statement::Function { name, args, body } => {
-                let name: String = name.iter().collect();
                 let object = object_context_window.add(name, ObjType::Function);
                 object_context_window.step_in();
                 let args: Vec<Object> = args.iter().map(|x|
-                    object_context_window.add(x.iter().collect::<String>(), ObjType::Variable)
+                    object_context_window.add(x, ObjType::Variable)
                 ).collect();
                 let body = link_statements_recursive(body, object_context_window)?;
                 object_context_window.step_out();
@@ -212,7 +217,7 @@ fn link_statements_recursive<'x>(statements: &[Statement<'x>], object_context_wi
     Ok(result)
 }
 
-fn parse_expression<'x>(expression: &Expression<'x>, object_context_window: &ObjectContextWindow) -> Result<LinkedExpression<'x>, CE> {
+fn parse_expression<'x>(expression: &Expression<'x>, object_context_window: &ObjectContextWindow<'x>) -> Result<LinkedExpression<'x>, CE> {
     let linked = match expression {
         Expression::Plus(expression1, expression2) => {
             let ex1 = parse_expression(expression1, object_context_window)?;
