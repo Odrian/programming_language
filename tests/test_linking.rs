@@ -5,8 +5,7 @@ use programming_language::parser::parse4_linking::linked_statement::*;
 
 fn parse(text: &[char]) -> Result<Vec<LinkedStatement>, CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
-    let tokens2 = parse2_brackets::parse_brackets(tokens)?;
-    let statements = parse3_syntactic::parse_statements(&tokens2)?;
+    let statements = parse3_syntactic::parse_statements(&tokens)?;
     let linked_statements = parse4_linking::link_variables(statements)?;
     Ok(linked_statements)
 }

@@ -9,10 +9,12 @@ impl PositionInFile {
     pub fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
-    pub fn default() -> Self {
-        Self::new(0, 0)
+    pub fn new_sized(start: usize, size: usize) -> Self {
+        let end = start + size;
+        Self { start, end }
     }
 }
+
 impl Display for PositionInFile {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // TODO: implement parsing from index to column:line

@@ -4,8 +4,7 @@ use programming_language::parser::parse3_syntactic::statement::*;
 
 fn parse(text: &[char]) -> Result<Vec<Statement>, CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
-    let tokens2 = parse2_brackets::parse_brackets(tokens)?;
-    let statements = parse3_syntactic::parse_statements(&tokens2)?;
+    let statements = parse3_syntactic::parse_statements(&tokens)?;
     Ok(statements)
 }
 fn string_to_chars(s: &str) -> Vec<char> {

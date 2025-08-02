@@ -2,9 +2,9 @@ use crate::error::CompilationError as CE;
 use crate::parser::{BracketType, PositionInFile};
 
 use super::statement::*;
-use crate::parser::parse2_brackets::token2::*;
+use crate::parser::parse1_tokenize::token::*;
 
-pub fn parse_statements<'x>(tokens: &[Token2WithPos<'x>]) -> Result<Vec<Statement<'x>>, CE> {
+pub fn parse_statements<'x>(tokens: &[TokenWithPos<'x>]) -> Result<Vec<Statement<'x>>, CE> {
     let mut statements = Vec::new();
 
     let mut state = ParsingState::new(tokens);
@@ -16,13 +16,13 @@ pub fn parse_statements<'x>(tokens: &[Token2WithPos<'x>]) -> Result<Vec<Statemen
 }
 
 pub struct ParsingState<'x, 'a> {
-    tokens: &'a [Token2WithPos<'x>],
+    tokens: &'a [TokenWithPos<'x>],
     index: usize,
     size: usize,
 }
 
 impl<'x, 'a> ParsingState<'x, 'a> {
-    pub fn new(tokens: &'a [Token2WithPos<'x>]) -> Self {
+    pub fn new(tokens: &'a [TokenWithPos<'x>]) -> Self {
         let size = tokens.len();
         ParsingState { tokens, index: 0, size }
     }
@@ -36,10 +36,10 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         let token = &self.tokens[self.index];
         self.index += 1;
         match &token.token {
-            Token2::NumberLiteral(_) | Token2::TwoSidedOperation(_) | Token2::EqualOperation(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
+            Token::NumberLiteral(_) | Token::TwoSidedOperation(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon => {
                 Err(CE::SyntacticsError(token.position, String::from("expected statement")))
             }
-            Token2::String(chars) => {
+            Token::String(chars) => {
                 let string = chars.iter().collect::<String>();
                 match string.as_str() {
                     "if" | "while" => {
@@ -49,7 +49,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                         }
                         let next_token = &self.tokens[self.index];
                         self.index += 1;
-                        let Token2::Bracket(vec, BracketType::Curly) = &next_token.token else {
+                        let Token::Bracket(vec, BracketType::Curly) = &next_token.token else {
                             return Err(CE::SyntacticsError(token.position, format!("expected {string} body")))
                         };
                         let body = parse_statements(vec)?;
@@ -65,7 +65,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                     }
                 }
             }
-            Token2::Bracket(_, _) => {
+            Token::Bracket(_, _) => {
                 Err(CE::SyntacticsError(token.position, format!("unexpected bracket open at {}, expected statement", token.position)))
             }
         }
@@ -77,10 +77,10 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         let new_token = &self.tokens[self.index];
         self.index += 1;
         match &new_token.token {
-            Token2::DoubleColon => {
+            Token::DoubleColon => {
                 self.parse_function(string, new_token.position)
             },
-            Token2::EqualOperation(equal_operation) => {
+            Token::EqualOperation(equal_operation) => {
                 let expression2 = self.parse_expression(new_token.position)?;
                 let statement = match equal_operation {
                     EqualOperation::ColonEqual => Statement::new_variable(string, expression2),
@@ -88,7 +88,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                 };
                 Ok(statement)
             }
-            Token2::Bracket(vec, BracketType::Round) => {
+            Token::Bracket(vec, BracketType::Round) => {
                 let name = string;
                 let args = parse_function_arguments(vec, new_token.position)?;
                 let statement = Statement::Expression(Expression::function_call(name, args));
@@ -108,18 +108,18 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         let token = &self.tokens[self.index];
         self.index += 1;
         match &token.token {
-            Token2::TwoSidedOperation(_) | Token2::EqualOperation(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
+            Token::TwoSidedOperation(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon => {
                 Err(CE::SyntacticsError(token.position, String::from("expected expression")))
             }
-            Token2::String(string) => {
+            Token::String(string) => {
                 let expression1 = Expression::Variable(string);
                 self.parse_expression2(expression1)
             }
-            Token2::NumberLiteral(value) => {
+            Token::NumberLiteral(value) => {
                 let expression1 = Expression::NumberLiteral(value);
                 self.parse_expression2(expression1)
             }
-            Token2::Bracket(vec, BracketType::Round) => {
+            Token::Bracket(vec, BracketType::Round) => {
                 let mut new_state = ParsingState::new(vec);
                 let expression = new_state.parse_expression(token.position)?;
                 if new_state.at_end() {
@@ -129,7 +129,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                     Err(CE::SyntacticsError(vec[new_state.index].position, String::from("expected ')'")))
                 }
             }
-            Token2::Bracket(_, _) => {
+            Token::Bracket(_, _) => {
                 Err(CE::SyntacticsError(token.position, String::from("expected expression, got open bracket")))
             }
         }
@@ -141,10 +141,10 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         }
         let token = &self.tokens[self.index];
         match &token.token {
-            Token2::String(_) | Token2::NumberLiteral(_) | Token2::EqualOperation(_) | Token2::Comma | Token2::Colon | Token2::DoubleColon => {
+            Token::String(_) | Token::NumberLiteral(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon => {
                 Ok(expression1)
             }
-            Token2::TwoSidedOperation(op) => {
+            Token::TwoSidedOperation(op) => {
                 self.index += 1;
                 match op {
                     TwoSidedOperation::Plus => {
@@ -153,7 +153,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                     }
                 }
             }
-            Token2::Bracket(vec, BracketType::Round) => {
+            Token::Bracket(vec, BracketType::Round) => {
                 self.index += 1;
                 let Expression::Variable(name) = expression1 else {
                     return Err(CE::SyntacticsError(token.position, String::from("unexpected round brackets after expression")));
@@ -161,7 +161,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                 let args = parse_function_arguments(vec, token.position)?;
                 Ok(Expression::function_call(name, args))
             }
-            Token2::Bracket(_, _) => {
+            Token::Bracket(_, _) => {
                 Ok(expression1)
             }
         }
@@ -173,7 +173,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         }
         let token = &self.tokens[self.index];
         self.index += 1;
-        let Token2::Bracket(args, BracketType::Round) = &token.token else {
+        let Token::Bracket(args, BracketType::Round) = &token.token else {
             return Err(CE::SyntacticsError(token.position, String::from("expected function declaration")));
         };
 
@@ -183,14 +183,14 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         } else {
             let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
 
-            let Token2::String(arg1) = &args[0].token else {
+            let Token::String(arg1) = &args[0].token else {
                 return Err(CE::SyntacticsError(args[0].position, String::from("expected argument name")));
             };
             arguments.push(*arg1);
 
             let mut index = 1;
             while index < args.len() {
-                if args[index].token != Token2::Comma {
+                if args[index].token != Token::Comma {
                     return Err(CE::SyntacticsError(args[index].position, String::from("expected ',' or ')'")));
                 }
                 index += 1;
@@ -198,7 +198,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                     // TODO: break
                     return Err(CE::SyntacticsError(args[index - 1].position, String::from("expected argument after comma")));
                 }
-                let Token2::String(arg_i) = &args[index].token else {
+                let Token::String(arg_i) = &args[index].token else {
                     return Err(CE::SyntacticsError(args[index].position, String::from("expected argument name in function declaration")));
                 };
                 arguments.push(*arg_i);
@@ -215,7 +215,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         // parse inside
         let new_token = &self.tokens[self.index];
         self.index += 1;
-        let Token2::Bracket(body, BracketType::Curly) = &new_token.token else {
+        let Token::Bracket(body, BracketType::Curly) = &new_token.token else {
             return Err(CE::SyntacticsError(new_token.position, String::from("expected curly brackets after function declaration")));
         };
         let body = parse_statements(body)?;
@@ -225,7 +225,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
     }
 }
 
-fn parse_function_arguments<'x>(tokens: &[Token2WithPos<'x>], previous_place_info: PositionInFile) -> Result<Vec<Expression<'x>>, CE> {
+fn parse_function_arguments<'x>(tokens: &[TokenWithPos<'x>], previous_place_info: PositionInFile) -> Result<Vec<Expression<'x>>, CE> {
     let mut args = Vec::new();
 
     let mut state = ParsingState::new(tokens);
@@ -235,7 +235,7 @@ fn parse_function_arguments<'x>(tokens: &[Token2WithPos<'x>], previous_place_inf
 
         if !state.at_end() {
             let token = &state.tokens[state.index];
-            if token.token == Token2::Comma {
+            if token.token == Token::Comma {
                 state.index += 1;
             } else {
                 return Err(CE::SyntacticsError(token.position, format!("expected ',' or ')', got {:?}", token.token)));
