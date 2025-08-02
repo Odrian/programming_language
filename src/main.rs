@@ -1,4 +1,4 @@
-use programming_language::parse;
+use programming_language::parser::parse;
 use std::{env, fs};
 use programming_language::error::CompilationError as CE;
 

@@ -1,9 +1,9 @@
 use crate::error::CompilationError as CE;
 
-mod parse1_tokenize;
-mod parse2_brackets;
-mod parse3_syntactic;
-mod parse4_linking;
+pub mod parse1_tokenize;
+pub mod parse2_brackets;
+pub mod parse3_syntactic;
+pub mod parse4_linking;
 
 mod position_in_file;
 pub use position_in_file::PositionInFile;
