@@ -1,20 +1,20 @@
 use crate::parser::{BracketType, PositionInFile};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct TokenWithPos<'x> {
-    pub token: Token<'x>,
+pub struct TokenWithPos<'text> {
+    pub token: Token<'text>,
     pub position: PositionInFile,
 }
-impl<'x> TokenWithPos<'x> {
-    pub fn new(token: Token<'x>, position: PositionInFile) -> Self {
+impl<'text> TokenWithPos<'text> {
+    pub fn new(token: Token<'text>, position: PositionInFile) -> Self {
         Self { token, position }
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Token<'x> {
-    String(&'x [char]),         // any String
-    NumberLiteral(&'x [char]),  // any String starting with a digit
+pub enum Token<'text> {
+    String(&'text [char]),         // any String
+    NumberLiteral(&'text [char]),  // any String starting with a digit
     Comma,                      // ,
     Colon,                      // :
     DoubleColon,                // ::
@@ -22,7 +22,7 @@ pub enum Token<'x> {
     EqualOperation(EqualOperation),
     TwoSidedOperation(TwoSidedOperation),
 
-    Bracket(Vec<TokenWithPos<'x>>, BracketType),
+    Bracket(Vec<TokenWithPos<'text>>, BracketType),
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]

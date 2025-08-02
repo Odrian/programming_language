@@ -1,7 +1,9 @@
-use std::fmt::Display;
+use std::fmt;
 use std::sync::atomic;
+use crate::parser::parse3_syntactic::statement::{TExpression, TStatement};
 
-pub use super::super::parse3_syntactic::statement::{LinkedStatement, LinkedExpression};
+pub type LinkedStatement<'text> = TStatement<'text, Object<'text>>;
+pub type LinkedExpression<'text> = TExpression<'text, Object<'text>>;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ObjType {
@@ -9,15 +11,15 @@ pub enum ObjType {
     Function
 }
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct Object<'x> {
-    id: u32,
-    name: &'x [char],
+pub struct Object<'text> {
+    pub id: u32,
+    pub name: &'text [char],
     pub name_id: u32,
     pub obj_type: ObjType,
 }
 
-impl<'x> Object<'x> {
-    pub fn new(name: &'x [char], name_id: u32, obj_type: ObjType) -> Self {
+impl<'text> Object<'text> {
+    pub fn new(name: &'text [char], name_id: u32, obj_type: ObjType) -> Self {
         let id = Self::get_unique_id();
         Object { id, name, name_id, obj_type }
     }
@@ -29,11 +31,11 @@ impl<'x> Object<'x> {
 
 // ----- Display implementation -----
 
-impl<'x> Display for LinkedStatement<'x> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for LinkedStatement<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn statements_to_string_with_tabs(statements: &[LinkedStatement]) -> String {
             let string = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
-            "    ".to_string() + string.replace("\n", "\n    ").as_str()
+            "    ".to_owned() + string.replace('\n', "\n    ").as_str()
         }
         match self {
             Self::VariableDeclaration { object, value } => {
@@ -62,8 +64,8 @@ impl<'x> Display for LinkedStatement<'x> {
     }
 }
 
-impl<'x> Display for LinkedExpression<'x> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for LinkedExpression<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LinkedExpression::Plus(a, b) => write!(f, "({a} + {b})"),
             LinkedExpression::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
@@ -77,8 +79,8 @@ impl<'x> Display for LinkedExpression<'x> {
     }
 }
 
-impl<'x> Display for Object<'x> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Object<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = self.name.iter().collect::<String>();
         if self.name_id == 0 {
             write!(f, "{name}")

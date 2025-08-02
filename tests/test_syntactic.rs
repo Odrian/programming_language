@@ -62,10 +62,10 @@ fn test_set_with_brackets() {
     assert_result("cat := cat + (cat + cat)",
                   Ok(vec![Statement::new_variable(
                       v_cat,
-                      Expression::plus(
+                      Expression::new_plus(
                           variable.clone(),
-                          Expression::round_bracket(
-                              Expression::plus(variable.clone(), variable.clone())
+                          Expression::new_round_bracket(
+                              Expression::new_plus(variable.clone(), variable.clone())
                           )
                       )
                   )])
@@ -144,7 +144,7 @@ fn test_function() {
                       set_expr.clone(),
                   ])])
     );
-    let another_set_expr = Statement::new_variable(v_owl, Expression::plus(
+    let another_set_expr = Statement::new_variable(v_owl, Expression::new_plus(
         Expression::Variable(v_dog), Expression::Variable(v_kitten)
     ));
     assert_result("foo :: (arg1, arg2) { owl := dog + kitten cat := dog owl := dog + kitten }",
@@ -164,7 +164,7 @@ fn test_function_with_while() {
     let v_1 = &string_to_chars("1");
     let set_statement = Statement::new_variable(
         arg2,
-        Expression::plus(
+        Expression::new_plus(
             Expression::Variable(arg2),
             Expression::NumberLiteral(v_1),
         ),
@@ -217,10 +217,10 @@ fn test_function_call() {
     let v_cat = &string_to_chars("cat");
     let v_5 = &string_to_chars("5");
     assert_result("foo()",
-                  Ok(vec![Statement::Expression(Expression::function_call(v_foo, vec![]))])
+                  Ok(vec![Statement::Expression(Expression::new_function_call(v_foo, vec![]))])
     );
     assert_result("foo(cat, 5)",
-                  Ok(vec![Statement::Expression(Expression::function_call(v_foo, vec![
+                  Ok(vec![Statement::Expression(Expression::new_function_call(v_foo, vec![
                       Expression::Variable(v_cat),
                       Expression::NumberLiteral(v_5),
                   ]))])

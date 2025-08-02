@@ -99,10 +99,10 @@ pub fn split_text_without_brackets(text: &[char]) -> Vec<TokenWithPos> {
     // let mut line = 1;
     // let mut column = 1;
 
-    while let Some(c) = state.peek_char() {
+    while let Some(char) = state.peek_char() {
         // split_state.update_place_info(PositionInFile::new(line, column));
         // column += 1;
-        match c {
+        match char {
             '\n' => {
                 state.add(1, None);
                 // line += 1;
@@ -119,7 +119,7 @@ pub fn split_text_without_brackets(text: &[char]) -> Vec<TokenWithPos> {
                     state.add(2, Some(Token::EqualOperation(EqualOperation::ColonEqual)));
                 } else {
                     state.add(1, Some(Token::Colon));
-                };
+                }
             }
             '+' => {
                 let token = Token::TwoSidedOperation(TwoSidedOperation::Plus);
@@ -132,7 +132,7 @@ pub fn split_text_without_brackets(text: &[char]) -> Vec<TokenWithPos> {
             '{' | '}' | '(' | ')' => {
                 unreachable!()
             }
-            _ if c.is_ascii_whitespace() => {
+            _ if char.is_ascii_whitespace() => {
                 state.add(1, None);
             }
             _ => {
@@ -144,15 +144,15 @@ pub fn split_text_without_brackets(text: &[char]) -> Vec<TokenWithPos> {
     state.tokens
 }
 
-/// guarantees that buffer_start <= buffer_end <= text.len()
-struct TokenizeState<'x> {
-    text: &'x [char],
-    tokens: Vec<TokenWithPos<'x>>,
+/// guarantees that `buffer_start <= buffer_end <= text.len()`
+struct TokenizeState<'text> {
+    text: &'text [char],
+    tokens: Vec<TokenWithPos<'text>>,
     buffer_start: usize,
     buffer_end: usize,
 }
-impl<'x> TokenizeState<'x> {
-    fn new(text: &'x [char]) -> Self {
+impl<'text> TokenizeState<'text> {
+    fn new(text: &'text [char]) -> Self {
         Self {
             text,
             tokens: Vec::new(),
@@ -161,18 +161,18 @@ impl<'x> TokenizeState<'x> {
         }
     }
     fn peek_char(&self) -> Option<char> {
-        self.text.get(self.buffer_end).cloned()
+        self.text.get(self.buffer_end).copied()
     }
     /// counting from 1
     fn peek_nth_char(&self, n: usize) -> Option<char> {
-        self.text.get(self.buffer_end + n - 1).cloned()
+        self.text.get(self.buffer_end + n - 1).copied()
     }
 
     fn use_char_in_string(&mut self) {
         self.buffer_end += 1;
         self.check_indexes();
     }
-    fn add(&mut self, skip_chars: usize, token: Option<Token<'x>>) {
+    fn add(&mut self, skip_chars: usize, token: Option<Token<'text>>) {
         self.flush_buffer();
         if let Some(token) = token {
             let place_info = PositionInFile::new(self.buffer_end, self.buffer_end + skip_chars);
@@ -200,8 +200,6 @@ impl<'x> TokenizeState<'x> {
         self.buffer_start = self.buffer_end;
     }
     fn check_indexes(&self) {
-        if self.buffer_end > self.text.len() {
-            panic!("Unexpected end of string");
-        }
+        assert!(self.buffer_end <= self.text.len(), "Unexpected end of string");
     }
 }

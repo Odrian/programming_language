@@ -1,58 +1,53 @@
-use std::fmt::Display;
-use crate::parser::parse4_linking::linked_statement::Object;
+use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum TStatement<'x, Obj> {
-    VariableDeclaration { object: Obj, value: TExpression<'x, Obj> },
-    SetVariable { object: Obj, value: TExpression<'x, Obj> },
-    Expression(TExpression<'x, Obj>),
+pub enum TStatement<'text, Obj> {
+    VariableDeclaration { object: Obj, value: TExpression<'text, Obj> },
+    SetVariable { object: Obj, value: TExpression<'text, Obj> },
+    Expression(TExpression<'text, Obj>),
     // Bracket(Box<Vec<Statement>>, BracketType),
-    If { condition: TExpression<'x, Obj>, body: Vec<Self> },
-    While { condition: TExpression<'x, Obj>, body: Vec<Self> },
+    If { condition: TExpression<'text, Obj>, body: Vec<Self> },
+    While { condition: TExpression<'text, Obj>, body: Vec<Self> },
     Function { object: Obj, args: Vec<Obj>, body: Vec<Self> },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum TExpression<'x, Obj> {
-    Plus(Box<TExpression<'x, Obj>>, Box<TExpression<'x, Obj>>),
-    NumberLiteral(&'x [char]),
+pub enum TExpression<'text, Obj> {
+    Plus(Box<Self>, Box<Self>),
+    NumberLiteral(&'text [char]),
     Variable(Obj),
-    RoundBracket(Box<TExpression<'x, Obj>>),
-    FunctionCall { object: Obj, args: Vec<TExpression<'x, Obj>> },
+    RoundBracket(Box<Self>),
+    FunctionCall { object: Obj, args: Vec<Self> },
 }
 
-pub type Statement<'x> = TStatement<'x, &'x [char]>;
-pub type Expression<'x> = TExpression<'x, &'x [char]>;
+pub type Statement<'text> = TStatement<'text, &'text [char]>;
+pub type Expression<'text> = TExpression<'text, &'text [char]>;
 
-pub type LinkedStatement<'x> = TStatement<'x, Object<'x>>;
-pub type LinkedExpression<'x> = TExpression<'x, Object<'x>>;
-
-
-impl<'x, Obj> TStatement<'x, Obj> {
-    pub fn new_variable(obj: Obj, value: TExpression<'x, Obj>) -> Self {
+impl<'text, Obj> TStatement<'text, Obj> {
+    pub fn new_variable(obj: Obj, value: TExpression<'text, Obj>) -> Self {
         Self::VariableDeclaration { object: obj, value }
     }
-    pub fn new_set(obj: Obj, value: TExpression<'x, Obj>) -> Self {
+    pub fn new_set(obj: Obj, value: TExpression<'text, Obj>) -> Self {
         Self::SetVariable { object: obj, value }
     }
-    pub fn new_if(condition: TExpression<'x, Obj>, body: Vec<Self>) -> Self {
+    pub fn new_if(condition: TExpression<'text, Obj>, body: Vec<Self>) -> Self {
         Self::If { condition, body }
     }
-    pub fn new_while(condition: TExpression<'x, Obj>, body: Vec<Self>) -> Self {
+    pub fn new_while(condition: TExpression<'text, Obj>, body: Vec<Self>) -> Self {
         Self::While { condition, body }
     }
     pub fn new_function(name: Obj, args: Vec<Obj>, body: Vec<Self>) -> Self {
         Self::Function { object: name, args, body }
     }
 }
-impl<'x, Obj> TExpression<'x, Obj> {
-    pub fn plus(expression1: Self, expression2: Self) -> Self {
+impl<'text, Obj> TExpression<'text, Obj> {
+    pub fn new_plus(expression1: Self, expression2: Self) -> Self {
         Self::Plus(Box::new(expression1), Box::new(expression2))
     }
-    pub fn round_bracket(expression: Self) -> Self {
+    pub fn new_round_bracket(expression: Self) -> Self {
         Self::RoundBracket(Box::new(expression))
     }
-    pub fn function_call(object: Obj, args: Vec<Self>) -> Self {
+    pub fn new_function_call(object: Obj, args: Vec<Self>) -> Self {
         Self::FunctionCall { object, args }
     }
 }
@@ -63,11 +58,11 @@ fn name_to_str(name: &[char]) -> String {
     name.iter().collect()
 }
 
-impl<'x> Display for Statement<'x> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Statement<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn statements_to_string_with_tabs(statements: &[Statement]) -> String {
             let string = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
-            "    ".to_string() + string.replace("\n", "\n    ").as_str()
+            "    ".to_owned() + string.replace('\n', "\n    ").as_str()
         }
         match self {
             Self::VariableDeclaration { object: name, value } => {
@@ -97,8 +92,9 @@ impl<'x> Display for Statement<'x> {
         }
     }
 }
-impl<'x> Display for Expression<'x> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+impl fmt::Display for Expression<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expression::Plus(a, b) => write!(f, "({a} + {b})"),
             Expression::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),

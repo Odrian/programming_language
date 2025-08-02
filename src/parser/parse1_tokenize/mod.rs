@@ -1,11 +1,9 @@
-use crate::error::CompilationError as CE;
-
 pub mod token;
 
 mod parser_tokens;
 
-use parser_tokens::parse_tokens;
+use crate::error::CompilationError as CE;
 
 pub fn tokenize(text: &[char]) -> Result<Vec<token::TokenWithPos>, CE> {
-    parse_tokens(text)
+    parser_tokens::parse_tokens(text)
 }

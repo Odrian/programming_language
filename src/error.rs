@@ -1,4 +1,4 @@
-use std::{error::Error, fmt, io};
+use std::{fmt, io};
 use crate::parser::{PositionInFile, BracketType};
 
 #[derive(Debug, Eq, PartialEq)]
@@ -57,5 +57,3 @@ fn bracket_type_to_string(bracket_type: &BracketType) -> &'static str {
         BracketType::Curly => "curly",
     }
 }
-
-impl Error for CompilationError {}

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct PositionInFile {
@@ -15,8 +15,8 @@ impl PositionInFile {
     }
 }
 
-impl Display for PositionInFile {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for PositionInFile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: implement parsing from index to column:line
         write!(f, "{}-{}", self.start, self.end)
     }

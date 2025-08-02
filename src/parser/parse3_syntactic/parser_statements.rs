@@ -4,7 +4,7 @@ use crate::parser::{BracketType, PositionInFile};
 use super::statement::*;
 use crate::parser::parse1_tokenize::token::*;
 
-pub fn parse_statements<'x>(tokens: &[TokenWithPos<'x>]) -> Result<Vec<Statement<'x>>, CE> {
+pub fn parse_statements<'text>(tokens: &[TokenWithPos<'text>]) -> Result<Vec<Statement<'text>>, CE> {
     let mut statements = Vec::new();
 
     let mut state = ParsingState::new(tokens);
@@ -15,24 +15,23 @@ pub fn parse_statements<'x>(tokens: &[TokenWithPos<'x>]) -> Result<Vec<Statement
     Ok(statements)
 }
 
-pub struct ParsingState<'x, 'a> {
-    tokens: &'a [TokenWithPos<'x>],
+pub struct ParsingState<'text, 'a> {
+    tokens: &'a [TokenWithPos<'text>],
     index: usize,
     size: usize,
 }
 
-impl<'x, 'a> ParsingState<'x, 'a> {
-    pub fn new(tokens: &'a [TokenWithPos<'x>]) -> Self {
+impl<'text, 'a> ParsingState<'text, 'a> {
+    pub fn new(tokens: &'a [TokenWithPos<'text>]) -> Self {
         let size = tokens.len();
         ParsingState { tokens, index: 0, size }
     }
     pub fn at_end(&self) -> bool {
         self.index >= self.size
     }
-    pub fn parse_statement(&mut self) -> Result<Statement<'x>, CE> {
-        if self.at_end() {
-            panic!("tokens should not be empty");
-        }
+    pub fn parse_statement(&mut self) -> Result<Statement<'text>, CE> {
+        assert!(!self.at_end(), "tokens should not be empty");
+
         let token = &self.tokens[self.index];
         self.index += 1;
         match &token.token {
@@ -40,6 +39,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                 Err(CE::SyntacticsError(token.position, String::from("expected statement")))
             }
             Token::String(chars) => {
+                // TODO: maybe not parse every name to String
                 let string = chars.iter().collect::<String>();
                 match string.as_str() {
                     "if" | "while" => {
@@ -70,7 +70,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
             }
         }
     }
-    fn parse_statement2(&mut self, string: &'x [char], previous_place_info: PositionInFile) -> Result<Statement<'x>, CE> {
+    fn parse_statement2(&mut self, string: &'text [char], previous_place_info: PositionInFile) -> Result<Statement<'text>, CE> {
         if self.at_end() {
             return Err(CE::SyntacticsError(previous_place_info, String::from("expected statement")));
         }
@@ -91,7 +91,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
             Token::Bracket(vec, BracketType::Round) => {
                 let name = string;
                 let args = parse_function_arguments(vec, new_token.position)?;
-                let statement = Statement::Expression(Expression::function_call(name, args));
+                let statement = Statement::Expression(Expression::new_function_call(name, args));
                 Ok(statement)
             }
             _ => {
@@ -101,7 +101,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         }
     }
 
-    fn parse_expression(&mut self, previous_place_info: PositionInFile) -> Result<Expression<'x>, CE> {
+    fn parse_expression(&mut self, previous_place_info: PositionInFile) -> Result<Expression<'text>, CE> {
         if self.at_end() {
             return Err(CE::SyntacticsError(previous_place_info, String::from("expected expression after that")));
         }
@@ -123,7 +123,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                 let mut new_state = ParsingState::new(vec);
                 let expression = new_state.parse_expression(token.position)?;
                 if new_state.at_end() {
-                    let expression1 = Expression::round_bracket(expression);
+                    let expression1 = Expression::new_round_bracket(expression);
                     self.parse_expression2(expression1)
                 } else {
                     Err(CE::SyntacticsError(vec[new_state.index].position, String::from("expected ')'")))
@@ -135,21 +135,18 @@ impl<'x, 'a> ParsingState<'x, 'a> {
         }
     }
     // parse "expression1 twoSidedOp expression2"
-    fn parse_expression2(&mut self, expression1: Expression<'x>) -> Result<Expression<'x>, CE> {
+    fn parse_expression2(&mut self, expression1: Expression<'text>) -> Result<Expression<'text>, CE> {
         if self.at_end() {
             return Ok(expression1);
         }
         let token = &self.tokens[self.index];
         match &token.token {
-            Token::String(_) | Token::NumberLiteral(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon => {
-                Ok(expression1)
-            }
             Token::TwoSidedOperation(op) => {
                 self.index += 1;
                 match op {
                     TwoSidedOperation::Plus => {
                         let expression2 = self.parse_expression(token.position)?;
-                        Ok(Expression::plus(expression1, expression2))
+                        Ok(Expression::new_plus(expression1, expression2))
                     }
                 }
             }
@@ -159,15 +156,15 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                     return Err(CE::SyntacticsError(token.position, String::from("unexpected round brackets after expression")));
                 };
                 let args = parse_function_arguments(vec, token.position)?;
-                Ok(Expression::function_call(name, args))
+                Ok(Expression::new_function_call(name, args))
             }
-            Token::Bracket(_, _) => {
+            Token::Bracket(_, _) | Token::String(_) | Token::NumberLiteral(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon => {
                 Ok(expression1)
             }
         }
     }
 
-    fn parse_function(&mut self, name: &'x [char], previous_place_info: PositionInFile) -> Result<Statement<'x>, CE> {
+    fn parse_function(&mut self, name: &'text [char], previous_place_info: PositionInFile) -> Result<Statement<'text>, CE> {
         if self.at_end() {
             return Err(CE::SyntacticsError(previous_place_info, String::from("expected function declaration")));
         }
@@ -225,7 +222,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
     }
 }
 
-fn parse_function_arguments<'x>(tokens: &[TokenWithPos<'x>], previous_place_info: PositionInFile) -> Result<Vec<Expression<'x>>, CE> {
+fn parse_function_arguments<'text>(tokens: &[TokenWithPos<'text>], previous_place_info: PositionInFile) -> Result<Vec<Expression<'text>>, CE> {
     let mut args = Vec::new();
 
     let mut state = ParsingState::new(tokens);
