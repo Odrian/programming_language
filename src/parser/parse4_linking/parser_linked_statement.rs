@@ -18,12 +18,12 @@ fn link_statements_recursive<'x>(statements: &[Statement<'x>], object_context_wi
     let mut result = vec![];
     for statement in statements {
         let linked = match statement {
-            Statement::VariableDeclaration { name, value } => {
+            Statement::VariableDeclaration { object: name, value } => {
                 let value = parse_expression(value, object_context_window)?;
                 let object = object_context_window.add(name, ObjType::Variable);
                 LinkedStatement::VariableDeclaration { object, value }
             }
-            Statement::SetVariable { name, value } => {
+            Statement::SetVariable { object: name, value } => {
                 let value = parse_expression(value, object_context_window)?;
                 let name: String = name.iter().collect();
                 let Some(&object) = object_context_window.get(&name) else {
@@ -50,7 +50,7 @@ fn link_statements_recursive<'x>(statements: &[Statement<'x>], object_context_wi
                 object_context_window.step_out();
                 LinkedStatement::While { condition, body }
             }
-            Statement::Function { name, args, body } => {
+            Statement::Function { object: name, args, body } => {
                 let object = object_context_window.add(name, ObjType::Function);
                 object_context_window.step_in();
                 let args: Vec<Object> = args.iter().map(|x|
@@ -90,7 +90,7 @@ fn parse_expression<'x>(expression: &Expression<'x>, object_context_window: &Obj
                 return Err(CE::LinkingError { name, context });
             }
         },
-        Expression::FunctionCall { name, args } => {
+        Expression::FunctionCall { object: name, args } => {
             let name: String = name.iter().collect();
             let Some(object) = object_context_window.get(&name) else {
                 let context = format!("{object_context_window:?}");
@@ -102,7 +102,7 @@ fn parse_expression<'x>(expression: &Expression<'x>, object_context_window: &Obj
             }
             let args = args.iter().map(|x| parse_expression(x, object_context_window)).collect::<Result<Vec<_>, _>>()?;
 
-            LinkedExpression::FunctionCall { object: *object, args }
+            LinkedExpression::function_call(*object, args)
         }
     };
     Ok(linked)

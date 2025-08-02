@@ -91,7 +91,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
             Token2::Bracket(vec, BracketType::Round) => {
                 let name = string;
                 let args = parse_function_arguments(vec, new_token.position)?;
-                let statement = Statement::Expression(Expression::FunctionCall { name, args });
+                let statement = Statement::Expression(Expression::function_call(name, args));
                 Ok(statement)
             }
             _ => {
@@ -159,7 +159,7 @@ impl<'x, 'a> ParsingState<'x, 'a> {
                     return Err(CE::SyntacticsError(token.position, String::from("unexpected round brackets after expression")));
                 };
                 let args = parse_function_arguments(vec, token.position)?;
-                Ok(Expression::FunctionCall { name, args })
+                Ok(Expression::function_call(name, args))
             }
             Token2::Bracket(_, _) => {
                 Ok(expression1)

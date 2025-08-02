@@ -240,13 +240,13 @@ mod tests {
         let v_cat = &string_to_chars("cat");
         let v_5 = &string_to_chars("5");
         assert_result("foo()",
-            Ok(vec![Statement::Expression(Expression::FunctionCall { name: v_foo, args: vec![] })])
+            Ok(vec![Statement::Expression(Expression::function_call(v_foo, vec![]))])
         );
         assert_result("foo(cat, 5)",
-            Ok(vec![Statement::Expression(Expression::FunctionCall { name: v_foo, args: vec![
+            Ok(vec![Statement::Expression(Expression::function_call(v_foo, vec![
                 Expression::Variable(v_cat),
                 Expression::NumberLiteral(v_5),
-            ] })])
+            ]))])
         );
     }
 }

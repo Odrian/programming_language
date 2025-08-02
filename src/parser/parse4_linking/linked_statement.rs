@@ -1,23 +1,7 @@
 use std::fmt::Display;
 use std::sync::atomic;
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum LinkedStatement<'x> {
-    VariableDeclaration { object: Object<'x>, value: LinkedExpression<'x> },
-    SetVariable { object: Object<'x>, value: LinkedExpression<'x> },
-    Expression(LinkedExpression<'x>),
-    If { condition: LinkedExpression<'x>, body: Vec<LinkedStatement<'x>> },
-    While { condition: LinkedExpression<'x>, body: Vec<LinkedStatement<'x>> },
-    Function { object: Object<'x>, args: Vec<Object<'x>>, body: Vec<LinkedStatement<'x>> },
-}
-#[derive(Debug, Eq, PartialEq)]
-pub enum LinkedExpression<'x> {
-    Plus(Box<LinkedExpression<'x>>, Box<LinkedExpression<'x>>),
-    NumberLiteral(&'x [char]),
-    Variable(Object<'x>),
-    RoundBracket(Box<LinkedExpression<'x>>),
-    FunctionCall { object: Object<'x>, args: Vec<LinkedExpression<'x>> },
-}
+pub use super::super::parse3_syntactic::statement::{LinkedStatement, LinkedExpression};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ObjType {
