@@ -10,35 +10,53 @@ mod bracket_type;
 pub use bracket_type::BracketType;
 
 use crate::error::CompilationError as CE;
+use std::fs;
 
-pub fn parse(text: &[char], debug: bool) -> Result<(), CE> {
+pub struct Config {
+    pub output: String,
+    pub create_executable: bool,
+
+    pub write_tokens_to_file: bool,
+    pub write_unlinked_syntactic_tree_to_file: bool,
+    pub write_syntactic_tree_to_file: bool,
+    pub create_assembly: bool,
+    pub create_object: bool,
+}
+
+pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
-    if debug {
-        let tokens: Vec<_> = tokens.iter().map(|t| t.token.clone()).collect();
-        println!("tokens:");
-        println!("{tokens:?}");
-        println!();
+    if config.write_tokens_to_file {
+        let text = tokens.iter()
+            .map(|t| format!("{:#?}", t.token))
+            .collect::<Vec<_>>().join("\n");
+
+        let filename = format!("{}_tokens.txt", config.output);
+        fs::write(&filename, text).unwrap_or_else(|err|
+            panic!("Can't write tokens to {filename}: {err}")
+        );
     }
 
     let statements = parse3_syntactic::parse_statements(&tokens)?;
-    if debug {
-        println!("statements:");
-        for statement in &statements {
-            println!("{statement}");
-        }
-        println!();
+    if config.write_unlinked_syntactic_tree_to_file {
+        let text = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
+
+        let filename = format!("{}_unlinked_AST.txt", config.output);
+        fs::write(&filename, text).unwrap_or_else(|err|
+            panic!("Can't write unlinked_AST to {filename}: {err}")
+        );
     }
 
     let linked_statement = parse4_linking::link_variables(&statements)?;
-    if debug {
-        println!("linked statements:");
-        for linked_statement in &linked_statement {
-            println!("{linked_statement}");
-        }
+    if config.write_syntactic_tree_to_file {
+        let text = linked_statement.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
+
+        let filename = format!("{}_AST.txt", config.output);
+        fs::write(&filename, text).unwrap_or_else(|err|
+            panic!("Can't write AST to {filename}: {err}")
+        );
     }
-    
-    compiling::parse_to_llvm(&linked_statement)?;
-    println!("Generated ./main");
+
+    compiling::parse_to_llvm(&config, &linked_statement)?;
 
     Ok(())
 }

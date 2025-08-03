@@ -13,9 +13,10 @@ use inkwell::builder::BuilderError;
 use inkwell::values::{FunctionValue, IntValue};
 
 use crate::error::CompilationError as CE;
+use crate::parser::Config;
 use crate::parser::parse4_linking::linked_statement::*;
 
-pub fn parse_to_llvm(statements: &[LinkedStatement]) -> Result<(), CE> {
+pub fn parse_to_llvm(config: &Config, statements: &[LinkedStatement]) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
@@ -25,7 +26,7 @@ pub fn parse_to_llvm(statements: &[LinkedStatement]) -> Result<(), CE> {
         return Err(CE::LLVMError(err));
     }
 
-    create_executable(&code_module_gen.module);
+    create_executable(config, &code_module_gen.module);
     Ok(())
 }
 
@@ -173,41 +174,56 @@ impl Object<'_> {
     }
 }
 
-fn create_executable(module: &Module) {
-    // 6) Готовим TargetMachine под вашу платформу
+fn create_executable(config: &Config, module: &Module) {
+    let assembly_name = format!("{}.ll", config.output);
+    let object_name = format!("{}.o", config.output);
+    let executable_name = config.output.clone();
+
+    // create assembly file
+    if config.create_assembly {
+        module.print_to_file(assembly_name)
+            .unwrap_or_else(|err| panic!("failed to dump LLVM IR: {err}"));
+    }
+
+    if !config.create_object && !config.create_executable {
+        return
+    }
+
+    let tm = create_target_machine();
+    module.set_triple(&tm.get_triple());
+
+    // create object file
+    tm.write_to_file(module, FileType::Object, Path::new(object_name.as_str()))
+        .unwrap_or_else(|err| panic!("failed to create object file: {err}"));
+
+    if config.create_executable {
+        let status = Command::new("cc")
+            .args([object_name.as_str(), "-o", executable_name.as_str()])
+            .status()
+            .unwrap_or_else(|err| panic!("Failed to invoke linker 'cc': {err}"));
+        if !status.success() {
+            panic!("Linker exited with {:?} code", status.code());
+        }
+    }
+    if !config.create_object {
+        std::fs::remove_file(object_name)
+            .unwrap_or_else(|err| panic!("failed to delete object file: {err}"));
+    }
+}
+
+fn create_target_machine() -> TargetMachine {
     let triple = TargetMachine::get_default_triple();
     let target = Target::from_triple(&triple)
         .expect("Failed to get target from default triple");
     let cpu = "generic";
     let features = "";
-    let tm = target
-        .create_target_machine(
-            &triple,
-            cpu,
-            features,
-            OptimizationLevel::None,
-            RelocMode::Default,
-            CodeModel::Default,
-        )
-        .expect("Could not create TargetMachine");
 
-    // Подставляем ту же триплету в модуль
-    module.set_triple(&triple);
-
-    module.print_to_file("main.ll")
-        .expect("Failed to dump IR");
-
-    // 7) Пишем объектный файл main.o
-    let obj_path = "main.o";
-    tm.write_to_file(module, FileType::Object, Path::new(obj_path))
-        .expect("Failed to write object file");
-
-    // 8) Линкуем его в исполняемый main
-    let status = Command::new("cc")
-        .args([obj_path, "-o", "main"])
-        .status()
-        .expect("Failed to invoke linker 'cc'");
-    if !status.success() {
-        panic!("Linker exited with {:?}", status.code());
-    }
+    target.create_target_machine(
+        &triple,
+        cpu,
+        features,
+        OptimizationLevel::None,
+        RelocMode::Default,
+        CodeModel::Default,
+    ).expect("Could not create TargetMachine")
 }

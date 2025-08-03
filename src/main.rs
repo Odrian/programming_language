@@ -1,4 +1,4 @@
-use programming_language::parser::parse;
+use programming_language::parser::{parse, Config};
 use std::{env, fs};
 use programming_language::error::CompilationError as CE;
 
@@ -10,8 +10,22 @@ fn main() -> Result<(), CE> {
     let file_path = &args[1];
     let file_text = read_file(file_path);
 
-    let debug = true;
-    parse(&file_text, debug)?;
+    let output = "main".to_owned();
+    let create_executable = true;
+
+    let write_tokens_to_file = false;
+    let write_syntactic_tree_to_file = false;
+    let write_unlinked_syntactic_tree_to_file = false;
+    let create_assembly = true;
+    let create_object = false;
+
+    let config = Config {
+        output, create_executable,
+        write_tokens_to_file, write_syntactic_tree_to_file,
+        write_unlinked_syntactic_tree_to_file,
+        create_assembly, create_object,
+    };
+    parse(&file_text, config)?;
 
     Ok(())
 }
