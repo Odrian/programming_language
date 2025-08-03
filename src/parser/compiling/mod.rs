@@ -1,0 +1,213 @@
+use std::collections::HashMap;
+use std::process::Command;
+use std::path::Path;
+
+use inkwell::{
+    context::Context,
+    module::Module,
+    builder::Builder,
+    targets::{InitializationConfig, Target, TargetMachine, FileType, RelocMode, CodeModel},
+    OptimizationLevel,
+};
+use inkwell::builder::BuilderError;
+use inkwell::values::{FunctionValue, IntValue};
+
+use crate::error::CompilationError as CE;
+use crate::parser::parse4_linking::linked_statement::*;
+
+pub fn parse_to_llvm(statements: &[LinkedStatement]) -> Result<(), CE> {
+    Target::initialize_all(&InitializationConfig::default());
+    let context = Context::create();
+
+    let code_module_gen = CodeModuleGen::new(&context, "main_module");
+    let result = code_module_gen.parse_statements(statements);
+    if let Err(err) = result {
+        return Err(CE::LLVMError(err));
+    }
+
+    create_executable(&code_module_gen.module);
+    Ok(())
+}
+
+struct CodeModuleGen<'ctx> {
+    context: &'ctx Context,
+    module: Module<'ctx>,
+    builder: Builder<'ctx>,
+}
+impl<'ctx> CodeModuleGen<'ctx> {
+    fn new(context: &'ctx Context, name: &str) -> Self {
+        let module = context.create_module(name);
+        let builder = context.create_builder();
+        Self {
+            context,
+            module,
+            builder
+        }
+    }
+    fn parse_statements(&self, statements: &[LinkedStatement]) -> Result<(), BuilderError> {
+        for statement in statements {
+            match statement {
+                LinkedStatement::Function { object, args, body } => {
+                    self.create_function(object, args, body)?;
+                }
+                _ => {
+                    unimplemented!("don't support statements in global")
+                }
+            }
+        }
+        Ok(())
+    }
+    fn create_function(&self, object: &Object, args: &Vec<Object>, body: &Vec<LinkedStatement>) -> Result<(), BuilderError> {
+        let i32_type = self.context.i8_type();
+        let argument_count = args.len();
+        let arguments_types = vec![i32_type.into(); argument_count];
+        let fn_type = i32_type.fn_type(&arguments_types, false);
+
+        let function = self.module.add_function(object.get_name().as_str(), fn_type, None);
+        let entry = self.context.append_basic_block(function, "entry");
+        self.builder.position_at_end(entry);
+
+        let mut variables_context: HashMap<u32, IntValue> = HashMap::new();
+        for (index, object) in args.iter().enumerate() {
+            let arg_value = function.get_nth_param(index as u32).unwrap().into_int_value();
+            variables_context.insert(object.id, arg_value);
+        }
+
+        let function_generator = FunctionGenerator::new(self, function);
+        function_generator.parse_function_body(&mut variables_context, body)?;
+        Ok(())
+    }
+}
+
+struct FunctionGenerator<'ctx, 'a> {
+    code_module_gen: &'a CodeModuleGen<'ctx>,
+    function: FunctionValue<'ctx>,
+}
+impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
+    fn new(code_module_gen: &'a CodeModuleGen<'ctx>, function: FunctionValue<'ctx>, ) -> Self {
+        Self {
+            code_module_gen,
+            function,
+        }
+    }
+
+    fn parse_function_body(
+        &self,
+        variables_context: &mut HashMap<u32, IntValue<'ctx>>,
+        body: &Vec<LinkedStatement>
+    ) -> Result<(), BuilderError> {
+        for statement in body {
+            self.parse_statement(variables_context, statement)?;
+        }
+        let i32_type = self.code_module_gen.context.i32_type();
+
+        let one = i32_type.const_int(8, false);
+        self.code_module_gen.builder.build_return(Some(&one))?;
+        Ok(())
+    }
+
+    fn parse_statement(
+        &self,
+        variables_context: &mut HashMap<u32, IntValue<'ctx>>,
+        statement: &LinkedStatement
+    ) -> Result<(), BuilderError> {
+        match statement {
+            LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
+            LinkedStatement::Expression(_) => {
+                unimplemented!("not supported")
+            }
+            LinkedStatement::If { .. } => {
+                // let then_bb  = self.variables_context.append_basic_block(self.function, "then");
+                // let merge_bb = self.variables_context.append_basic_block(self.function, "merge");
+                unimplemented!("not supported")
+            }
+            LinkedStatement::While { .. } => {
+                unimplemented!("not supported")
+            }
+            LinkedStatement::SetVariable { object, value } => {
+                let expression = self.parse_expression(variables_context, value)?;
+                variables_context.insert(object.id, expression);
+            }
+            LinkedStatement::VariableDeclaration { object, value } => {
+                let expression = self.parse_expression(variables_context, value)?;
+                variables_context.insert(object.id, expression);
+            }
+        }
+        Ok(())
+    }
+
+    fn parse_expression(
+        &self,
+        variables_context: &mut HashMap<u32, IntValue<'ctx>>,
+        expression: &LinkedExpression
+    ) -> Result<IntValue<'ctx>, BuilderError> {
+        let i32_type = self.code_module_gen.context.i32_type();
+        match expression {
+            LinkedExpression::FunctionCall { .. } => unimplemented!("not supported"),
+            LinkedExpression::NumberLiteral(literal) => {
+                let number = literal.iter().collect::<String>().parse::<i32>().unwrap();
+                Ok(i32_type.const_int(number as u64, false))
+            }
+            LinkedExpression::RoundBracket(boxed) => self.parse_expression(variables_context, boxed),
+            LinkedExpression::Variable(object) => {
+                Ok(*variables_context.get(&object.id).unwrap())
+            }
+            LinkedExpression::Plus(ex1, ex2) => {
+                let ex1 = self.parse_expression(variables_context, ex1)?;
+                let ex2 = self.parse_expression(variables_context, ex2)?;
+                self.code_module_gen.builder.build_int_add(ex1, ex2, "sum")
+            }
+        }
+    }
+}
+
+
+impl Object<'_> {
+    fn get_name(&self) -> String {
+        let name = self.name.iter().collect::<String>();
+        if self.name_id == 0 {
+            name
+        } else {
+            format!("{}.{}", name, self.name_id)
+        }
+    }
+}
+
+fn create_executable(module: &Module) {
+    // 6) Готовим TargetMachine под вашу платформу
+    let triple = TargetMachine::get_default_triple();
+    let target = Target::from_triple(&triple)
+        .expect("Failed to get target from default triple");
+    let cpu = "generic";
+    let features = "";
+    let tm = target
+        .create_target_machine(
+            &triple,
+            cpu,
+            features,
+            OptimizationLevel::None,
+            RelocMode::Default,
+            CodeModel::Default,
+        )
+        .expect("Could not create TargetMachine");
+
+    // Подставляем ту же триплету в модуль
+    module.set_triple(&triple);
+
+    module.print_to_file("main.ll")
+        .expect("Failed to dump IR");
+
+    // 7) Пишем объектный файл main.o
+    let obj_path = "main.o";
+    tm.write_to_file(module, FileType::Object, Path::new(obj_path))
+        .expect("Failed to write object file");
+
+    // 8) Линкуем его в исполняемый main
+    let status = Command::new("cc")
+        .args([obj_path, "-o", "main"])
+        .status()
+        .expect("Failed to invoke linker 'cc'");
+    if !status.success() {
+        panic!("Linker exited with {:?}", status.code());
+    }
+}

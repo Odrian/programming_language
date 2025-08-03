@@ -8,3 +8,4 @@ opt-level = 0
 debug = "full"
 
 [dependencies]
+inkwell = { version = "0.6.0", features = ["llvm18-1"] }

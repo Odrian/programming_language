@@ -85,7 +85,7 @@ impl fmt::Display for Object<'_> {
         if self.name_id == 0 {
             write!(f, "{name}")
         } else {
-            write!(f, "{}#{}", name, self.name_id)
+            write!(f, "{}.{}", name, self.name_id)
         }
     }
 }

@@ -1,4 +1,5 @@
 use std::{fmt, io};
+use inkwell::builder::BuilderError;
 use crate::parser::{PositionInFile, BracketType};
 
 #[derive(Debug, Eq, PartialEq)]
@@ -17,6 +18,8 @@ pub enum CompilationError {
 
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
+    
+    LLVMError(BuilderError),
 }
 
 impl fmt::Display for CompilationError {
@@ -46,6 +49,9 @@ impl fmt::Display for CompilationError {
             }
             CompilationError::LinkingErrorFunctionUsage { name } => {
                 write!(f, "Linking Error: can't use function {name} as variable value")
+            }
+            CompilationError::LLVMError(build_error) => {
+                write!(f, "LLVM Error: {build_error}")
             }
         }
     }
