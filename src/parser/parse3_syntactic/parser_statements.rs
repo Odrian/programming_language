@@ -60,6 +60,10 @@ impl<'text, 'a> ParsingState<'text, 'a> {
                             Ok(Statement::new_while(condition, body))
                         }
                     }
+                    "return" => {
+                        let result_expression = self.parse_expression(token.position)?;
+                        Ok(Statement::Return(result_expression))
+                    }
                     _ => {
                         self.parse_statement2(chars, token.position)
                     }

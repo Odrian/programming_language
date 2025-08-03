@@ -16,14 +16,14 @@ fn main() -> Result<(), CE> {
     let write_tokens_to_file = false;
     let write_syntactic_tree_to_file = false;
     let write_unlinked_syntactic_tree_to_file = false;
-    let create_assembly = true;
+    let create_llvm_ir = true;
     let create_object = false;
 
     let config = Config {
         output, create_executable,
         write_tokens_to_file, write_syntactic_tree_to_file,
         write_unlinked_syntactic_tree_to_file,
-        create_assembly, create_object,
+        create_llvm_ir, create_object,
     };
     parse(&file_text, config)?;
 

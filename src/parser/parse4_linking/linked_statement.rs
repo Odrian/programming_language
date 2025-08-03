@@ -60,6 +60,9 @@ impl fmt::Display for LinkedStatement<'_> {
                 let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
                 write!(f, "{object} :: ({args}) {{\n{inside}\n}}")
             }
+            Self::Return(exp) => {
+                write!(f, "return {exp}")
+            }
         }
     }
 }

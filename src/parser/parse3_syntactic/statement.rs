@@ -9,6 +9,7 @@ pub enum TStatement<'text, Obj> {
     If { condition: TExpression<'text, Obj>, body: Vec<Self> },
     While { condition: TExpression<'text, Obj>, body: Vec<Self> },
     Function { object: Obj, args: Vec<Obj>, body: Vec<Self> },
+    Return(TExpression<'text, Obj>)
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -88,6 +89,9 @@ impl fmt::Display for Statement<'_> {
                 let args = args.join(", ");
                 let inside = statements_to_string_with_tabs(body);
                 write!(f, "{name} :: ({args}) {{\n{inside}\n}}")
+            }
+            Self::Return(exp) => {
+                write!(f, "return {exp}")
             }
         }
     }

@@ -59,6 +59,10 @@ fn link_statements_recursive<'text>(statements: &[Statement<'text>], object_cont
                 object_context_window.step_out();
                 LinkedStatement::new_function(object, args, body)
             }
+            Statement::Return(expression) => {
+                let expression = parse_expression(expression, object_context_window)?;
+                LinkedStatement::Return(expression)
+            }
         };
         result.push(linked);
     }

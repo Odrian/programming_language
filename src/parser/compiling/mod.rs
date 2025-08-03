@@ -100,10 +100,12 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
         for statement in body {
             self.parse_statement(variables_context, statement)?;
         }
-        let i32_type = self.code_module_gen.context.i32_type();
 
-        let one = i32_type.const_int(8, false);
-        self.code_module_gen.builder.build_return(Some(&one))?;
+        // TODO: check that function always return something
+        // TODO: add return zero by default from main function
+        // let i32_type = self.code_module_gen.context.i32_type();
+        // let zero = i32_type.const_int(0, false);
+        // self.code_module_gen.builder.build_return(Some(&zero))?;
         Ok(())
     }
 
@@ -132,6 +134,10 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
             LinkedStatement::VariableDeclaration { object, value } => {
                 let expression = self.parse_expression(variables_context, value)?;
                 variables_context.insert(object.id, expression);
+            }
+            LinkedStatement::Return(expression) => {
+                let expression = self.parse_expression(variables_context, expression)?;
+                self.code_module_gen.builder.build_return(Some(&expression))?;
             }
         }
         Ok(())
@@ -180,7 +186,7 @@ fn create_executable(config: &Config, module: &Module) {
     let executable_name = config.output.clone();
 
     // create assembly file
-    if config.create_assembly {
+    if config.create_llvm_ir {
         module.print_to_file(assembly_name)
             .unwrap_or_else(|err| panic!("failed to dump LLVM IR: {err}"));
     }

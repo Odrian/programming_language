@@ -226,3 +226,15 @@ fn test_function_call() {
                   ]))])
     );
 }
+
+#[test]
+fn test_function_return() {
+    assert_no_error("return 0");
+    assert_no_error("foo :: () { return 0 }");
+    assert_no_error("foo :: () { a := 0 return a }");
+    
+    assert_has_error("return");
+    assert_has_error("return return 0");
+    assert_has_error("return foo :: () {}");
+    assert_has_error("return ()");
+}

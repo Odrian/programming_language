@@ -3,7 +3,7 @@
 * parse if, while (done)
 * parse function (done)
 * linking (done)
-* compile with int8 type only
+* compile with int8 type only (in progress)
 * add types
 * add arrays
 
@@ -38,6 +38,7 @@ Function declaration
 ```
 name :: (argument : type) -> result_type {
     ...
+    return ...
 }
 
 name(argument)
@@ -56,6 +57,7 @@ input file must contain any number of statements
 * while expression { 'any number of statements' }
 * name :: ('arguments') { 'any number of statements' }\
   'arguments' - any number of name seperated with comma
+* return expression
 
 ## valid expression
 

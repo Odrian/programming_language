@@ -19,7 +19,7 @@ pub struct Config {
     pub write_tokens_to_file: bool,
     pub write_unlinked_syntactic_tree_to_file: bool,
     pub write_syntactic_tree_to_file: bool,
-    pub create_assembly: bool,
+    pub create_llvm_ir: bool,
     pub create_object: bool,
 }
 
