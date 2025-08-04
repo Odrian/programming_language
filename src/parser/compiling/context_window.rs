@@ -1,0 +1,40 @@
+use std::collections::HashMap;
+use inkwell::values::AnyValueEnum;
+use crate::parser::parse4_linking::linked_statement::Object;
+
+#[derive(Debug, Default)]
+struct ValueContext<'ctx>(HashMap<u32, AnyValueEnum<'ctx>>);
+
+impl<'ctx> ValueContext<'ctx> {
+    fn add(&mut self, object: &Object, value: AnyValueEnum<'ctx>) {
+        self.0.insert(object.id, value);
+    }
+    fn get(&self, object: &Object) -> Option<&AnyValueEnum<'ctx>> {
+        self.0.get(&object.id)
+    }
+}
+
+#[derive(Debug)]
+pub struct ValueContextWindow<'ctx> {
+    contexts: Vec<ValueContext<'ctx>>,
+}
+
+impl<'ctx> ValueContextWindow<'ctx> {
+    pub fn new() -> Self {
+        ValueContextWindow { contexts: vec![] }
+    }
+    pub fn step_in(&mut self) {
+        self.contexts.push(ValueContext::default());
+    }
+    pub fn step_out(&mut self) {
+        assert!(!self.contexts.is_empty(), "No more objects to step out!");
+        self.contexts.pop();
+    }
+    pub fn get(&self, object: &Object) -> Option<&AnyValueEnum<'ctx>> {
+        self.contexts.iter().rev()
+            .find_map(|obj_con|obj_con.get(object))
+    }
+    pub fn add(&mut self, object: &Object, value: AnyValueEnum<'ctx>) {
+        self.contexts.last_mut().unwrap().add(object, value)
+    }
+}

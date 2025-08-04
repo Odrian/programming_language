@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+mod context_window;
+
+use context_window::ValueContextWindow;
+
 use std::process::Command;
 use std::path::Path;
 
@@ -41,19 +44,24 @@ impl<'ctx> CodeModuleGen<'ctx> {
         }
     }
     fn parse_statements(&self, statements: &[LinkedStatement]) -> Result<(), BuilderError> {
+        let mut context_window = ValueContextWindow::new();
+        context_window.step_in();
         for statement in statements {
             match statement {
-                LinkedStatement::Function { object, args, body } => {
-                    self.create_function(object, args, body)?;
+                LinkedStatement::Function { .. } => {
+                    self.create_function(&mut context_window, statement)?;
                 }
                 _ => {
                     unimplemented!("don't support statements in global")
                 }
             }
         }
+        context_window.step_out();
         Ok(())
     }
-    fn create_function(&self, object: &Object, args: &Vec<Object>, body: &Vec<LinkedStatement>) -> Result<(), BuilderError> {
+    fn create_function(&self, context_window: &mut ValueContextWindow<'ctx>, statement: &LinkedStatement) -> Result<(), BuilderError> {
+        let LinkedStatement::Function { object, args, body } = statement else { unreachable!() };
+
         let i32_type = self.context.i8_type();
         let argument_count = args.len();
         let arguments_types = vec![i32_type.into(); argument_count];
@@ -63,14 +71,18 @@ impl<'ctx> CodeModuleGen<'ctx> {
         let entry = self.context.append_basic_block(function, "entry");
         self.builder.position_at_end(entry);
 
-        let mut variables_context: HashMap<u32, IntValue> = HashMap::new();
+        context_window.add(object, function.into());
+        context_window.step_in();
+
         for (index, object) in args.iter().enumerate() {
-            let arg_value = function.get_nth_param(index as u32).unwrap().into_int_value();
-            variables_context.insert(object.id, arg_value);
+            let arg_value = function.get_nth_param(index as u32).unwrap();
+            context_window.add(object, arg_value.into());
         }
 
         let function_generator = FunctionGenerator::new(self, function);
-        function_generator.parse_function_body(&mut variables_context, body)?;
+        function_generator.parse_function_body(context_window, body)?;
+
+        context_window.step_out();
         Ok(())
     }
 }
@@ -89,11 +101,11 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
 
     fn parse_function_body(
         &self,
-        variables_context: &mut HashMap<u32, IntValue<'ctx>>,
+        context_window: &mut ValueContextWindow<'ctx>,
         body: &Vec<LinkedStatement>
     ) -> Result<(), BuilderError> {
         for statement in body {
-            self.parse_statement(variables_context, statement)?;
+            self.parse_statement(context_window, statement)?;
         }
 
         // TODO: check that function always return something
@@ -106,19 +118,19 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
 
     fn parse_statement(
         &self,
-        variables_context: &mut HashMap<u32, IntValue<'ctx>>,
+        context_window: &mut ValueContextWindow<'ctx>,
         statement: &LinkedStatement
     ) -> Result<(), BuilderError> {
         match statement {
             LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
             LinkedStatement::Expression(expression) => {
-                self.parse_expression(variables_context, expression)?;
+                self.parse_expression(context_window, expression)?;
             }
             LinkedStatement::If { condition, body } => {
                 let context = self.code_module_gen.context;
                 let builder = &self.code_module_gen.builder;
 
-                let condition = self.parse_expression(variables_context, condition)?;
+                let condition = self.parse_expression(context_window, condition)?;
                 let zero = context.i32_type().const_int(0, false);
                 let condition = builder.build_int_compare(
                     IntPredicate::NE, condition, zero, "if_cond"
@@ -130,7 +142,7 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
 
                 builder.position_at_end(then_bb);
                 for statement in body {
-                    self.parse_statement(variables_context, statement)?;
+                    self.parse_statement(context_window, statement)?;
                 }
                 builder.build_unconditional_branch(merge_bb)?;
                 builder.position_at_end(merge_bb);
@@ -146,7 +158,7 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
                 builder.build_unconditional_branch(cond_bb)?;
 
                 builder.position_at_end(cond_bb);
-                let condition = self.parse_expression(variables_context, condition)?;
+                let condition = self.parse_expression(context_window, condition)?;
                 let zero = context.i32_type().const_int(0, false);
                 let condition = builder.build_int_compare(
                     IntPredicate::NE, condition, zero, "while_cond"
@@ -155,21 +167,21 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
 
                 builder.position_at_end(body_bb);
                 for statement in body {
-                    self.parse_statement(variables_context, statement)?;
+                    self.parse_statement(context_window, statement)?;
                 }
                 builder.build_unconditional_branch(cond_bb)?;
                 builder.position_at_end(after_bb);
             }
             LinkedStatement::SetVariable { object, value } => {
-                let expression = self.parse_expression(variables_context, value)?;
-                variables_context.insert(object.id, expression);
+                let expression = self.parse_expression(context_window, value)?;
+                context_window.add(object, expression.into());
             }
             LinkedStatement::VariableDeclaration { object, value } => {
-                let expression = self.parse_expression(variables_context, value)?;
-                variables_context.insert(object.id, expression);
+                let expression = self.parse_expression(context_window, value)?;
+                context_window.add(object, expression.into());
             }
             LinkedStatement::Return(expression) => {
-                let expression = self.parse_expression(variables_context, expression)?;
+                let expression = self.parse_expression(context_window, expression)?;
                 self.code_module_gen.builder.build_return(Some(&expression))?;
             }
         }
@@ -178,7 +190,7 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
 
     fn parse_expression(
         &self,
-        variables_context: &mut HashMap<u32, IntValue<'ctx>>,
+        context_window: &mut ValueContextWindow<'ctx>,
         expression: &LinkedExpression
     ) -> Result<IntValue<'ctx>, BuilderError> {
         let i32_type = self.code_module_gen.context.i32_type();
@@ -188,13 +200,14 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
                 let number = literal.iter().collect::<String>().parse::<i32>().unwrap();
                 Ok(i32_type.const_int(number as u64, false))
             }
-            LinkedExpression::RoundBracket(boxed) => self.parse_expression(variables_context, boxed),
+            LinkedExpression::RoundBracket(boxed) => self.parse_expression(context_window, boxed),
             LinkedExpression::Variable(object) => {
-                Ok(*variables_context.get(&object.id).unwrap())
+                let any_value = context_window.get(object).unwrap();
+                Ok(any_value.into_int_value())
             }
             LinkedExpression::Plus(ex1, ex2) => {
-                let ex1 = self.parse_expression(variables_context, ex1)?;
-                let ex2 = self.parse_expression(variables_context, ex2)?;
+                let ex1 = self.parse_expression(context_window, ex1)?;
+                let ex2 = self.parse_expression(context_window, ex2)?;
                 self.code_module_gen.builder.build_int_add(ex1, ex2, "sum")
             }
         }

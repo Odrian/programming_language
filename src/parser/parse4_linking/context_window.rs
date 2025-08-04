@@ -33,13 +33,8 @@ impl<'text> ObjectContextWindow<'text> {
         self.contexts.pop();
     }
     pub fn get(&self, name: &String) -> Option<&Object<'text>> {
-        for object_context in self.contexts.iter().rev() {
-            let object = object_context.get(name);
-            if object.is_some() {
-                return object;
-            }
-        }
-        None
+        self.contexts.iter().rev()
+            .find_map(|obj_con|obj_con.get(name))
     }
     pub fn add(&mut self, name: &'text [char], v_type: ObjType) -> Object<'text> {
         let name_string = name.iter().collect::<String>();

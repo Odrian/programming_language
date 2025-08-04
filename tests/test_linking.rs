@@ -109,4 +109,6 @@ fn test_function_with_while() {
 fn test_function_call() {
     assert_no_error("a :: () {} a()");
     assert_no_error("a :: () {} b :: () { a() }");
+
+    assert_has_error("b :: () { a() }    a :: () {}");
 }
