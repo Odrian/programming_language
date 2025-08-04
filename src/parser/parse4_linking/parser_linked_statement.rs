@@ -50,7 +50,7 @@ fn link_statements_recursive<'text>(statements: &[Statement<'text>], object_cont
                 LinkedStatement::new_while(condition, body)
             }
             Statement::Function { object: name, args, body } => {
-                let object = object_context_window.add(name, ObjType::Function);
+                let object = object_context_window.add(name, ObjType::Function { argument_count: args.len() });
                 object_context_window.step_in();
                 let args: Vec<Object> = args.iter().map(|x|
                     object_context_window.add(x, ObjType::Variable)
@@ -84,7 +84,7 @@ fn parse_expression<'text>(expression: &Expression<'text>, object_context_window
         Expression::Variable(name) => {
             let name: String = name.iter().collect();
             if let Some(object) = object_context_window.get(&name) {
-                if object.obj_type == ObjType::Function {
+                if object.obj_type != ObjType::Variable {
                     return Err(CE::LinkingErrorFunctionUsage { name });
                 }
                 LinkedExpression::Variable(*object)
@@ -99,9 +99,13 @@ fn parse_expression<'text>(expression: &Expression<'text>, object_context_window
                 let context = format!("{object_context_window:?}");
                 return Err(CE::LinkingError { name, context });
             };
-            if object.obj_type != ObjType::Function {
+            let ObjType::Function { argument_count } = object.obj_type else {
                 let context = format!("{object_context_window:?}");
                 return Err(CE::LinkingError { name, context });
+            };
+            if args.len() != argument_count {
+                let function_name = object.name.iter().collect::<String>();
+                return Err(CE::IncorrectArgumentCount { function_name, argument_need: argument_count, argument_got: args.len() });
             }
             let args = args.iter().map(|x| parse_expression(x, object_context_window)).collect::<Result<Vec<_>, _>>()?;
 

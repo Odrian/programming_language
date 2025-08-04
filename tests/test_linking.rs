@@ -67,7 +67,7 @@ fn test_function_with_while() {
     let LinkedStatement::Function { object: function_object, args, body } = &statements[0] else {
         panic!("expected function statement");
     };
-    assert_eq!(function_object.obj_type, ObjType::Function);
+    assert_eq!(function_object.obj_type, ObjType::Function { argument_count: 1 });
     assert_eq!(args.len(), 1);
     let arg = &args[0];
     assert_eq!(body.len(), 2);
@@ -109,6 +109,18 @@ fn test_function_with_while() {
 fn test_function_call() {
     assert_no_error("a :: () {} a()");
     assert_no_error("a :: () {} b :: () { a() }");
+    assert_no_error("a :: (a1) {} a(0 + 0)");
+    assert_no_error("a :: (a1) {} a(0)");
+    assert_no_error("a :: (a1, a2) {} a(0, 0)");
+    assert_no_error("a :: (a1, a2, a3) {} a(0, 0, 0)");
 
+    assert_has_error("a :: (0) {}");
     assert_has_error("b :: () { a() }    a :: () {}");
+
+    assert_has_error("a :: () {} a(0)");
+    assert_has_error("a :: (ar1) {} a()");
+    assert_has_error("a :: (ar1) {} a(0, 0)");
+    assert_has_error("a :: (ar1, ar2) {} a()");
+    assert_has_error("a :: (ar1, ar2) {} a(0)");
+    assert_has_error("a :: (ar1, ar2) {} a(0, 0, 0)");
 }
