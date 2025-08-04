@@ -22,6 +22,20 @@ pub struct Config {
     pub create_llvm_ir: bool,
     pub create_object: bool,
 }
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            output: "main".to_owned(),
+            create_executable: true,
+
+            write_tokens_to_file: false,
+            write_unlinked_syntactic_tree_to_file: false,
+            write_syntactic_tree_to_file: false,
+            create_llvm_ir: false,
+            create_object: false,
+        }
+    }
+}
 
 pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
     let tokens = parse1_tokenize::tokenize(text)?;

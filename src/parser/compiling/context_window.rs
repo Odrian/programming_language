@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use inkwell::values::AnyValueEnum;
+use inkwell::values::{AnyValueEnum, FunctionValue, PointerValue};
 use crate::parser::parse4_linking::linked_statement::Object;
 
 #[derive(Debug, Default)]
@@ -30,9 +30,15 @@ impl<'ctx> ValueContextWindow<'ctx> {
         assert!(!self.contexts.is_empty(), "No more objects to step out!");
         self.contexts.pop();
     }
-    pub fn get(&self, object: &Object) -> Option<&AnyValueEnum<'ctx>> {
+    fn get(&self, object: &Object) -> Option<&AnyValueEnum<'ctx>> {
         self.contexts.iter().rev()
             .find_map(|obj_con|obj_con.get(object))
+    }
+    pub fn get_pointer_unwrap(&self, object: &Object) -> PointerValue<'ctx> {
+        self.get(object).unwrap().into_pointer_value()
+    }
+    pub fn get_function_unwrap(&self, object: &Object) -> FunctionValue<'ctx> {
+        self.get(object).unwrap().into_function_value()
     }
     pub fn add(&mut self, object: &Object, value: AnyValueEnum<'ctx>) {
         self.contexts.last_mut().unwrap().add(object, value)

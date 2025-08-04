@@ -63,7 +63,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
     fn create_function(&self, context_window: &mut ValueContextWindow<'ctx>, statement: &LinkedStatement) -> Result<(), BuilderError> {
         let LinkedStatement::Function { object, args, body } = statement else { unreachable!() };
 
-        let i32_type = self.context.i8_type();
+        let i32_type = self.context.i32_type();
         let argument_count = args.len();
         let arguments_types = vec![i32_type.into(); argument_count];
         let fn_type = i32_type.fn_type(&arguments_types, false);
@@ -76,8 +76,10 @@ impl<'ctx> CodeModuleGen<'ctx> {
         context_window.step_in();
 
         for (index, object) in args.iter().enumerate() {
-            let arg_value = function.get_nth_param(index as u32).unwrap();
-            context_window.add(object, arg_value.into());
+            let arg_value = function.get_nth_param(index as u32).unwrap().into_int_value();
+            let pointer = self.builder.build_alloca(i32_type, &format!("arg{index}"))?;
+            self.builder.build_store(pointer, arg_value)?;
+            context_window.add(object, pointer.into());
         }
 
         let function_generator = FunctionGenerator::new(self, function);
@@ -174,12 +176,21 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
                 builder.position_at_end(after_bb);
             }
             LinkedStatement::SetVariable { object, value } => {
-                let expression = self.parse_expression(context_window, value)?;
-                context_window.add(object, expression.into());
+                let builder = &self.code_module_gen.builder;
+
+                let value = self.parse_expression(context_window, value)?;
+                let pointer = context_window.get_pointer_unwrap(object);
+                builder.build_store(pointer, value)?;
             }
             LinkedStatement::VariableDeclaration { object, value } => {
-                let expression = self.parse_expression(context_window, value)?;
-                context_window.add(object, expression.into());
+                let context = self.code_module_gen.context;
+                let builder = &self.code_module_gen.builder;
+
+                let value = self.parse_expression(context_window, value)?;
+                let var_type = context.i32_type();
+                let pointer = builder.build_alloca(var_type, &object.get_name())?;
+                builder.build_store(pointer, value)?;
+                context_window.add(object, pointer.into());
             }
             LinkedStatement::Return(expression) => {
                 let expression = self.parse_expression(context_window, expression)?;
@@ -202,7 +213,7 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
                 ).collect::<Result<_, _>>()?;
                 let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.into()).collect(); // will be removed
 
-                let function = context_window.get(object).unwrap().into_function_value();
+                let function = context_window.get_function_unwrap(object);
                 let returned = self.code_module_gen.builder.build_call(function, &args, "function call")?;
                 // now all functions return i32
                 let returned_value = returned.try_as_basic_value().unwrap_left();
@@ -214,8 +225,10 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
             }
             LinkedExpression::RoundBracket(boxed) => self.parse_expression(context_window, boxed),
             LinkedExpression::Variable(object) => {
-                let any_value = context_window.get(object).unwrap();
-                Ok(any_value.into_int_value())
+                let value_type = self.code_module_gen.context.i32_type();
+                let pointer = context_window.get_pointer_unwrap(object);
+                let value = self.code_module_gen.builder.build_load(value_type, pointer, "load")?;
+                Ok(value.into_int_value())
             }
             LinkedExpression::TwoSidedOp(ex1, ex2, op) => {
                 let ex1 = self.parse_expression(context_window, ex1)?;
