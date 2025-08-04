@@ -20,6 +20,8 @@ pub enum CompilationError {
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
 
+    WritingASTError { filename: String, ast_name: String, io_err: String },
+
     LLVMError(BuilderError),
     LLVMVerifyModuleError { llvm_error: String },
     LLVMVerifyFunctionError { name: String },
@@ -56,6 +58,10 @@ impl fmt::Display for CompilationError {
                 let end_name = bracket_type_to_string(end_bracket_type);
                 write!(f, "Error: at {end} expected {start_name} bracket, but have {end_name} bracket. Open bracket at {start}")
             }
+            
+            Self::WritingASTError { filename, ast_name, io_err } => {
+                write!(f, "Can't write {ast_name} to {filename}: {io_err}")
+            }
 
             Self::IncorrectArgumentCount { function_name, argument_need, argument_got } => {
                 write!(f, "Incorrect argument count for function {function_name}, need {argument_need}, got {argument_got}")
@@ -66,6 +72,8 @@ impl fmt::Display for CompilationError {
             Self::LinkingErrorFunctionUsage { name } => {
                 write!(f, "Linking Error: can't use function {name} as variable value")
             }
+
+            
 
             Self::LLVMError(build_error) => {
                 write!(f, "LLVM Error: {build_error}")

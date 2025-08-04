@@ -55,9 +55,9 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
         let text = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
         let filename = format!("{}_unlinked_AST.txt", config.output);
-        fs::write(&filename, text).unwrap_or_else(|err|
-            panic!("Can't write unlinked_AST to {filename}: {err}")
-        );
+        if let Err(err) = fs::write(&filename, text) {
+            return Err(CE::WritingASTError { filename, ast_name: "unlinked_AST".to_owned(), io_err: err.to_string() });
+        }
     }
 
     let linked_statement = parse4_linking::link_variables(&statements)?;
@@ -65,9 +65,9 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
         let text = linked_statement.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
         let filename = format!("{}_AST.txt", config.output);
-        fs::write(&filename, text).unwrap_or_else(|err|
-            panic!("Can't write AST to {filename}: {err}")
-        );
+        if let Err(err) = fs::write(&filename, text) {
+            return Err(CE::WritingASTError { filename, ast_name: "AST".to_owned(), io_err: err.to_string() });
+        }
     }
 
     compiling::parse_to_llvm(&config, &linked_statement)?;
