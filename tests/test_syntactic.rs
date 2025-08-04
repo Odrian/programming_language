@@ -1,5 +1,6 @@
 use programming_language::error::CompilationError as CE;
 use programming_language::parser::*;
+use programming_language::parser::parse1_tokenize::token::TwoSidedOperation;
 use programming_language::parser::parse3_syntactic::statement::*;
 
 fn parse(text: &[char]) -> Result<Vec<Statement>, CE> {
@@ -59,17 +60,30 @@ fn test_set_with_brackets() {
 
     let v_cat = &string_to_chars("cat");
     let variable = Expression::Variable(v_cat);
-    assert_result("cat := cat + (cat + cat)",
-                  Ok(vec![Statement::new_variable(
-                      v_cat,
-                      Expression::new_plus(
-                          variable.clone(),
-                          Expression::new_round_bracket(
-                              Expression::new_plus(variable.clone(), variable.clone())
-                          )
-                      )
-                  )])
+    assert_result(
+        "cat := cat + (cat + cat)",
+        Ok(vec![Statement::new_variable(
+            v_cat,
+            Expression::new_two_sided_op(
+                variable.clone(),
+                Expression::new_round_bracket(
+                    Expression::new_two_sided_op(variable.clone(), variable.clone(), TwoSidedOperation::Plus)
+                ),
+                TwoSidedOperation::Plus
+            )
+        )])
     );
+}
+
+#[test]
+fn test_minus() {
+    assert_no_error("a := 0 - 0");
+    assert_no_error("a := 0 - 0 a = 0 - a");
+    assert_no_error("a := 0 - 0 a = a - 0");
+
+    assert_has_error("a := -1");
+    assert_has_error("a := --1");
+    assert_has_error("a := 0 a = -a");
 }
 
 #[test]
@@ -105,6 +119,7 @@ fn test_if_while() {
     assert_has_error("if cat = cat { cat := cat }");
     assert_has_error("if { cat = cat }");
 }
+
 #[test]
 fn test_function() {
     assert_no_error("foo :: () { }");
@@ -122,37 +137,43 @@ fn test_function() {
     let v_kitten = &string_to_chars("kitten");
     let v_owl = &string_to_chars("owl");
 
-    assert_result("foo :: () { }",
-                  Ok(vec![Statement::new_function(name, vec![], vec![])])
+    assert_result(
+        "foo :: () { }",
+        Ok(vec![Statement::new_function(name, vec![], vec![])])
     );
-    assert_result("foo :: (arg1) { }",
-                  Ok(vec![Statement::new_function(name, vec![arg1], vec![])])
+    assert_result(
+        "foo :: (arg1) { }",
+        Ok(vec![Statement::new_function(name, vec![arg1], vec![])])
     );
-    assert_result("foo :: (arg1, arg2) { }",
-                  Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![])])
+    assert_result(
+        "foo :: (arg1, arg2) { }",
+        Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![])])
     );
     let set_expr = Statement::new_variable(v_cat, Expression::Variable(v_dog));
-    assert_result("foo :: (arg1, arg2) { cat := dog }",
-                  Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
-                      set_expr.clone(),
-                  ])])
+    assert_result(
+        "foo :: (arg1, arg2) { cat := dog }",
+        Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
+            set_expr.clone(),
+        ])])
     );
 
-    assert_result("foo :: (arg1, arg2) { cat := dog cat := dog }",
-                  Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
-                      set_expr.clone(),
-                      set_expr.clone(),
-                  ])])
+    assert_result(
+        "foo :: (arg1, arg2) { cat := dog cat := dog }",
+            Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
+                set_expr.clone(),
+                set_expr.clone(),
+            ])])
     );
-    let another_set_expr = Statement::new_variable(v_owl, Expression::new_plus(
-        Expression::Variable(v_dog), Expression::Variable(v_kitten)
+    let another_set_expr = Statement::new_variable(v_owl, Expression::new_two_sided_op(
+        Expression::Variable(v_dog), Expression::Variable(v_kitten), TwoSidedOperation::Plus
     ));
-    assert_result("foo :: (arg1, arg2) { owl := dog + kitten cat := dog owl := dog + kitten }",
-                  Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
-                      another_set_expr.clone(),
-                      set_expr.clone(),
-                      another_set_expr.clone(),
-                  ])])
+    assert_result(
+        "foo :: (arg1, arg2) { owl := dog + kitten cat := dog owl := dog + kitten }",
+        Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
+            another_set_expr.clone(),
+            set_expr.clone(),
+            another_set_expr.clone(),
+        ])])
     );
 }
 
@@ -164,9 +185,10 @@ fn test_function_with_while() {
     let v_1 = &string_to_chars("1");
     let set_statement = Statement::new_variable(
         arg2,
-        Expression::new_plus(
+        Expression::new_two_sided_op(
             Expression::Variable(arg2),
             Expression::NumberLiteral(v_1),
+            TwoSidedOperation::Plus
         ),
     );
     let while_statement = Statement::new_while(
@@ -176,28 +198,32 @@ fn test_function_with_while() {
     let create_function_statement = |body| {
         Statement::new_function(name, vec![arg1, arg2], body)
     };
-    assert_result("foo :: (arg1, arg2) { while arg1 { arg2 := arg2 + 1 } }",
-                  Ok(vec![create_function_statement(vec![
-                      while_statement.clone(),
-                  ])])
+    assert_result(
+        "foo :: (arg1, arg2) { while arg1 { arg2 := arg2 + 1 } }",
+        Ok(vec![create_function_statement(vec![
+            while_statement.clone(),
+        ])])
     );
-    assert_result("foo::(arg1,arg2){while arg1{arg2:=arg2+1}}",
-                  Ok(vec![create_function_statement(vec![
-                      while_statement.clone(),
-                  ])])
+    assert_result(
+        "foo::(arg1,arg2){while arg1{arg2:=arg2+1}}",
+        Ok(vec![create_function_statement(vec![
+            while_statement.clone(),
+        ])])
     );
-    assert_result("foo :: (arg1, arg2) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } }",
-                  Ok(vec![create_function_statement(vec![
-                      set_statement.clone(),
-                      while_statement.clone(),
-                  ])])
+    assert_result(
+        "foo :: (arg1, arg2) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } }",
+        Ok(vec![create_function_statement(vec![
+            set_statement.clone(),
+            while_statement.clone(),
+        ])])
     );
-    assert_result("foo :: (arg1, arg2) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } arg2 := arg2 + 1 }",
-                  Ok(vec![create_function_statement(vec![
-                      set_statement.clone(),
-                      while_statement.clone(),
-                      set_statement.clone(),
-                  ])])
+    assert_result(
+        "foo :: (arg1, arg2) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } arg2 := arg2 + 1 }",
+        Ok(vec![create_function_statement(vec![
+            set_statement.clone(),
+            while_statement.clone(),
+            set_statement.clone(),
+        ])])
     );
 }
 
@@ -216,11 +242,13 @@ fn test_function_call() {
     let v_foo = &string_to_chars("foo");
     let v_cat = &string_to_chars("cat");
     let v_5 = &string_to_chars("5");
-    assert_result("foo()",
-                  Ok(vec![Statement::Expression(Expression::new_function_call(v_foo, vec![]))])
+    assert_result(
+        "foo()",
+        Ok(vec![Statement::Expression(Expression::new_function_call(v_foo, vec![]))])
     );
-    assert_result("foo(cat, 5)",
-                  Ok(vec![Statement::Expression(Expression::new_function_call(v_foo, vec![
+    assert_result(
+        "foo(cat, 5)",
+        Ok(vec![Statement::Expression(Expression::new_function_call(v_foo, vec![
                       Expression::Variable(v_cat),
                       Expression::NumberLiteral(v_5),
                   ]))])

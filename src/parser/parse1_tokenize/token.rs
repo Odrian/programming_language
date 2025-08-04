@@ -28,6 +28,7 @@ pub enum Token<'text> {
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TwoSidedOperation {
     Plus,                       // +
+    Minus,                      // -
 }
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum EqualOperation {

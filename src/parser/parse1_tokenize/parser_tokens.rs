@@ -121,6 +121,10 @@ pub fn split_text_without_brackets(text: &[char]) -> Vec<TokenWithPos> {
                     state.add(1, Some(Token::Colon));
                 }
             }
+            '-' => {
+                let token = Token::TwoSidedOperation(TwoSidedOperation::Minus);
+                state.add(1, Some(token));
+            }
             '+' => {
                 let token = Token::TwoSidedOperation(TwoSidedOperation::Plus);
                 state.add(1, Some(token));

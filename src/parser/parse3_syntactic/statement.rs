@@ -1,4 +1,5 @@
 use std::fmt;
+use crate::parser::parse1_tokenize::token::TwoSidedOperation;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum TStatement<'text, Obj> {
@@ -14,7 +15,7 @@ pub enum TStatement<'text, Obj> {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum TExpression<'text, Obj> {
-    Plus(Box<Self>, Box<Self>),
+    TwoSidedOp(Box<Self>, Box<Self>, TwoSidedOperation),
     NumberLiteral(&'text [char]),
     Variable(Obj),
     RoundBracket(Box<Self>),
@@ -42,8 +43,8 @@ impl<'text, Obj> TStatement<'text, Obj> {
     }
 }
 impl<'text, Obj> TExpression<'text, Obj> {
-    pub fn new_plus(expression1: Self, expression2: Self) -> Self {
-        Self::Plus(Box::new(expression1), Box::new(expression2))
+    pub fn new_two_sided_op(expression1: Self, expression2: Self, op: TwoSidedOperation) -> Self {
+        Self::TwoSidedOp(Box::new(expression1), Box::new(expression2), op)
     }
     pub fn new_round_bracket(expression: Self) -> Self {
         Self::RoundBracket(Box::new(expression))
@@ -100,11 +101,14 @@ impl fmt::Display for Statement<'_> {
 impl fmt::Display for Expression<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expression::Plus(a, b) => write!(f, "({a} + {b})"),
-            Expression::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
-            Expression::Variable(name) => write!(f, "{}", name.iter().collect::<String>()),
-            Expression::RoundBracket(expression) => write!(f, "({expression})"),
-            Expression::FunctionCall { object: name, args } => {
+            Self::TwoSidedOp(a, b, op) => match op {
+                TwoSidedOperation::Plus => write!(f, "({a} + {b})"),
+                TwoSidedOperation::Minus => write!(f, "({a} - {b})"),
+            }
+            Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
+            Self::Variable(name) => write!(f, "{}", name.iter().collect::<String>()),
+            Self::RoundBracket(expression) => write!(f, "({expression})"),
+            Self::FunctionCall { object: name, args } => {
                 let name = name.iter().collect::<String>();
                 let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
                 write!(f, "{name} ({args})")

@@ -1,5 +1,6 @@
 use std::fmt;
 use std::sync::atomic;
+use crate::parser::parse1_tokenize::token::TwoSidedOperation;
 use crate::parser::parse3_syntactic::statement::{TExpression, TStatement};
 
 pub type LinkedStatement<'text> = TStatement<'text, Object<'text>>;
@@ -71,11 +72,14 @@ impl fmt::Display for LinkedStatement<'_> {
 impl fmt::Display for LinkedExpression<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LinkedExpression::Plus(a, b) => write!(f, "({a} + {b})"),
-            LinkedExpression::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
-            LinkedExpression::Variable(object) => write!(f, "{object}"),
-            LinkedExpression::RoundBracket(expression) => write!(f, "({expression})"),
-            LinkedExpression::FunctionCall { object, args } => {
+            Self::TwoSidedOp(a, b, op) => match op {
+                TwoSidedOperation::Plus => write!(f, "({a} + {b})"),
+                TwoSidedOperation::Minus => write!(f, "({a} - {b})"),
+            }
+            Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
+            Self::Variable(object) => write!(f, "{object}"),
+            Self::RoundBracket(expression) => write!(f, "({expression})"),
+            Self::FunctionCall { object, args } => {
                 let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>();
                 write!(f, "{} ({})", object, args.join(", "))
             },

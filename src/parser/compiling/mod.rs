@@ -11,6 +11,7 @@ use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue};
 
 use crate::error::CompilationError as CE;
 use crate::parser::Config;
+use crate::parser::parse1_tokenize::token::TwoSidedOperation;
 use crate::parser::parse4_linking::linked_statement::*;
 
 /// previous steps guarantees that every used variables is valid
@@ -216,10 +217,17 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
                 let any_value = context_window.get(object).unwrap();
                 Ok(any_value.into_int_value())
             }
-            LinkedExpression::Plus(ex1, ex2) => {
+            LinkedExpression::TwoSidedOp(ex1, ex2, op) => {
                 let ex1 = self.parse_expression(context_window, ex1)?;
                 let ex2 = self.parse_expression(context_window, ex2)?;
-                self.code_module_gen.builder.build_int_add(ex1, ex2, "sum")
+                match op {
+                    TwoSidedOperation::Plus => {
+                        self.code_module_gen.builder.build_int_add(ex1, ex2, "sum")
+                    }
+                    TwoSidedOperation::Minus => {
+                        self.code_module_gen.builder.build_int_sub(ex1, ex2, "dif")
+                    }
+                }
             }
         }
     }

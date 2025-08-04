@@ -71,10 +71,10 @@ fn link_statements_recursive<'text>(statements: &[Statement<'text>], object_cont
 
 fn parse_expression<'text>(expression: &Expression<'text>, object_context_window: &ObjectContextWindow<'text>) -> Result<LinkedExpression<'text>, CE> {
     let linked = match expression {
-        Expression::Plus(expression1, expression2) => {
+        Expression::TwoSidedOp(expression1, expression2, op) => {
             let ex1 = parse_expression(expression1, object_context_window)?;
             let ex2 = parse_expression(expression2, object_context_window)?;
-            LinkedExpression::new_plus(ex1, ex2)
+            LinkedExpression::new_two_sided_op(ex1, ex2, *op)
         }
         Expression::NumberLiteral(string) => LinkedExpression::NumberLiteral(string),
         Expression::RoundBracket(ex1) => {

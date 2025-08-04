@@ -147,12 +147,8 @@ impl<'text, 'a> ParsingState<'text, 'a> {
         match &token.token {
             Token::TwoSidedOperation(op) => {
                 self.index += 1;
-                match op {
-                    TwoSidedOperation::Plus => {
-                        let expression2 = self.parse_expression(token.position)?;
-                        Ok(Expression::new_plus(expression1, expression2))
-                    }
-                }
+                let expression2 = self.parse_expression(token.position)?;
+                Ok(Expression::new_two_sided_op(expression1, expression2, *op))
             }
             Token::Bracket(vec, BracketType::Round) => {
                 self.index += 1;
