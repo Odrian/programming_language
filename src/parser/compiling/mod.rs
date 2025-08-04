@@ -2,13 +2,7 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::path::Path;
 
-use inkwell::{
-    context::Context,
-    module::Module,
-    builder::Builder,
-    targets::{InitializationConfig, Target, TargetMachine, FileType, RelocMode, CodeModel},
-    OptimizationLevel,
-};
+use inkwell::{context::Context, module::Module, builder::Builder, targets::{InitializationConfig, Target, TargetMachine, FileType, RelocMode, CodeModel}, OptimizationLevel, IntPredicate};
 use inkwell::builder::BuilderError;
 use inkwell::values::{FunctionValue, IntValue};
 
@@ -16,6 +10,7 @@ use crate::error::CompilationError as CE;
 use crate::parser::Config;
 use crate::parser::parse4_linking::linked_statement::*;
 
+/// previous steps guarantees that every used variables is valid
 pub fn parse_to_llvm(config: &Config, statements: &[LinkedStatement]) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
@@ -116,16 +111,54 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
     ) -> Result<(), BuilderError> {
         match statement {
             LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
-            LinkedStatement::Expression(_) => {
-                unimplemented!("not supported")
+            LinkedStatement::Expression(expression) => {
+                self.parse_expression(variables_context, expression)?;
             }
-            LinkedStatement::If { .. } => {
-                // let then_bb  = self.variables_context.append_basic_block(self.function, "then");
-                // let merge_bb = self.variables_context.append_basic_block(self.function, "merge");
-                unimplemented!("not supported")
+            LinkedStatement::If { condition, body } => {
+                let context = self.code_module_gen.context;
+                let builder = &self.code_module_gen.builder;
+
+                let condition = self.parse_expression(variables_context, condition)?;
+                let zero = context.i32_type().const_int(0, false);
+                let condition = builder.build_int_compare(
+                    IntPredicate::NE, condition, zero, "if_cond"
+                )?;
+
+                let then_bb = context.append_basic_block(self.function, "then");
+                let merge_bb = context.append_basic_block(self.function, "merge");
+                builder.build_conditional_branch(condition, then_bb, merge_bb)?;
+
+                builder.position_at_end(then_bb);
+                for statement in body {
+                    self.parse_statement(variables_context, statement)?;
+                }
+                builder.build_unconditional_branch(merge_bb)?;
+                builder.position_at_end(merge_bb);
             }
-            LinkedStatement::While { .. } => {
-                unimplemented!("not supported")
+            LinkedStatement::While { condition, body } => {
+                let context = self.code_module_gen.context;
+                let builder = &self.code_module_gen.builder;
+
+                let cond_bb = context.append_basic_block(self.function, "cond");
+                let body_bb = context.append_basic_block(self.function, "then");
+                let after_bb = context.append_basic_block(self.function, "merge");
+
+                builder.build_unconditional_branch(cond_bb)?;
+
+                builder.position_at_end(cond_bb);
+                let condition = self.parse_expression(variables_context, condition)?;
+                let zero = context.i32_type().const_int(0, false);
+                let condition = builder.build_int_compare(
+                    IntPredicate::NE, condition, zero, "while_cond"
+                )?;
+                builder.build_conditional_branch(condition, body_bb, after_bb)?;
+
+                builder.position_at_end(body_bb);
+                for statement in body {
+                    self.parse_statement(variables_context, statement)?;
+                }
+                builder.build_unconditional_branch(cond_bb)?;
+                builder.position_at_end(after_bb);
             }
             LinkedStatement::SetVariable { object, value } => {
                 let expression = self.parse_expression(variables_context, value)?;
@@ -150,7 +183,7 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
     ) -> Result<IntValue<'ctx>, BuilderError> {
         let i32_type = self.code_module_gen.context.i32_type();
         match expression {
-            LinkedExpression::FunctionCall { .. } => unimplemented!("not supported"),
+            LinkedExpression::FunctionCall { .. } => unimplemented!("function calls not supported"),
             LinkedExpression::NumberLiteral(literal) => {
                 let number = literal.iter().collect::<String>().parse::<i32>().unwrap();
                 Ok(i32_type.const_int(number as u64, false))
@@ -167,7 +200,6 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
         }
     }
 }
-
 
 impl Object<'_> {
     fn get_name(&self) -> String {
