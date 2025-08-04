@@ -7,7 +7,7 @@ use std::path::Path;
 
 use inkwell::{context::Context, module::Module, builder::Builder, targets::{InitializationConfig, Target, TargetMachine, FileType, RelocMode, CodeModel}, OptimizationLevel, IntPredicate};
 use inkwell::builder::BuilderError;
-use inkwell::values::{FunctionValue, IntValue};
+use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue};
 
 use crate::error::CompilationError as CE;
 use crate::parser::Config;
@@ -195,7 +195,18 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
     ) -> Result<IntValue<'ctx>, BuilderError> {
         let i32_type = self.code_module_gen.context.i32_type();
         match expression {
-            LinkedExpression::FunctionCall { .. } => unimplemented!("function calls not supported"),
+            LinkedExpression::FunctionCall { object, args } => {
+                let args: Vec<_> = args.iter().map(|a|
+                    self.parse_expression(context_window, a)
+                ).collect::<Result<_, _>>()?;
+                let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.into()).collect(); // will be removed
+
+                let function = context_window.get(object).unwrap().into_function_value();
+                let returned = self.code_module_gen.builder.build_call(function, &args, "function call")?;
+                // now all functions return i32
+                let returned_value = returned.try_as_basic_value().unwrap_left();
+                Ok(returned_value.into_int_value())
+            },
             LinkedExpression::NumberLiteral(literal) => {
                 let number = literal.iter().collect::<String>().parse::<i32>().unwrap();
                 Ok(i32_type.const_int(number as u64, false))
