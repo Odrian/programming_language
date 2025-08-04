@@ -3,7 +3,7 @@
 * parse if, while (done)
 * parse function (done)
 * linking (done)
-* compile with int8 type only (in progress)
+* compile with int8 type only (done)
 * add types
 * add arrays
 
