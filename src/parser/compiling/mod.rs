@@ -6,7 +6,6 @@ use std::process::Command;
 use std::path::Path;
 
 use inkwell::{context::Context, module::Module, builder::Builder, targets::{InitializationConfig, Target, TargetMachine, FileType, RelocMode, CodeModel}, OptimizationLevel, IntPredicate};
-use inkwell::builder::BuilderError;
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue};
 
 use crate::error::CompilationError as CE;
@@ -14,18 +13,21 @@ use crate::parser::Config;
 use crate::parser::parse1_tokenize::token::TwoSidedOperation;
 use crate::parser::parse4_linking::linked_statement::*;
 
+// TODO: split module to submodules
+
 /// previous steps guarantees that every used variables is valid
 pub fn parse_to_llvm(config: &Config, statements: &[LinkedStatement]) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
     let code_module_gen = CodeModuleGen::new(&context, "main_module");
-    let result = code_module_gen.parse_statements(statements);
-    if let Err(err) = result {
-        return Err(CE::LLVMError(err));
+    code_module_gen.parse_statements(statements)?;
+    
+    if let Err(err) = code_module_gen.module.verify() {
+        return Err(CE::LLVMVerifyModuleError { llvm_error: err.to_string() });
     }
 
-    create_executable(config, &code_module_gen.module);
+    create_executable(config, &code_module_gen.module)?;
     Ok(())
 }
 
@@ -44,7 +46,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
             builder
         }
     }
-    fn parse_statements(&self, statements: &[LinkedStatement]) -> Result<(), BuilderError> {
+    fn parse_statements(&self, statements: &[LinkedStatement]) -> Result<(), CE> {
         let mut context_window = ValueContextWindow::new();
         context_window.step_in();
         for statement in statements {
@@ -60,7 +62,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
         context_window.step_out();
         Ok(())
     }
-    fn create_function(&self, context_window: &mut ValueContextWindow<'ctx>, statement: &LinkedStatement) -> Result<(), BuilderError> {
+    fn create_function(&self, context_window: &mut ValueContextWindow<'ctx>, statement: &LinkedStatement) -> Result<(), CE> {
         let LinkedStatement::Function { object, args, body } = statement else { unreachable!() };
 
         let i32_type = self.context.i32_type();
@@ -84,6 +86,9 @@ impl<'ctx> CodeModuleGen<'ctx> {
 
         let function_generator = FunctionGenerator::new(self, function);
         function_generator.parse_function_body(context_window, body)?;
+        if !function.verify(true) {
+            return Err(CE::LLVMVerifyFunctionError { name: object.get_name() });
+        }
 
         context_window.step_out();
         Ok(())
@@ -106,7 +111,7 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
         &self,
         context_window: &mut ValueContextWindow<'ctx>,
         body: &Vec<LinkedStatement>
-    ) -> Result<(), BuilderError> {
+    ) -> Result<(), CE> {
         for statement in body {
             self.parse_statement(context_window, statement)?;
         }
@@ -123,7 +128,7 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
         &self,
         context_window: &mut ValueContextWindow<'ctx>,
         statement: &LinkedStatement
-    ) -> Result<(), BuilderError> {
+    ) -> Result<(), CE> {
         match statement {
             LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
             LinkedStatement::Expression(expression) => {
@@ -204,7 +209,7 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
         &self,
         context_window: &mut ValueContextWindow<'ctx>,
         expression: &LinkedExpression
-    ) -> Result<IntValue<'ctx>, BuilderError> {
+    ) -> Result<IntValue<'ctx>, CE> {
         let i32_type = self.code_module_gen.context.i32_type();
         match expression {
             LinkedExpression::FunctionCall { object, args } => {
@@ -235,10 +240,12 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
                 let ex2 = self.parse_expression(context_window, ex2)?;
                 match op {
                     TwoSidedOperation::Plus => {
-                        self.code_module_gen.builder.build_int_add(ex1, ex2, "sum")
+                        let result = self.code_module_gen.builder.build_int_add(ex1, ex2, "sum")?;
+                        Ok(result)
                     }
                     TwoSidedOperation::Minus => {
-                        self.code_module_gen.builder.build_int_sub(ex1, ex2, "dif")
+                        let result = self.code_module_gen.builder.build_int_sub(ex1, ex2, "dif")?;
+                        Ok(result)
                     }
                 }
             }
@@ -257,41 +264,57 @@ impl Object<'_> {
     }
 }
 
-fn create_executable(config: &Config, module: &Module) {
+fn create_executable(config: &Config, module: &Module) -> Result<(), CE> {
     let assembly_name = format!("{}.ll", config.output);
     let object_name = format!("{}.o", config.output);
     let executable_name = config.output.clone();
 
     // create assembly file
     if config.create_llvm_ir {
-        module.print_to_file(assembly_name)
-            .unwrap_or_else(|err| panic!("failed to dump LLVM IR: {err}"));
+        if let Err(err) = module.print_to_file(assembly_name) {
+            return Err(CE::LLVMFailedToCreateAssembly { llvm_error: err.to_string() });
+        }
     }
 
     if !config.create_object && !config.create_executable {
-        return
+        return Ok(())
     }
 
     let tm = create_target_machine();
     module.set_triple(&tm.get_triple());
 
     // create object file
-    tm.write_to_file(module, FileType::Object, Path::new(object_name.as_str()))
-        .unwrap_or_else(|err| panic!("failed to create object file: {err}"));
+    if let Err(err) = tm.write_to_file(module, FileType::Object, Path::new(object_name.as_str())) {
+        panic!("functions and whole module was verified, but got error: {}", err.to_string());
+    }
 
-    if config.create_executable {
+    let status_option = if config.create_executable {
         let status = Command::new("cc")
-            .args([object_name.as_str(), "-o", executable_name.as_str()])
-            .status()
-            .unwrap_or_else(|err| panic!("Failed to invoke linker 'cc': {err}"));
-        if !status.success() {
-            panic!("Linker exited with {:?} code", status.code());
+            .args([object_name.as_str(), "-o", executable_name.as_str()]).status();
+        Some(status)
+    } else { None };
+
+    if !config.create_object {
+        if let Err(err) = std::fs::remove_file(object_name.clone()) {
+            return Err(CE::FailedToDeleteObject { name: object_name, io_err: err.to_string() });
         }
     }
-    if !config.create_object {
-        std::fs::remove_file(object_name)
-            .unwrap_or_else(|err| panic!("failed to delete object file: {err}"));
+
+    if let Some(status) = status_option {
+        // parse linking result
+        match status {
+            Ok(exit_status) => {
+                if !exit_status.success() {
+                    let description = format!("exit with code {}", exit_status.code().unwrap());
+                    return Err(CE::FailedToRunLinker { description })
+                }
+            }
+            Err(err) => {
+                return Err(CE::FailedToRunLinker { description: err.to_string() })
+            }
+        }
     }
+    Ok(())
 }
 
 fn create_target_machine() -> TargetMachine {

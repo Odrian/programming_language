@@ -16,7 +16,7 @@ fn main() -> Result<(), CE> {
     let write_tokens_to_file = false;
     let write_syntactic_tree_to_file = false;
     let write_unlinked_syntactic_tree_to_file = false;
-    let create_llvm_ir = true;
+    let create_llvm_ir = false;
     let create_object = false;
 
     let config = Config {

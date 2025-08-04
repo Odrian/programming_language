@@ -21,6 +21,17 @@ pub enum CompilationError {
     LinkingErrorFunctionUsage { name: String },
 
     LLVMError(BuilderError),
+    LLVMVerifyModuleError { llvm_error: String },
+    LLVMVerifyFunctionError { name: String },
+    LLVMFailedToCreateAssembly { llvm_error: String },
+    FailedToDeleteObject { name: String, io_err: String },
+    FailedToRunLinker { description: String },
+}
+
+impl From<BuilderError> for CompilationError {
+    fn from(value: BuilderError) -> Self {
+        Self::LLVMError(value)
+    }
 }
 
 impl fmt::Display for CompilationError {
@@ -58,6 +69,21 @@ impl fmt::Display for CompilationError {
 
             Self::LLVMError(build_error) => {
                 write!(f, "LLVM Error: {build_error}")
+            }
+            Self::LLVMVerifyFunctionError { name } => {
+                write!(f, "Function {name} probably doesn't return anything, read text below")
+            }
+            Self::LLVMVerifyModuleError { llvm_error } => {
+                write!(f, "Module verify error: {llvm_error}")
+            }
+            Self::LLVMFailedToCreateAssembly { llvm_error } => {
+                write!(f, "failed to create assembly file: {llvm_error}")
+            }
+            Self::FailedToDeleteObject { name, io_err } => {
+                write!(f, "failed to delete object file {name}. Error: {io_err}")
+            }
+            Self::FailedToRunLinker { description } => {
+                write!(f, "failed run linked 'cc': {description}")
             }
         }
     }
