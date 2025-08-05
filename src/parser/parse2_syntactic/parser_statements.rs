@@ -39,7 +39,6 @@ impl<'text, 'a> ParsingState<'text, 'a> {
                 Err(CE::SyntacticsError(token.position, String::from("expected statement")))
             }
             Token::String(chars) => {
-                // TODO: maybe not parse every name to String
                 let string = chars.iter().collect::<String>();
                 match string.as_str() {
                     "if" | "while" => {
@@ -192,8 +191,7 @@ impl<'text, 'a> ParsingState<'text, 'a> {
                 }
                 index += 1;
                 if index == args.len() {
-                    // TODO: break
-                    return Err(CE::SyntacticsError(args[index - 1].position, String::from("expected argument after comma")));
+                    break // redundant comma
                 }
                 let Token::String(arg_i) = &args[index].token else {
                     return Err(CE::SyntacticsError(args[index].position, String::from("expected argument name in function declaration")));

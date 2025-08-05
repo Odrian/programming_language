@@ -9,7 +9,7 @@ pub type LinkedExpression<'text> = TExpression<'text, Object<'text>>;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ObjType {
     Variable,
-    Function { argument_count: usize } // TODO: check all u8 and u32 for UB
+    Function { argument_count: usize }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
