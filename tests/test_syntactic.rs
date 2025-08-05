@@ -1,11 +1,11 @@
 use programming_language::error::CompilationError as CE;
 use programming_language::parser::*;
 use programming_language::parser::parse1_tokenize::token::TwoSidedOperation;
-use programming_language::parser::parse3_syntactic::statement::*;
+use programming_language::parser::parse2_syntactic::statement::*;
 
 fn parse(text: &[char]) -> Result<Vec<Statement>, CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
-    let statements = parse3_syntactic::parse_statements(&tokens)?;
+    let statements = parse2_syntactic::parse_statements(&tokens)?;
     Ok(statements)
 }
 fn string_to_chars(s: &str) -> Vec<char> {

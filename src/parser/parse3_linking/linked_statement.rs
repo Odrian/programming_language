@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::atomic;
 use crate::parser::parse1_tokenize::token::TwoSidedOperation;
-use crate::parser::parse3_syntactic::statement::{TExpression, TStatement};
+use crate::parser::parse2_syntactic::statement::{TExpression, TStatement};
 
 pub type LinkedStatement<'text> = TStatement<'text, Object<'text>>;
 pub type LinkedExpression<'text> = TExpression<'text, Object<'text>>;

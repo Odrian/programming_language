@@ -1,6 +1,6 @@
 pub mod parse1_tokenize;
-pub mod parse3_syntactic;
-pub mod parse4_linking;
+pub mod parse2_syntactic;
+pub mod parse3_linking;
 pub mod compiling;
 
 mod position_in_file;
@@ -50,7 +50,7 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
         );
     }
 
-    let statements = parse3_syntactic::parse_statements(&tokens)?;
+    let statements = parse2_syntactic::parse_statements(&tokens)?;
     if config.write_unlinked_syntactic_tree_to_file {
         let text = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
@@ -60,7 +60,7 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
         }
     }
 
-    let linked_statement = parse4_linking::link_variables(&statements)?;
+    let linked_statement = parse3_linking::link_variables(&statements)?;
     if config.write_syntactic_tree_to_file {
         let text = linked_statement.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 

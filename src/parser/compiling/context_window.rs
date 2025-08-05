@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use inkwell::values::{AnyValueEnum, FunctionValue, PointerValue};
-use crate::parser::parse4_linking::linked_statement::Object;
+use crate::parser::parse3_linking::linked_statement::Object;
 
 #[derive(Debug, Default)]
 struct ValueContext<'ctx>(HashMap<u32, AnyValueEnum<'ctx>>);

@@ -1,6 +1,6 @@
 use crate::error::CompilationError as CE;
 
-use super::super::parse3_syntactic::statement::*;
+use super::super::parse2_syntactic::statement::*;
 use super::linked_statement::*;
 use super::context_window::ObjectContextWindow;
 

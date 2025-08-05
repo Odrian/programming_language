@@ -1,11 +1,11 @@
 use programming_language::error::CompilationError as CE;
 use programming_language::parser::*;
-use programming_language::parser::parse4_linking::linked_statement::*;
+use programming_language::parser::parse3_linking::linked_statement::*;
 
 fn parse(text: &[char]) -> Result<Vec<LinkedStatement>, CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
-    let statements = parse3_syntactic::parse_statements(&tokens)?;
-    let linked_statements = parse4_linking::link_variables(&statements)?;
+    let statements = parse2_syntactic::parse_statements(&tokens)?;
+    let linked_statements = parse3_linking::link_variables(&statements)?;
     Ok(linked_statements)
 }
 fn string_to_chars(s: &str) -> Vec<char> {

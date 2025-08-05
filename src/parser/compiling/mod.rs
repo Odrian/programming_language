@@ -11,7 +11,7 @@ use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue};
 use crate::error::CompilationError as CE;
 use crate::parser::Config;
 use crate::parser::parse1_tokenize::token::TwoSidedOperation;
-use crate::parser::parse4_linking::linked_statement::*;
+use crate::parser::parse3_linking::linked_statement::*;
 
 // TODO: split module to submodules
 
