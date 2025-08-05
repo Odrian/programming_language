@@ -44,19 +44,29 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
             .map(|t| format!("{:#?}", t.token))
             .collect::<Vec<_>>().join("\n");
 
-        let filename = format!("{}_tokens.txt", config.output);
-        fs::write(&filename, text).unwrap_or_else(|err|
-            panic!("Can't write tokens to {filename}: {err}")
-        );
+        let filepath = format!("{}_tokens.txt", config.output);
+        let write_result = fs::write(&filepath, text);
+        if let Err(err) = write_result {
+            return Err(CE::CantWriteToFile {
+                filepath,
+                what: "tokens".to_owned(),
+                io_error: err.to_string()
+            })
+        }
     }
 
     let statements = parse2_syntactic::parse_statements(&tokens)?;
     if config.write_unlinked_syntactic_tree_to_file {
         let text = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
-        let filename = format!("{}_unlinked_AST.txt", config.output);
-        if let Err(err) = fs::write(&filename, text) {
-            return Err(CE::WritingASTError { filename, ast_name: "unlinked_AST".to_owned(), io_err: err.to_string() });
+        let filepath = format!("{}_unlinked_AST.txt", config.output);
+        let write_result = fs::write(&filepath, text);
+        if let Err(err) = write_result {
+            return Err(CE::CantWriteToFile {
+                filepath,
+                what: "unlinked AST".to_owned(),
+                io_error: err.to_string()
+            })
         }
     }
 
@@ -64,9 +74,14 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
     if config.write_syntactic_tree_to_file {
         let text = linked_statement.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
-        let filename = format!("{}_AST.txt", config.output);
-        if let Err(err) = fs::write(&filename, text) {
-            return Err(CE::WritingASTError { filename, ast_name: "AST".to_owned(), io_err: err.to_string() });
+        let filepath = format!("{}_AST.txt", config.output);
+        let write_result = fs::write(&filepath, text);
+        if let Err(err) = write_result {
+            return Err(CE::CantWriteToFile {
+                filepath,
+                what: "AST".to_owned(),
+                io_error: err.to_string()
+            })
         }
     }
 

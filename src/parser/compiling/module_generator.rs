@@ -47,7 +47,7 @@ mod module_parsing {
                         self.create_function(statement)?;
                     }
                     _ => {
-                        unimplemented!("don't support statements in global")
+                        return Err(CE::UnexpectedGlobalVariable)
                     }
                 }
             }

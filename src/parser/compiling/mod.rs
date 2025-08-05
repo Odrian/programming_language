@@ -61,9 +61,8 @@ fn create_executable(config: &Config, module: &Module) -> Result<(), CE> {
     module.set_triple(&tm.get_triple());
 
     // create object file
-    if let Err(err) = tm.write_to_file(module, FileType::Object, Path::new(object_name.as_str())) {
-        panic!("functions and whole module was verified, but got error: {}", err.to_string());
-    }
+    tm.write_to_file(module, FileType::Object, Path::new(object_name.as_str()))
+        .expect("functions and whole module was verified, shouldn't return error");
 
     let status_option = if config.create_executable {
         let status = Command::new("cc")
@@ -73,7 +72,7 @@ fn create_executable(config: &Config, module: &Module) -> Result<(), CE> {
 
     if !config.create_object {
         if let Err(err) = std::fs::remove_file(object_name.clone()) {
-            return Err(CE::FailedToDeleteObject { name: object_name, io_err: err.to_string() });
+            return Err(CE::CantDeleteObjectFile { filepath: object_name, io_error: err.to_string() });
         }
     }
 

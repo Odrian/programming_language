@@ -1,10 +1,14 @@
-use std::{fmt, io};
+use std::fmt;
 use inkwell::builder::BuilderError;
 use crate::parser::{PositionInFile, BracketType};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CompilationError {
-    FileIO { filepath: String, error: io::ErrorKind },
+    WrongArguments(String),
+    CantReadSourceFile { filepath: String, io_error: String },
+    CantWriteToFile { filepath: String, what: String, io_error: String },
+    CantDeleteObjectFile { filepath: String, io_error: String },
+
     SyntacticsError(PositionInFile, String),
 
     BracketNotOpened(PositionInFile, BracketType),
@@ -20,14 +24,12 @@ pub enum CompilationError {
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
     NoMainFunction,
-
-    WritingASTError { filename: String, ast_name: String, io_err: String },
+    UnexpectedGlobalVariable,
 
     LLVMError(BuilderError),
     LLVMVerifyModuleError { llvm_error: String },
     LLVMVerifyFunctionError { name: String },
     LLVMFailedToCreateAssembly { llvm_error: String },
-    FailedToDeleteObject { name: String, io_err: String },
     FailedToRunLinker { description: String },
 }
 
@@ -40,9 +42,18 @@ impl From<BuilderError> for CompilationError {
 impl fmt::Display for CompilationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::FileIO { filepath, error } => {
-                write!(f, "Error reading file {filepath}: {error}")
+            Self::WrongArguments(string) => write!(f, "{string}"),
+
+            Self::CantReadSourceFile { filepath, io_error } => {
+                write!(f, "Error reading file {filepath}: {io_error}")
             }
+            Self::CantWriteToFile { filepath, what, io_error } => {
+                write!(f, "Error writing {what} to file {filepath}: {io_error}")
+            }
+            Self::CantDeleteObjectFile { filepath, io_error } => {
+                write!(f, "failed to delete object file {filepath}. Error: {io_error}")
+            }
+
             Self::SyntacticsError(place_info, description) => {
                 write!(f, "Error at {place_info}: {description}")
             }
@@ -59,10 +70,6 @@ impl fmt::Display for CompilationError {
                 let end_name = bracket_type_to_string(end_bracket_type);
                 write!(f, "Error: at {end} expected {start_name} bracket, but have {end_name} bracket. Open bracket at {start}")
             }
-            
-            Self::WritingASTError { filename, ast_name, io_err } => {
-                write!(f, "Can't write {ast_name} to {filename}: {io_err}")
-            }
 
             Self::IncorrectArgumentCount { function_name, argument_need, argument_got } => {
                 write!(f, "Incorrect argument count for function {function_name}, need {argument_need}, got {argument_got}")
@@ -76,6 +83,9 @@ impl fmt::Display for CompilationError {
             Self::NoMainFunction => {
                 write!(f, "No 'main' function")
             }
+            Self::UnexpectedGlobalVariable => {
+                write!(f, "Global variables are not supported")
+            }
 
             Self::LLVMError(build_error) => {
                 write!(f, "LLVM Error: {build_error}")
@@ -88,9 +98,6 @@ impl fmt::Display for CompilationError {
             }
             Self::LLVMFailedToCreateAssembly { llvm_error } => {
                 write!(f, "failed to create assembly file: {llvm_error}")
-            }
-            Self::FailedToDeleteObject { name, io_err } => {
-                write!(f, "failed to delete object file {name}. Error: {io_err}")
             }
             Self::FailedToRunLinker { description } => {
                 write!(f, "failed run linked 'cc': {description}")

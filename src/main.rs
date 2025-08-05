@@ -5,10 +5,10 @@ use programming_language::error::CompilationError as CE;
 fn main() -> Result<(), CE> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        panic!("WRONG ARGUMENTS, USE: programming_language <filepath>");
+        return Err(CE::WrongArguments("WRONG ARGUMENTS, USE: programming_language <filepath>".to_owned()))
     }
     let file_path = &args[1];
-    let file_text = read_file(file_path);
+    let file_text = read_file(file_path)?;
 
     let output = "main".to_owned();
     let create_executable = true;
@@ -30,12 +30,13 @@ fn main() -> Result<(), CE> {
     Ok(())
 }
 
-fn read_file(path: &str) -> Vec<char> {
+fn read_file(path: &str) -> Result<Vec<char>, CE> {
     let result = fs::read_to_string(path);
     match result {
-        Ok(text) => text.chars().collect(),
-        Err(error) => {
-            panic!("{error:?}");
-        }
+        Ok(text) => Ok(text.chars().collect()),
+        Err(error) => Err(CE::CantReadSourceFile {
+            filepath: path.to_owned(),
+            io_error: error.to_string(),
+        })
     }
 }
