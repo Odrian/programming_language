@@ -21,8 +21,8 @@ pub fn parse_to_llvm(config: &Config, statements: &[LinkedStatement]) -> Result<
     let context = Context::create();
 
     let mut code_module_gen = CodeModuleGen::new(&context, "main_module");
-    code_module_gen.parse_statements(statements)?;
-    
+    code_module_gen.parse_module(statements)?;
+
     if let Err(err) = code_module_gen.module.verify() {
         return Err(CE::LLVMVerifyModuleError { llvm_error: err.to_string() });
     }
@@ -67,173 +67,188 @@ impl<'ctx> CodeModuleGen<'ctx> {
             context_window
         }
     }
-    fn parse_statements(&mut self, statements: &[LinkedStatement]) -> Result<(), CE> {
-        self.context_window.step_in();
-        for statement in statements {
-            match statement {
-                LinkedStatement::Function { .. } => {
-                    self.create_function(statement)?;
-                }
-                _ => {
-                    unimplemented!("don't support statements in global")
+}
+
+/// parsing statements in global space
+mod module_parsing {
+    use super::*;
+
+    impl<'ctx> CodeModuleGen<'ctx> {
+        pub fn parse_module(&mut self, statements: &[LinkedStatement]) -> Result<(), CE> {
+            self.context_window.step_in();
+            for statement in statements {
+                match statement {
+                    LinkedStatement::Function { .. } => {
+                        self.create_function(statement)?;
+                    }
+                    _ => {
+                        unimplemented!("don't support statements in global")
+                    }
                 }
             }
-        }
-        self.context_window.step_out();
-        Ok(())
-    }
-    fn create_function(&mut self, statement: &LinkedStatement) -> Result<(), CE> {
-        let LinkedStatement::Function { object, args, body } = statement else { unreachable!() };
-
-        let i32_type = self.context.i32_type();
-        let argument_count = args.len();
-        let arguments_types = vec![i32_type.into(); argument_count];
-        let fn_type = i32_type.fn_type(&arguments_types, false);
-
-        let function = self.module.add_function(object.get_name().as_str(), fn_type, None);
-        let entry = self.context.append_basic_block(function, "entry");
-        self.builder.position_at_end(entry);
-
-        self.context_window.add(object, function.into());
-        self.context_window.step_in();
-
-        for (index, object) in args.iter().enumerate() {
-            let arg_value = function.get_nth_param(index as u32).unwrap().into_int_value();
-            let pointer = self.builder.build_alloca(i32_type, &format!("arg{index}"))?;
-            self.builder.build_store(pointer, arg_value)?;
-            self.context_window.add(object, pointer.into());
+            self.context_window.step_out();
+            Ok(())
         }
 
-        self.current_function = Some(function);
-        self.parse_function_body(body)?;
-        if !function.verify(true) {
-            return Err(CE::LLVMVerifyFunctionError { name: object.get_name() });
-        }
+        fn create_function(&mut self, statement: &LinkedStatement) -> Result<(), CE> {
+            let LinkedStatement::Function { object, args, body } = statement else { unreachable!() };
 
-        self.context_window.step_out();
-        Ok(())
+            let i32_type = self.context.i32_type();
+            let argument_count = args.len();
+            let arguments_types = vec![i32_type.into(); argument_count];
+            let fn_type = i32_type.fn_type(&arguments_types, false);
+
+            let function = self.module.add_function(object.get_name().as_str(), fn_type, None);
+            let entry = self.context.append_basic_block(function, "entry");
+            self.builder.position_at_end(entry);
+
+            self.context_window.add(object, function.into());
+            self.context_window.step_in();
+
+            for (index, object) in args.iter().enumerate() {
+                let arg_value = function.get_nth_param(index as u32).unwrap().into_int_value();
+                let pointer = self.builder.build_alloca(i32_type, &format!("arg{index}"))?;
+                self.builder.build_store(pointer, arg_value)?;
+                self.context_window.add(object, pointer.into());
+            }
+
+            self.current_function = Some(function);
+            self.parse_function_body(body)?;
+            if !function.verify(true) {
+                return Err(CE::LLVMVerifyFunctionError { name: object.get_name() });
+            }
+            self.current_function = None;
+
+            self.context_window.step_out();
+            Ok(())
+        }
     }
 }
 
-impl<'ctx> CodeModuleGen<'ctx> {
-    fn parse_function_body(&mut self, body: &Vec<LinkedStatement>) -> Result<(), CE> {
-        for statement in body {
-            self.parse_statement(statement)?;
+/// parsing statements inside function
+mod function_parsing {
+    use super::*;
+
+    impl<'ctx> CodeModuleGen<'ctx> {
+        pub fn parse_function_body(&mut self, body: &Vec<LinkedStatement>) -> Result<(), CE> {
+            for statement in body {
+                self.parse_statement(statement)?;
+            }
+
+            // TODO: check that function always return something
+            // TODO: add return zero by default from main function
+            // let i32_type = self.code_module_gen.context.i32_type();
+            // let zero = i32_type.const_int(0, false);
+            // self.code_module_gen.builder.build_return(Some(&zero))?;
+            Ok(())
         }
 
-        // TODO: check that function always return something
-        // TODO: add return zero by default from main function
-        // let i32_type = self.code_module_gen.context.i32_type();
-        // let zero = i32_type.const_int(0, false);
-        // self.code_module_gen.builder.build_return(Some(&zero))?;
-        Ok(())
-    }
-
-    fn parse_statement(&mut self, statement: &LinkedStatement) -> Result<(), CE> {
-        match statement {
-            LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
-            LinkedStatement::Expression(expression) => {
-                self.parse_expression(expression)?;
-            }
-            LinkedStatement::If { condition, body } => {
-                let condition = self.parse_expression(condition)?;
-                let zero = self.context.i32_type().const_int(0, false);
-                let condition = self.builder.build_int_compare(
-                    IntPredicate::NE, condition, zero, "if_cond"
-                )?;
-
-                let function = self.current_function.unwrap();
-                let then_bb = self.context.append_basic_block(function, "then");
-                let merge_bb = self.context.append_basic_block(function, "merge");
-                self.builder.build_conditional_branch(condition, then_bb, merge_bb)?;
-
-                self.builder.position_at_end(then_bb);
-                for statement in body {
-                    self.parse_statement(statement)?;
+        fn parse_statement(&mut self, statement: &LinkedStatement) -> Result<(), CE> {
+            match statement {
+                LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
+                LinkedStatement::Expression(expression) => {
+                    self.parse_expression(expression)?;
                 }
-                self.builder.build_unconditional_branch(merge_bb)?;
-                self.builder.position_at_end(merge_bb);
-            }
-            LinkedStatement::While { condition, body } => {
-                let function = self.current_function.unwrap();
-                let cond_bb = self.context.append_basic_block(function, "cond");
-                let body_bb = self.context.append_basic_block(function, "then");
-                let after_bb = self.context.append_basic_block(function, "merge");
+                LinkedStatement::If { condition, body } => {
+                    let condition = self.parse_expression(condition)?;
+                    let zero = self.context.i32_type().const_int(0, false);
+                    let condition = self.builder.build_int_compare(
+                        IntPredicate::NE, condition, zero, "if_cond"
+                    )?;
 
-                self.builder.build_unconditional_branch(cond_bb)?;
+                    let function = self.current_function.unwrap();
+                    let then_bb = self.context.append_basic_block(function, "then");
+                    let merge_bb = self.context.append_basic_block(function, "merge");
+                    self.builder.build_conditional_branch(condition, then_bb, merge_bb)?;
 
-                self.builder.position_at_end(cond_bb);
-                let condition = self.parse_expression(condition)?;
-                let zero = self.context.i32_type().const_int(0, false);
-                let condition = self.builder.build_int_compare(
-                    IntPredicate::NE, condition, zero, "while_cond"
-                )?;
-                self.builder.build_conditional_branch(condition, body_bb, after_bb)?;
-
-                self.builder.position_at_end(body_bb);
-                for statement in body {
-                    self.parse_statement(statement)?;
-                }
-                self.builder.build_unconditional_branch(cond_bb)?;
-                self.builder.position_at_end(after_bb);
-            }
-            LinkedStatement::SetVariable { object, value } => {
-                let value = self.parse_expression(value)?;
-                let pointer = self.context_window.get_pointer_unwrap(object);
-                self.builder.build_store(pointer, value)?;
-            }
-            LinkedStatement::VariableDeclaration { object, value } => {
-                let value = self.parse_expression(value)?;
-                let var_type = self.context.i32_type();
-                let pointer = self.builder.build_alloca(var_type, &object.get_name())?;
-                self.builder.build_store(pointer, value)?;
-                self.context_window.add(object, pointer.into());
-            }
-            LinkedStatement::Return(expression) => {
-                let expression = self.parse_expression(expression)?;
-                self.builder.build_return(Some(&expression))?;
-            }
-        }
-        Ok(())
-    }
-
-    fn parse_expression(&self, expression: &LinkedExpression) -> Result<IntValue<'ctx>, CE> {
-        let i32_type = self.context.i32_type();
-        match expression {
-            LinkedExpression::FunctionCall { object, args } => {
-                let args: Vec<_> = args.iter().map(|a|
-                    self.parse_expression(a)
-                ).collect::<Result<_, _>>()?;
-                let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.into()).collect(); // will be removed
-
-                let function = self.context_window.get_function_unwrap(object);
-                let returned = self.builder.build_call(function, &args, "function call")?;
-                // now all functions return i32
-                let returned_value = returned.try_as_basic_value().unwrap_left();
-                Ok(returned_value.into_int_value())
-            },
-            LinkedExpression::NumberLiteral(literal) => {
-                let number = literal.iter().collect::<String>().parse::<i32>().unwrap();
-                Ok(i32_type.const_int(number as u64, false))
-            }
-            LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed),
-            LinkedExpression::Variable(object) => {
-                let value_type = self.context.i32_type();
-                let pointer = self.context_window.get_pointer_unwrap(object);
-                let value = self.builder.build_load(value_type, pointer, "load")?;
-                Ok(value.into_int_value())
-            }
-            LinkedExpression::TwoSidedOp(ex1, ex2, op) => {
-                let ex1 = self.parse_expression(ex1)?;
-                let ex2 = self.parse_expression(ex2)?;
-                match op {
-                    TwoSidedOperation::Plus => {
-                        let result = self.builder.build_int_add(ex1, ex2, "sum")?;
-                        Ok(result)
+                    self.builder.position_at_end(then_bb);
+                    for statement in body {
+                        self.parse_statement(statement)?;
                     }
-                    TwoSidedOperation::Minus => {
-                        let result = self.builder.build_int_sub(ex1, ex2, "dif")?;
-                        Ok(result)
+                    self.builder.build_unconditional_branch(merge_bb)?;
+                    self.builder.position_at_end(merge_bb);
+                }
+                LinkedStatement::While { condition, body } => {
+                    let function = self.current_function.unwrap();
+                    let cond_bb = self.context.append_basic_block(function, "cond");
+                    let body_bb = self.context.append_basic_block(function, "then");
+                    let after_bb = self.context.append_basic_block(function, "merge");
+
+                    self.builder.build_unconditional_branch(cond_bb)?;
+
+                    self.builder.position_at_end(cond_bb);
+                    let condition = self.parse_expression(condition)?;
+                    let zero = self.context.i32_type().const_int(0, false);
+                    let condition = self.builder.build_int_compare(
+                        IntPredicate::NE, condition, zero, "while_cond"
+                    )?;
+                    self.builder.build_conditional_branch(condition, body_bb, after_bb)?;
+
+                    self.builder.position_at_end(body_bb);
+                    for statement in body {
+                        self.parse_statement(statement)?;
+                    }
+                    self.builder.build_unconditional_branch(cond_bb)?;
+                    self.builder.position_at_end(after_bb);
+                }
+                LinkedStatement::SetVariable { object, value } => {
+                    let value = self.parse_expression(value)?;
+                    let pointer = self.context_window.get_pointer_unwrap(object);
+                    self.builder.build_store(pointer, value)?;
+                }
+                LinkedStatement::VariableDeclaration { object, value } => {
+                    let value = self.parse_expression(value)?;
+                    let var_type = self.context.i32_type();
+                    let pointer = self.builder.build_alloca(var_type, &object.get_name())?;
+                    self.builder.build_store(pointer, value)?;
+                    self.context_window.add(object, pointer.into());
+                }
+                LinkedStatement::Return(expression) => {
+                    let expression = self.parse_expression(expression)?;
+                    self.builder.build_return(Some(&expression))?;
+                }
+            }
+            Ok(())
+        }
+
+        fn parse_expression(&self, expression: &LinkedExpression) -> Result<IntValue<'ctx>, CE> {
+            let i32_type = self.context.i32_type();
+            match expression {
+                LinkedExpression::FunctionCall { object, args } => {
+                    let args: Vec<_> = args.iter().map(|a|
+                        self.parse_expression(a)
+                    ).collect::<Result<_, _>>()?;
+                    let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.into()).collect(); // will be removed
+
+                    let function = self.context_window.get_function_unwrap(object);
+                    let returned = self.builder.build_call(function, &args, "function call")?;
+                    // now all functions return i32
+                    let returned_value = returned.try_as_basic_value().unwrap_left();
+                    Ok(returned_value.into_int_value())
+                },
+                LinkedExpression::NumberLiteral(literal) => {
+                    let number = literal.iter().collect::<String>().parse::<i32>().unwrap();
+                    Ok(i32_type.const_int(number as u64, false))
+                }
+                LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed),
+                LinkedExpression::Variable(object) => {
+                    let value_type = self.context.i32_type();
+                    let pointer = self.context_window.get_pointer_unwrap(object);
+                    let value = self.builder.build_load(value_type, pointer, "load")?;
+                    Ok(value.into_int_value())
+                }
+                LinkedExpression::TwoSidedOp(ex1, ex2, op) => {
+                    let ex1 = self.parse_expression(ex1)?;
+                    let ex2 = self.parse_expression(ex2)?;
+                    match op {
+                        TwoSidedOperation::Plus => {
+                            let result = self.builder.build_int_add(ex1, ex2, "sum")?;
+                            Ok(result)
+                        }
+                        TwoSidedOperation::Minus => {
+                            let result = self.builder.build_int_sub(ex1, ex2, "dif")?;
+                            Ok(result)
+                        }
                     }
                 }
             }
@@ -251,6 +266,7 @@ impl Object<'_> {
         }
     }
 }
+
 
 fn create_executable(config: &Config, module: &Module) -> Result<(), CE> {
     let assembly_name = format!("{}.ll", config.output);
