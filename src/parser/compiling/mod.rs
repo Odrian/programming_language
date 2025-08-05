@@ -26,9 +26,25 @@ pub fn parse_to_llvm(config: &Config, statements: &[LinkedStatement]) -> Result<
     if let Err(err) = code_module_gen.module.verify() {
         return Err(CE::LLVMVerifyModuleError { llvm_error: err.to_string() });
     }
+    
+    if !verify_main_exist(statements) {
+        return Err(CE::NoMainFunction)
+    }
 
     create_executable(config, &code_module_gen.module)?;
     Ok(())
+}
+
+fn verify_main_exist(statements: &[LinkedStatement]) -> bool {
+    for statement in statements {
+        if let LinkedStatement::Function { object, .. } = statement {
+            if object.name == ['m', 'a', 'i', 'n'] {
+                // TODO: check that main has correct signature
+                return true
+            }
+        }
+    }
+    false
 }
 
 struct CodeModuleGen<'ctx> {
@@ -256,10 +272,10 @@ impl<'ctx, 'a> FunctionGenerator<'ctx, 'a> {
 impl Object<'_> {
     fn get_name(&self) -> String {
         let name = self.name.iter().collect::<String>();
-        if self.name_id == 0 {
+        if name == "main" {
             name
         } else {
-            format!("{}.{}", name, self.name_id)
+            format!("{}.{}", name, self.id)
         }
     }
 }

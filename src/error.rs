@@ -19,6 +19,7 @@ pub enum CompilationError {
     IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
+    NoMainFunction,
 
     WritingASTError { filename: String, ast_name: String, io_err: String },
 
@@ -72,8 +73,9 @@ impl fmt::Display for CompilationError {
             Self::LinkingErrorFunctionUsage { name } => {
                 write!(f, "Linking Error: can't use function {name} as variable value")
             }
-
-            
+            Self::NoMainFunction => {
+                write!(f, "No 'main' function")
+            }
 
             Self::LLVMError(build_error) => {
                 write!(f, "LLVM Error: {build_error}")

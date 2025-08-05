@@ -16,14 +16,13 @@ pub enum ObjType {
 pub struct Object<'text> {
     pub id: u32,
     pub name: &'text [char],
-    pub name_id: u32,
     pub obj_type: ObjType,
 }
 
 impl<'text> Object<'text> {
-    pub fn new(name: &'text [char], name_id: u32, obj_type: ObjType) -> Self {
+    pub fn new(name: &'text [char], obj_type: ObjType) -> Self {
         let id = Self::get_unique_id();
-        Object { id, name, name_id, obj_type }
+        Object { id, name, obj_type }
     }
     fn get_unique_id() -> u32 {
         static COUNTER: atomic::AtomicU32 = atomic::AtomicU32::new(0);
@@ -90,10 +89,6 @@ impl fmt::Display for LinkedExpression<'_> {
 impl fmt::Display for Object<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = self.name.iter().collect::<String>();
-        if self.name_id == 0 {
-            write!(f, "{name}")
-        } else {
-            write!(f, "{}.{}", name, self.name_id)
-        }
+        write!(f, "{}.{}", name, self.id)
     }
 }
