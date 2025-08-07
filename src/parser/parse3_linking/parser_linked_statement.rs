@@ -2,115 +2,139 @@ use crate::error::CompilationError as CE;
 
 use super::super::parse2_syntactic::statement::*;
 use super::linked_statement::*;
+use super::object::{ObjectFactory, Object, ObjType};
 use super::context_window::ObjectContextWindow;
 
-pub fn link_names<'text>(statement: &Vec<Statement<'text>>) -> Result<Vec<LinkedStatement<'text>>, CE> {
-    let mut object_context_window = ObjectContextWindow::new();
-
-    object_context_window.step_in();
-    let result = link_statements_recursive(statement, &mut object_context_window);
-    object_context_window.step_out();
-    result
+pub fn link_names<'text>(statement: &Vec<Statement<'text>>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement<'text>>, CE> {
+    let mut context = LinkingContext::new(object_factory);
+    context.link_statements_recursive(statement)
 }
 
-fn link_statements_recursive<'text>(statements: &[Statement<'text>], object_context_window: &mut ObjectContextWindow<'text>) -> Result<Vec<LinkedStatement<'text>>, CE> {
-    let mut result = vec![];
-    for statement in statements {
-        let linked = match statement {
-            Statement::VariableDeclaration { object: name, value } => {
-                let value = parse_expression(value, object_context_window)?;
-                let object = object_context_window.add(name, ObjType::Variable);
-                LinkedStatement::new_variable(object, value)
-            }
-            Statement::SetVariable { object: name, value } => {
-                let value = parse_expression(value, object_context_window)?;
-                let name: String = name.iter().collect();
-                let Some(&object) = object_context_window.get(&name) else {
-                    let context = format!("{object_context_window:?}");
-                    return Err(CE::LinkingError { name, context });
+struct LinkingContext<'text, 'factory> {
+    object_context_window: ObjectContextWindow<'text>,
+    object_factory: &'factory mut ObjectFactory,
+}
+impl<'factory> LinkingContext<'_, 'factory> {
+    fn new(object_factory: &'factory mut ObjectFactory) -> Self {
+        Self {
+            object_context_window: ObjectContextWindow::new(),
+            object_factory,
+        }
+    }
+}
+
+impl<'text> LinkingContext<'text, '_> {
+    fn link_statements_recursive(&mut self, statements: &[Statement<'text>]) -> Result<Vec<LinkedStatement<'text>>, CE> {
+        let mut result = vec![];
+        for statement in statements {
+            let linked = match statement {
+                Statement::VariableDeclaration { object: name, value } => {
+                    let typed_expr = self.parse_expression(value)?;
+                    let object = self.object_factory.create_object(name, typed_expr.typee.clone(), &mut self.object_context_window);
+                    LinkedStatement::new_variable(object, typed_expr)
+                }
+                Statement::SetVariable { object: name, value } => {
+                    let value = self.parse_expression(value)?;
+                    let object = self.object_context_window.get_or_error(name)?;
+                    LinkedStatement::new_set(object, value)
+                }
+                Statement::Expression(expression) => {
+                    let expression = self.parse_expression(expression)?;
+                    LinkedStatement::Expression(expression)
+                }
+                Statement::If { condition, body } => {
+                    let condition = self.parse_expression(condition)?;
+                    self.object_context_window.step_in();
+                    let body = self.link_statements_recursive(body)?;
+                    self.object_context_window.step_out();
+                    LinkedStatement::new_if(condition, body)
+                }
+                Statement::While { condition, body } => {
+                    let condition = self.parse_expression(condition)?;
+                    self.object_context_window.step_in();
+                    let body = self.link_statements_recursive(body)?;
+                    self.object_context_window.step_out();
+                    LinkedStatement::new_while(condition, body)
+                }
+                Statement::Function { object: name, args, body } => {
+                    let args: Vec<Object> = args.iter().map(|x| {
+                        self.object_factory.create_object(x, ObjType::Number, &mut self.object_context_window)
+                    }).collect();
+
+                    let arguments_type: Vec<ObjType> = args.iter().map(|x| self.object_factory.get_type(*x).clone()).collect();
+                    let func_type = ObjType::Function {
+                        arguments: arguments_type,
+                        returns: Box::new(ObjType::Number), // FIXME
+                    };
+                    let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
+
+                    self.object_context_window.step_in();
+                    let body = self.link_statements_recursive(body)?;
+                    self.object_context_window.step_out();
+
+                    LinkedStatement::new_function(function_object, args, body)
+                }
+                Statement::Return(expression) => {
+                    let expression = self.parse_expression(expression)?;
+                    LinkedStatement::Return(expression)
+                }
+            };
+            result.push(linked);
+        }
+        Ok(result)
+    }
+
+    fn parse_expression(&mut self, expression: &Expression<'text>) -> Result<TypedExpression<'text>, CE> {
+        let linked: TypedExpression = match expression {
+            Expression::TwoSidedOp(expression1, expression2, op) => {
+                let ex1 = self.parse_expression(expression1)?;
+                let ex2 = self.parse_expression(expression2)?;
+                let Some(result_type) = ObjType::from_two_op(&ex1.typee, &ex2.typee, op) else {
+                    return Err(CE::IncorrectTwoOper { type1: ex1.typee, type2: ex2.typee, op: *op })
                 };
-                LinkedStatement::new_set(object, value)
+                TypedExpression::new(
+                    result_type,
+                    LinkedExpression::new_two_sided_op(ex1, ex2, *op)
+                )
             }
-            Statement::Expression(expression) => {
-                let expression = parse_expression(expression, object_context_window)?;
-                LinkedStatement::Expression(expression)
+            Expression::NumberLiteral(string) => {
+                TypedExpression::new(
+                    ObjType::Number,
+                    LinkedExpression::NumberLiteral(string),
+                )
+            },
+            Expression::RoundBracket(ex1) => {
+                let ex1 = self.parse_expression(ex1)?;
+                TypedExpression::new(ex1.typee.clone(), LinkedExpression::new_round_bracket(ex1))
             }
-            Statement::If { condition, body } => {
-                let condition = parse_expression(condition, object_context_window)?;
-                object_context_window.step_in();
-                let body = link_statements_recursive(body, object_context_window)?;
-                object_context_window.step_out();
-                LinkedStatement::new_if(condition, body)
-            }
-            Statement::While { condition, body } => {
-                let condition = parse_expression(condition, object_context_window)?;
-                object_context_window.step_in();
-                let body = link_statements_recursive(body, object_context_window)?;
-                object_context_window.step_out();
-                LinkedStatement::new_while(condition, body)
-            }
-            Statement::Function { object: name, args, body } => {
-                let object = object_context_window.add(name, ObjType::Function { argument_count: args.len() });
-                object_context_window.step_in();
-                let args: Vec<Object> = args.iter().map(|x|
-                    object_context_window.add(x, ObjType::Variable)
-                ).collect();
-                let body = link_statements_recursive(body, object_context_window)?;
-                object_context_window.step_out();
-                LinkedStatement::new_function(object, args, body)
-            }
-            Statement::Return(expression) => {
-                let expression = parse_expression(expression, object_context_window)?;
-                LinkedStatement::Return(expression)
+            Expression::Variable(name) => {
+                let object = self.object_context_window.get_or_error(name)?;
+                if matches!(self.object_factory.get_type(object), ObjType::Function { .. }) {
+                    return Err(CE::LinkingErrorFunctionUsage { name: CE::string_from(name) });
+                }
+                TypedExpression::new(
+                    self.object_factory.get_type(object).clone(),
+                    LinkedExpression::Variable(object)
+                )
+            },
+            Expression::FunctionCall { object: name, args: args_values } => {
+                let object = self.object_context_window.get_or_error(name)?;
+                let ObjType::Function { arguments, returns } = self.object_factory.get_type(object).clone() else {
+                    let context = format!("{:?}", self.object_context_window);
+                    return Err(CE::LinkingError { name: CE::string_from(name), context });
+                };
+                if args_values.len() != arguments.len() {
+                    let function_name = object.name.iter().collect::<String>();
+                    return Err(CE::IncorrectArgumentCount { function_name, argument_need: arguments.len(), argument_got: args_values.len() });
+                }
+                let args = args_values.iter().map(|x| self.parse_expression(x)).collect::<Result<Vec<_>, _>>()?;
+
+                TypedExpression::new(
+                    returns.as_ref().clone(),
+                    LinkedExpression::new_function_call(object, args)
+                )
             }
         };
-        result.push(linked);
+        Ok(linked)
     }
-    Ok(result)
-}
-
-fn parse_expression<'text>(expression: &Expression<'text>, object_context_window: &ObjectContextWindow<'text>) -> Result<LinkedExpression<'text>, CE> {
-    let linked = match expression {
-        Expression::TwoSidedOp(expression1, expression2, op) => {
-            let ex1 = parse_expression(expression1, object_context_window)?;
-            let ex2 = parse_expression(expression2, object_context_window)?;
-            LinkedExpression::new_two_sided_op(ex1, ex2, *op)
-        }
-        Expression::NumberLiteral(string) => LinkedExpression::NumberLiteral(string),
-        Expression::RoundBracket(ex1) => {
-            let ex1 = parse_expression(ex1, object_context_window)?;
-            LinkedExpression::new_round_bracket(ex1)
-        }
-        Expression::Variable(name) => {
-            let name: String = name.iter().collect();
-            if let Some(object) = object_context_window.get(&name) {
-                if object.obj_type != ObjType::Variable {
-                    return Err(CE::LinkingErrorFunctionUsage { name });
-                }
-                LinkedExpression::Variable(*object)
-            } else {
-                let context = format!("{object_context_window:?}");
-                return Err(CE::LinkingError { name, context });
-            }
-        },
-        Expression::FunctionCall { object: name, args } => {
-            let name: String = name.iter().collect();
-            let Some(object) = object_context_window.get(&name) else {
-                let context = format!("{object_context_window:?}");
-                return Err(CE::LinkingError { name, context });
-            };
-            let ObjType::Function { argument_count } = object.obj_type else {
-                let context = format!("{object_context_window:?}");
-                return Err(CE::LinkingError { name, context });
-            };
-            if args.len() != argument_count {
-                let function_name = object.name.iter().collect::<String>();
-                return Err(CE::IncorrectArgumentCount { function_name, argument_need: argument_count, argument_got: args.len() });
-            }
-            let args = args.iter().map(|x| parse_expression(x, object_context_window)).collect::<Result<Vec<_>, _>>()?;
-
-            LinkedExpression::new_function_call(*object, args)
-        }
-    };
-    Ok(linked)
 }

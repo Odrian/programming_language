@@ -1,19 +1,17 @@
 use std::collections::HashMap;
-
-use super::linked_statement::{Object, ObjType};
+use super::object::Object;
+use crate::error::CompilationError as CE;
 
 #[derive(Debug, Default)]
 struct ObjectsContext<'text>(HashMap<String, Object<'text>>);
 
 impl<'text> ObjectsContext<'text> {
-    fn add(&mut self, name: &'text [char], v_type: ObjType) -> Object<'text> {
-        let object = Object::new(name, v_type);
-        let name_string = name.iter().collect::<String>();
+    fn add(&mut self, object: Object<'text>) {
+        let name_string = object.name.iter().collect::<String>();
         self.0.insert(name_string, object);
-        object
     }
-    fn get(&self, name: &String) -> Option<&Object<'text>> {
-        self.0.get(name)
+    fn get(&self, name: &String) -> Option<Object<'text>> {
+        self.0.get(name).copied()
     }
 }
 
@@ -24,7 +22,7 @@ pub struct ObjectContextWindow<'text> {
 
 impl<'text> ObjectContextWindow<'text> {
     pub fn new() -> Self {
-        ObjectContextWindow { contexts: vec![] }
+        ObjectContextWindow { contexts: vec![ObjectsContext::default()] }
     }
     pub fn step_in(&mut self) {
         self.contexts.push(ObjectsContext::default());
@@ -33,11 +31,18 @@ impl<'text> ObjectContextWindow<'text> {
         assert!(!self.contexts.is_empty(), "No more objects to step out!");
         self.contexts.pop();
     }
-    pub fn get(&self, name: &String) -> Option<&Object<'text>> {
+    fn get(&self, name: &String) -> Option<Object<'text>> {
         self.contexts.iter().rev()
             .find_map(|obj_con|obj_con.get(name))
     }
-    pub fn add(&mut self, name: &'text [char], v_type: ObjType) -> Object<'text> {
-        self.contexts.last_mut().unwrap().add(name, v_type)
+    pub fn get_or_error(&self, name: &[char]) -> Result<Object<'text>, CE> {
+        let name = name.iter().collect::<String>();
+        match self.get(&name) {
+            Some(obj) => Ok(obj),
+            None => Err(CE::LinkingError { name, context: format!("{self:?}") })
+        }
+    }
+    pub fn add(&mut self, object: Object<'text>) {
+        self.contexts.last_mut().unwrap().add(object);
     }
 }

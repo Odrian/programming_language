@@ -9,13 +9,14 @@ use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, I
 use crate::error::CompilationError as CE;
 use crate::parser::Config;
 use crate::parser::parse3_linking::linked_statement::*;
+use crate::parser::parse3_linking::object::ObjectFactory;
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(config: &Config, statements: &[LinkedStatement]) -> Result<(), CE> {
+pub fn parse_to_llvm(config: &Config, statements: &[LinkedStatement], object_factory: &ObjectFactory) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
-    let module = module_generator::parse_module(&context, statements)?;
+    let module = module_generator::parse_module(&context, statements, object_factory)?;
 
     if let Err(err) = module.verify() {
         return Err(CE::LLVMVerifyModuleError { llvm_error: err.to_string() });

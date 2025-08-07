@@ -1,12 +1,14 @@
 use programming_language::error::CompilationError as CE;
 use programming_language::parser::*;
 use programming_language::parser::parse3_linking::linked_statement::*;
+use programming_language::parser::parse3_linking::object::*;
 
-fn parse(text: &[char]) -> Result<Vec<LinkedStatement>, CE> {
+fn parse(text: &[char]) -> Result<(Vec<LinkedStatement>, ObjectFactory), CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
     let statements = parse2_syntactic::parse_statements(&tokens)?;
-    let linked_statements = parse3_linking::link_variables(&statements)?;
-    Ok(linked_statements)
+    let mut object_factory = ObjectFactory::default();
+    let linked_statements = parse3_linking::link_variables(&statements, &mut object_factory)?;
+    Ok((linked_statements, object_factory))
 }
 fn string_to_chars(s: &str) -> Vec<char> {
     s.chars().collect()
@@ -59,7 +61,7 @@ fn test_function_with_while() {
 
     let text = string_to_chars("a :: (b) { c := b while c { c = b } }");
     let result = parse(&text);
-    let Ok(statements) = result else {
+    let Ok((statements, object_factory)) = result else {
         let err = result.err().unwrap();
         panic!("parsing error: {err}");
     };
@@ -67,7 +69,13 @@ fn test_function_with_while() {
     let LinkedStatement::Function { object: function_object, args, body } = &statements[0] else {
         panic!("expected function statement");
     };
-    assert_eq!(function_object.obj_type, ObjType::Function { argument_count: 1 });
+
+    let function_type = object_factory.get_type(*function_object);
+    assert!(matches!(function_type, ObjType::Function { .. }));
+    let ObjType::Function { arguments, returns } = function_type else { unreachable!() };
+    assert_eq!(arguments, &vec![ObjType::Number]);
+    assert_eq!(returns.as_ref(), &ObjType::Number);
+
     assert_eq!(args.len(), 1);
     let arg = &args[0];
     assert_eq!(body.len(), 2);
@@ -75,21 +83,21 @@ fn test_function_with_while() {
     let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = &body[0] else {
         panic!("expected variable declaration");
     };
-    let LinkedExpression::Variable(value1) = value1 else {
+    let LinkedExpression::Variable(value1) = &value1.expr else {
         panic!("expected variable declaration");
     };
 
     let LinkedStatement::While { condition, body: while_body } = &body[1] else {
         panic!("expected while statement");
     };
-    let LinkedExpression::Variable(condition) = condition else {
+    let LinkedExpression::Variable(condition) = &condition.expr else {
         panic!("expected variable declaration");
     };
     assert_eq!(while_body.len(), 1);
     let LinkedStatement::SetVariable { object: var2, value: value2 } = &while_body[0] else {
         panic!("expected variable declaration");
     };
-    let LinkedExpression::Variable(value2) = value2 else {
+    let LinkedExpression::Variable(value2) = &value2.expr else {
         panic!("expected variable declaration");
     };
     // arg = b

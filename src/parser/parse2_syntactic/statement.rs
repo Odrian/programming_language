@@ -1,6 +1,7 @@
 use std::fmt;
 use crate::parser::parse1_tokenize::token::TwoSidedOperation;
 
+// FIXME: don't need abstraction
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum TStatement<'text, Obj> {
     VariableDeclaration { object: Obj, value: TExpression<'text, Obj> },

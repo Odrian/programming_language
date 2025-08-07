@@ -1,32 +1,67 @@
 use std::fmt;
-use std::sync::atomic;
 use crate::parser::parse1_tokenize::token::TwoSidedOperation;
-use crate::parser::parse2_syntactic::statement::{TExpression, TStatement};
 
-pub type LinkedStatement<'text> = TStatement<'text, Object<'text>>;
-pub type LinkedExpression<'text> = TExpression<'text, Object<'text>>;
+use super::object::{Object, ObjType};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum ObjType {
-    Variable,
-    Function { argument_count: usize }
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct TypedExpression<'text> {
+    pub typee: ObjType,
+    pub expr: LinkedExpression<'text >,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct Object<'text> {
-    pub id: u32,
-    pub name: &'text [char],
-    pub obj_type: ObjType,
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum LinkedStatement<'text> {
+    VariableDeclaration { object: Object<'text>, value: TypedExpression<'text> },
+    SetVariable { object: Object<'text>, value: TypedExpression<'text> },
+    Expression(TypedExpression<'text>),
+    If { condition: TypedExpression<'text>, body: Vec<Self> },
+    While { condition: TypedExpression<'text>, body: Vec<Self> },
+    Function { object: Object<'text>, args: Vec<Object<'text>>, body: Vec<Self> },
+    Return(TypedExpression<'text>)
 }
 
-impl<'text> Object<'text> {
-    pub fn new(name: &'text [char], obj_type: ObjType) -> Self {
-        let id = Self::get_unique_id();
-        Object { id, name, obj_type }
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum LinkedExpression<'text> {
+    TwoSidedOp(Box<TypedExpression<'text>>, Box<TypedExpression<'text>>, TwoSidedOperation),
+    NumberLiteral(&'text [char]),
+    Variable(Object<'text>),
+    RoundBracket(Box<TypedExpression<'text>>),
+    FunctionCall { object: Object<'text>, args: Vec<TypedExpression<'text>> },
+}
+
+impl<'text> TypedExpression<'text> {
+    pub fn new(typee: ObjType, expr: LinkedExpression<'text >) -> Self {
+        Self { expr, typee }
     }
-    fn get_unique_id() -> u32 {
-        static COUNTER: atomic::AtomicU32 = atomic::AtomicU32::new(0);
-        COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
+}
+
+impl<'text> LinkedStatement<'text> {
+    pub fn new_variable(object: Object<'text>, value: TypedExpression<'text>) -> Self {
+        Self::VariableDeclaration { object, value }
+    }
+    pub fn new_set(object: Object<'text>, value: TypedExpression<'text>) -> Self {
+        Self::SetVariable { object, value }
+    }
+    pub fn new_if(condition: TypedExpression<'text>, body: Vec<Self>) -> Self {
+        Self::If { condition, body }
+    }
+    pub fn new_while(condition: TypedExpression<'text>, body: Vec<Self>) -> Self {
+        Self::While { condition, body }
+    }
+    pub fn new_function(name: Object<'text>, args: Vec<Object<'text>>, body: Vec<Self>) -> Self {
+        Self::Function { object: name, args, body }
+    }
+}
+
+impl<'text> LinkedExpression<'text> {
+    pub fn new_two_sided_op(expression1: TypedExpression<'text>, expression2: TypedExpression<'text>, op: TwoSidedOperation) -> Self {
+        Self::TwoSidedOp(Box::new(expression1), Box::new(expression2), op)
+    }
+    pub fn new_round_bracket(expression: TypedExpression<'text>) -> Self {
+        Self::RoundBracket(Box::new(expression))
+    }
+    pub fn new_function_call(object: Object<'text>, args: Vec<TypedExpression<'text>>) -> Self {
+        Self::FunctionCall { object, args }
     }
 }
 
@@ -83,6 +118,12 @@ impl fmt::Display for LinkedExpression<'_> {
                 write!(f, "{} ({})", object, args.join(", "))
             },
         }
+    }
+}
+
+impl fmt::Display for TypedExpression<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.expr)
     }
 }
 

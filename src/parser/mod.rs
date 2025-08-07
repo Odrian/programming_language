@@ -11,6 +11,7 @@ pub use bracket_type::BracketType;
 
 use crate::error::CompilationError as CE;
 use std::fs;
+use crate::parser::parse3_linking::object::ObjectFactory;
 
 pub struct Config {
     pub output: String,
@@ -70,7 +71,8 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
         }
     }
 
-    let linked_statement = parse3_linking::link_variables(&statements)?;
+    let mut object_factory = ObjectFactory::default();
+    let linked_statement = parse3_linking::link_variables(&statements, &mut object_factory)?;
     if config.write_syntactic_tree_to_file {
         let text = linked_statement.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
@@ -85,7 +87,7 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
         }
     }
 
-    compiling::parse_to_llvm(&config, &linked_statement)?;
+    compiling::parse_to_llvm(&config, &linked_statement, &object_factory)?;
 
     Ok(())
 }

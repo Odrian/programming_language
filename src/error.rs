@@ -1,6 +1,8 @@
 use std::fmt;
 use inkwell::builder::BuilderError;
 use crate::parser::{PositionInFile, BracketType};
+use crate::parser::parse1_tokenize::token::TwoSidedOperation;
+use crate::parser::parse3_linking::object::ObjType;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CompilationError {
@@ -23,6 +25,8 @@ pub enum CompilationError {
     IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
+    IncorrectTwoOper { type1: ObjType, type2: ObjType, op: TwoSidedOperation },
+    ArgumentTypeMismatch, // FIXME
     NoMainFunction,
     UnexpectedGlobalVariable,
 
@@ -31,6 +35,12 @@ pub enum CompilationError {
     LLVMVerifyFunctionError { name: String },
     LLVMFailedToCreateAssembly { llvm_error: String },
     FailedToRunLinker { description: String },
+}
+
+impl CompilationError {
+    pub fn string_from(chars: &[char]) -> String {
+        chars.iter().collect()
+    }
 }
 
 impl From<BuilderError> for CompilationError {
@@ -80,11 +90,17 @@ impl fmt::Display for CompilationError {
             Self::LinkingErrorFunctionUsage { name } => {
                 write!(f, "Linking Error: can't use function {name} as variable value")
             }
+            Self::IncorrectTwoOper { .. } => {
+                write!(f, "Error: can't do this two-sided operation") // FIXME
+            }
+            Self::ArgumentTypeMismatch => {
+                write!(f, "Error: incorrect function argument type")
+            }
             Self::NoMainFunction => {
-                write!(f, "No 'main' function")
+                write!(f, "Error: No 'main' function")
             }
             Self::UnexpectedGlobalVariable => {
-                write!(f, "Global variables are not supported")
+                write!(f, "Error: Global variables are not supported")
             }
 
             Self::LLVMError(build_error) => {

@@ -5,22 +5,24 @@ use super::context_window::ValueContextWindow;
 
 use inkwell::values::{BasicMetadataValueEnum, FunctionValue, IntValue};
 use inkwell::{builder::Builder, context::Context, module::Module, IntPredicate};
+use crate::parser::parse3_linking::object::*;
 
-pub fn parse_module<'ctx>(context: &'ctx Context, statements: &[LinkedStatement<'ctx>]) -> Result<Module<'ctx>, CE> {
-    let mut code_module_gen = CodeModuleGen::new(context, "main_module");
+pub fn parse_module<'ctx>(context: &'ctx Context, statements: &[LinkedStatement], object_factory: &ObjectFactory) -> Result<Module<'ctx>, CE> {
+    let mut code_module_gen = CodeModuleGen::new(context, object_factory, "main_module");
     code_module_gen.parse_module(statements)?;
     Ok(code_module_gen.module)
 }
 
-struct CodeModuleGen<'ctx> {
+struct CodeModuleGen<'ctx, 'factory> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
+    object_factory: &'factory ObjectFactory,
     current_function: Option<FunctionValue<'ctx>>,
     context_window: ValueContextWindow<'ctx>,
 }
-impl<'ctx> CodeModuleGen<'ctx> {
-    fn new(context: &'ctx Context, name: &str) -> Self {
+impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
+    fn new(context: &'ctx Context, object_factory: &'factory ObjectFactory, name: &str) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
         let context_window = ValueContextWindow::new();
@@ -28,6 +30,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
             context,
             module,
             builder,
+            object_factory,
             current_function: None,
             context_window
         }
@@ -38,7 +41,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
 mod module_parsing {
     use super::*;
 
-    impl<'ctx> CodeModuleGen<'ctx> {
+    impl<'ctx> CodeModuleGen<'ctx, '_> {
         pub fn parse_module(&mut self, statements: &[LinkedStatement]) -> Result<(), CE> {
             self.context_window.step_in();
             for statement in statements {
@@ -94,7 +97,7 @@ mod module_parsing {
 mod function_parsing {
     use super::*;
 
-    impl<'ctx> CodeModuleGen<'ctx> {
+    impl<'ctx> CodeModuleGen<'ctx, '_> {
         pub fn parse_function_body(&mut self, body: &Vec<LinkedStatement>) -> Result<(), CE> {
             for statement in body {
                 self.parse_statement(statement)?;
@@ -176,9 +179,9 @@ mod function_parsing {
             Ok(())
         }
 
-        fn parse_expression(&self, expression: &LinkedExpression) -> Result<IntValue<'ctx>, CE> {
+        fn parse_expression(&self, expression: &TypedExpression) -> Result<IntValue<'ctx>, CE> {
             let i32_type = self.context.i32_type();
-            match expression {
+            match &expression.expr {
                 LinkedExpression::FunctionCall { object, args } => {
                     let args: Vec<_> = args.iter().map(|a|
                         self.parse_expression(a)
