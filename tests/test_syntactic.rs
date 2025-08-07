@@ -36,6 +36,7 @@ fn test_set() {
     assert_no_error("cat = cat + cat + cat");
     assert_no_error("cat = cat + cat + cat + cat");
     assert_no_error("cat := cat + cat + cat + cat");
+    assert_no_error("cat : i32 = cat");
 
     assert_has_error("4 = cat");
     assert_has_error("cat = cat = cat");
@@ -48,6 +49,7 @@ fn test_set() {
     assert_has_error("cat == cat");
     assert_has_error("cat := +cat");
     assert_has_error("cat :== cat");
+    assert_has_error("cat : = cat")
 }
 
 #[test]
@@ -69,6 +71,7 @@ fn test_set_with_brackets() {
         "cat := cat + (cat + cat)",
         Ok(vec![Statement::new_variable(
             v_cat,
+            None,
             Expression::new_two_sided_op(
                 variable.clone(),
                 Expression::new_round_bracket(
@@ -101,14 +104,14 @@ fn test_if_while() {
     );
     assert_result("if cat { cat := cat }",
                   Ok(vec![Statement::new_if(variable.clone(),
-                                            vec![Statement::new_variable(v_cat, variable.clone())],
+                                            vec![Statement::new_variable(v_cat, None, variable.clone())],
                   )])
     );
     assert_result("if cat { cat := cat cat := cat }",
                   Ok(vec![Statement::new_if(variable.clone(),
                                             vec![
-                                                Statement::new_variable(v_cat, variable.clone()),
-                                                Statement::new_variable(v_cat, variable.clone())
+                                                Statement::new_variable(v_cat, None, variable.clone()),
+                                                Statement::new_variable(v_cat, None, variable.clone())
                                             ],
                   )])
     );
@@ -117,7 +120,7 @@ fn test_if_while() {
     );
     assert_result("while cat { cat := cat }",
                   Ok(vec![Statement::new_while(variable.clone(),
-                                               vec![Statement::new_variable(v_cat, variable.clone())],
+                                               vec![Statement::new_variable(v_cat, None, variable.clone())],
                   )])
     );
 
@@ -159,7 +162,7 @@ fn test_function() {
         "foo :: (arg1: i32, arg2: i32) { }",
         Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![])])
     );
-    let set_expr = Statement::new_variable(v_cat, Expression::Variable(v_dog));
+    let set_expr = Statement::new_variable(v_cat, None, Expression::Variable(v_dog));
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { cat := dog }",
         Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![
@@ -174,7 +177,7 @@ fn test_function() {
                 set_expr.clone(),
             ])])
     );
-    let another_set_expr = Statement::new_variable(v_owl, Expression::new_two_sided_op(
+    let another_set_expr = Statement::new_variable(v_owl, None, Expression::new_two_sided_op(
         Expression::Variable(v_dog), Expression::Variable(v_kitten), TwoSidedOperation::Plus
     ));
     assert_result(
@@ -199,6 +202,7 @@ fn test_function_with_while() {
 
     let set_statement = Statement::new_variable(
         arg2,
+        None,
         Expression::new_two_sided_op(
             Expression::Variable(arg2),
             Expression::NumberLiteral(v_1),

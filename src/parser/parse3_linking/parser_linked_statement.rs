@@ -28,8 +28,15 @@ impl<'text> LinkingContext<'text, '_> {
         let mut result = vec![];
         for statement in statements {
             let linked = match statement {
-                Statement::VariableDeclaration { object: name, value } => {
+                Statement::VariableDeclaration { object: name, typee, value } => {
                     let typed_expr = self.parse_expression(value)?;
+                    if let Some(typee) = typee {
+                        let typee = self.parse_type(typee)?;
+                        if typee != typed_expr.typee {
+                            return Err(CE::IncorrectType { got: typed_expr.typee, expected: typee })
+                        }
+                    }
+
                     let object = self.object_factory.create_object(name, typed_expr.typee.clone(), &mut self.object_context_window);
                     LinkedStatement::new_variable(object, typed_expr)
                 }

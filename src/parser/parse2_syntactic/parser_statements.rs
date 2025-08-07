@@ -81,17 +81,34 @@ impl<'text, 'a> ParsingState<'text, 'a> {
         self.index += 1;
         match &new_token.token {
             Token::DoubleColon => {
+                // name ::
                 self.parse_function(string, new_token.position)
             },
+            Token::Colon => {
+                // name :
+                let (typee, index) = parse_type(self.tokens, self.index, self.tokens[self.index-1].position)?;
+                self.index = index;
+
+                if self.at_end() || self.tokens[self.index].token != Token::EqualOperation(EqualOperation::Equal) {
+                    return Err(CE::SyntacticsError(self.tokens[self.index-1].position, format!("expected '=' after '{}' : {typee}", string.iter().collect::<String>())))
+                }
+                self.index += 1;
+
+                let expression = self.parse_expression(self.tokens[self.index-1].position)?;
+                let statement = Statement::new_variable(string, Some(typee), expression);
+                Ok(statement)
+            }
             Token::EqualOperation(equal_operation) => {
+                // name _=
                 let expression2 = self.parse_expression(new_token.position)?;
                 let statement = match equal_operation {
-                    EqualOperation::ColonEqual => Statement::new_variable(string, expression2),
+                    EqualOperation::ColonEqual => Statement::new_variable(string, None, expression2),
                     EqualOperation::Equal => Statement::new_set(string, expression2),
                 };
                 Ok(statement)
             }
             Token::Bracket(vec, BracketType::Round) => {
+                // name(..)
                 let name = string;
                 let args = parse_function_arguments(vec, new_token.position)?;
                 let statement = Statement::Expression(Expression::new_function_call(name, args));

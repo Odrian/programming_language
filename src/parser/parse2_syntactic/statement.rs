@@ -4,7 +4,7 @@ use crate::parser::parse1_tokenize::token::TwoSidedOperation;
 // FIXME: don't need abstraction
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum TStatement<'text, Obj> {
-    VariableDeclaration { object: Obj, value: TExpression<'text, Obj> },
+    VariableDeclaration { object: Obj, typee: Option<Typee<'text>>, value: TExpression<'text, Obj> },
     SetVariable { object: Obj, value: TExpression<'text, Obj> },
     Expression(TExpression<'text, Obj>),
     // Bracket(Box<Vec<Statement>>, BracketType),
@@ -32,8 +32,8 @@ pub type Statement<'text> = TStatement<'text, &'text [char]>;
 pub type Expression<'text> = TExpression<'text, &'text [char]>;
 
 impl<'text, Obj> TStatement<'text, Obj> {
-    pub fn new_variable(obj: Obj, value: TExpression<'text, Obj>) -> Self {
-        Self::VariableDeclaration { object: obj, value }
+    pub fn new_variable(obj: Obj, typee: Option<Typee<'text>>, value: TExpression<'text, Obj>) -> Self {
+        Self::VariableDeclaration { object: obj, typee, value }
     }
     pub fn new_set(obj: Obj, value: TExpression<'text, Obj>) -> Self {
         Self::SetVariable { object: obj, value }
@@ -73,8 +73,12 @@ impl fmt::Display for Statement<'_> {
             "    ".to_owned() + string.replace('\n', "\n    ").as_str()
         }
         match self {
-            Self::VariableDeclaration { object: name, value } => {
-                write!(f, "{} := {}", name_to_str(name), value)
+            Self::VariableDeclaration { object: name, typee, value } => {
+                let name = name_to_str(name);
+                match typee {
+                    Some(typee) => write!(f, "{name} : {typee} = {value}"),
+                    None => write!(f, "{name} := {value}"),
+                }
             }
             Self::SetVariable { object: name, value } => {
                 write!(f, "{} = {}", name_to_str(name), value)

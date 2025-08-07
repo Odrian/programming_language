@@ -25,6 +25,7 @@ pub enum CompilationError {
     IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
+    IncorrectType { got: ObjType, expected: ObjType },
     IncorrectTwoOper { type1: ObjType, type2: ObjType, op: TwoSidedOperation },
     ArgumentTypeMismatch, // FIXME
     NoMainFunction,
@@ -89,6 +90,9 @@ impl fmt::Display for CompilationError {
             }
             Self::LinkingErrorFunctionUsage { name } => {
                 write!(f, "Linking Error: can't use function {name} as variable value")
+            }
+            Self::IncorrectType { got, expected } => {
+                write!(f, "Error: incorrect type, got {got}, expected {expected}")
             }
             Self::IncorrectTwoOper { .. } => {
                 write!(f, "Error: can't do this two-sided operation") // FIXME
