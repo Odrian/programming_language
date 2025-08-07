@@ -199,8 +199,12 @@ mod function_parsing {
                     self.context_window.add(object, pointer.into());
                 }
                 LinkedStatement::Return(expression) => {
-                    let expression = self.parse_expression(expression)?;
-                    self.builder.build_return(Some(&expression))?; // TODO: allow just 'return'
+                    if let Some(expression) = expression {
+                        let expression = self.parse_expression(expression)?;
+                        self.builder.build_return(Some(&expression))?;
+                    } else {
+                        self.builder.build_return(None)?;
+                    }
                 }
             }
             Ok(())

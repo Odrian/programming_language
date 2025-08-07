@@ -1,8 +1,8 @@
 use crate::error::CompilationError as CE;
 use crate::parser::parse1_tokenize::token::TwoSidedOperation;
-use super::super::parse2_syntactic::statement::*;
+use crate::parser::parse2_syntactic::statement::*;
 use super::linked_statement::*;
-use super::object::{ObjectFactory, Object, ObjType};
+use super::object::{ObjectFactory, ObjType};
 use super::context_window::ObjectContextWindow;
 
 pub fn link_names<'text>(statement: &Vec<Statement<'text>>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement<'text>>, CE> {
@@ -102,12 +102,19 @@ impl<'text> LinkingContext<'text, '_> {
 
                     LinkedStatement::new_function(function_object, arguments_obj, return_type, body)
                 }
-                Statement::Return(expression) => {
-                    let expression = self.parse_expression(expression)?;
-                    if Some(&expression.typee) != self.current_function_returns.as_ref() {
+                Statement::Return(option_expression) => {
+                    let expression = match option_expression {
+                        Some(expression) => Some(self.parse_expression(expression)?),
+                        None => None,
+                    };
+                    let expression_type = match &expression {
+                        Some(expr) => &expr.typee,
+                        None => &ObjType::Unit,
+                    };
+                    if Some(expression_type) != self.current_function_returns.as_ref() {
                         return match &self.current_function_returns {
                             None => Err(CE::UnexpectedReturn),
-                            Some(cfr) => Err(CE::IncorrectType { got: expression.typee.clone(), expected: cfr.clone() })
+                            Some(cfr) => Err(CE::IncorrectType { got: expression_type.clone(), expected: cfr.clone() })
                         }
                     }
                     LinkedStatement::Return(expression)

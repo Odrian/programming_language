@@ -132,6 +132,8 @@ fn test_if_while() {
 fn test_function() {
     assert_no_error("foo :: () { }");
     assert_no_error("foo :: () -> i32 { }");
+    assert_no_error("foo :: () { return }");
+    assert_no_error("foo :: () { return 0 }");
 
     assert_has_error(":: () { }");
     assert_has_error("foo () { }");
@@ -275,11 +277,12 @@ fn test_function_call() {
 
 #[test]
 fn test_function_return() {
+    assert_no_error("return");
+    assert_no_error("if 1 { return }");
     assert_no_error("return 0");
     assert_no_error("foo :: () { return 0 }");
     assert_no_error("foo :: () { a := 0 return a }");
-    
-    assert_has_error("return");
+
     assert_has_error("return return 0");
     assert_has_error("return foo :: () {}");
     assert_has_error("return ()");

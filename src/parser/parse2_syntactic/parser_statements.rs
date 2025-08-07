@@ -57,8 +57,16 @@ impl<'text, 'a> ParsingState<'text, 'a> {
                         }
                     }
                     "return" => {
-                        let result_expression = self.parse_expression(token.position)?;
-                        Ok(Statement::Return(result_expression))
+                        // FIXME: require ';' at end of statement?
+                        let save_index = self.index;
+                        let result_expression = self.parse_expression(token.position);
+                        match result_expression {
+                            Ok(expression) => Ok(Statement::Return(Some(expression))),
+                            Err(_) => {
+                                self.index = save_index;
+                                Ok(Statement::Return(None))
+                            },
+                        }
                     }
                     _ => {
                         self.parse_statement2(chars, token.position)

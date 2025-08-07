@@ -11,7 +11,7 @@ pub enum TStatement<'text, Obj> {
     If { condition: TExpression<'text, Obj>, body: Vec<Self> },
     While { condition: TExpression<'text, Obj>, body: Vec<Self> },
     Function { object: Obj, args: Vec<(Obj, Typee<'text>)>, returns: Option<Typee<'text>>, body: Vec<Self> },
-    Return(TExpression<'text, Obj>)
+    Return(Option<TExpression<'text, Obj>>)
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -103,7 +103,10 @@ impl fmt::Display for Statement<'_> {
                 write!(f, "{name} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
             Self::Return(exp) => {
-                write!(f, "return {exp}")
+                match exp {
+                    Some(exp) => write!(f, "return {exp}"),
+                    None => write!(f, "return")
+                }
             }
         }
     }

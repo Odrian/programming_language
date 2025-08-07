@@ -17,7 +17,7 @@ pub enum LinkedStatement<'text> {
     If { condition: TypedExpression<'text>, body: Vec<Self> },
     While { condition: TypedExpression<'text>, body: Vec<Self> },
     Function { object: Object<'text>, args: Vec<Object<'text>>, returns: ObjType, body: Vec<Self> },
-    Return(TypedExpression<'text>)
+    Return(Option<TypedExpression<'text>>)
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +97,10 @@ impl fmt::Display for LinkedStatement<'_> {
                 write!(f, "{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
             Self::Return(exp) => {
-                write!(f, "return {exp}")
+                match exp {
+                    Some(exp) => write!(f, "return {exp}"),
+                    None => write!(f, "return")
+                }
             }
         }
     }
