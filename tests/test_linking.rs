@@ -49,6 +49,7 @@ fn test_functions() {
     assert_has_error("a :: (arg1: i32) { x = arg1 }");
     assert_has_error("a :: () { a = x }");
     assert_has_error("a :: () { x := a }");
+    assert_has_error("a :: () { } a :: () {}");
 
     assert_no_error("a :: () { a := 0 x := a }");
 }

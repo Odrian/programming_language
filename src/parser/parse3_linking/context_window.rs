@@ -31,15 +31,15 @@ impl<'text> ObjectContextWindow<'text> {
         assert!(!self.contexts.is_empty(), "No more objects to step out!");
         self.contexts.pop();
     }
-    fn get(&self, name: &String) -> Option<Object<'text>> {
+    pub fn get(&self, name: &[char]) -> Option<Object<'text>> {
+        let name = name.iter().collect::<String>();
         self.contexts.iter().rev()
-            .find_map(|obj_con|obj_con.get(name))
+            .find_map(|obj_con|obj_con.get(&name))
     }
     pub fn get_or_error(&self, name: &[char]) -> Result<Object<'text>, CE> {
-        let name = name.iter().collect::<String>();
-        match self.get(&name) {
+        match self.get(name) {
             Some(obj) => Ok(obj),
-            None => Err(CE::LinkingError { name, context: format!("{self:?}") })
+            None => Err(CE::LinkingError { name: name.iter().collect::<String>(), context: format!("{self:?}") })
         }
     }
     pub fn add(&mut self, object: Object<'text>) {

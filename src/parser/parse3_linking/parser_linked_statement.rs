@@ -89,6 +89,9 @@ impl<'text> LinkingContext<'text, '_> {
                         arguments: arguments_type,
                         returns: Box::new(return_type.clone()),
                     };
+                    if self.object_context_window.get(name).is_some() {
+                        return Err(CE::FunctionOverloading { function_name: name.iter().collect::<String>()})
+                    }
                     let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
 
                     self.object_context_window.step_in();

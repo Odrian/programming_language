@@ -22,6 +22,7 @@ pub enum CompilationError {
         end_bracket_type: BracketType,
     },
 
+    FunctionOverloading { function_name: String },
     IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
@@ -83,8 +84,11 @@ impl fmt::Display for CompilationError {
                 write!(f, "Error: at {end} expected {start_name} bracket, but have {end_name} bracket. Open bracket at {start}")
             }
 
+            Self::FunctionOverloading { function_name } => {
+                write!(f, "Error: function overloading is not allowed, you overload {function_name}")
+            }
             Self::IncorrectArgumentCount { function_name, argument_need, argument_got } => {
-                write!(f, "Incorrect argument count for function {function_name}, need {argument_need}, got {argument_got}")
+                write!(f, "Erorr: incorrect argument count for function {function_name}, need {argument_need}, got {argument_got}")
             }
             Self::LinkingError { name, context } => {
                 write!(f, "Linking Error: can't find {name} in {context}")
