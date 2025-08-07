@@ -41,11 +41,12 @@ fn test_variables() {
 #[test]
 fn test_functions() {
     assert_no_error("a :: () { }");
-    assert_no_error("a :: (arg1) { }");
-    assert_no_error("a :: (arg1) { x := arg1 }");
-    assert_no_error("a :: (arg1, arg2) { x := arg1 + arg2 }");
+    assert_no_error("a :: (arg1: i32) { }");
+    assert_no_error("a :: (arg1: i32) { x := arg1 }");
+    assert_no_error("a :: (arg1: i32, arg2: i32) { x := arg1 + arg2 }");
 
-    assert_has_error("a :: (arg1) { x = arg1 }");
+    assert_has_error("a :: (arg1) {  }");
+    assert_has_error("a :: (arg1: i32) { x = arg1 }");
     assert_has_error("a :: () { a = x }");
     assert_has_error("a :: () { x := a }");
 
@@ -55,20 +56,22 @@ fn test_functions() {
 #[test]
 fn test_function_with_while() {
     assert_has_error("a :: ()  { if 0    { x := 0 } e := x }");
-    assert_has_error("a :: (b) { if b    { x := 0 } e := x }");
+    assert_has_error("a :: (b: i32) { if b    { x := 0 } e := x }");
     assert_has_error("a :: ()  { while 0 { x := 0 } e := x }");
-    assert_has_error("a :: (b) { while b { x := 0 } e := x }");
+    assert_has_error("a :: (b: i32) { while b { x := 0 } e := x }");
 
-    let text = string_to_chars("a :: (b) { c := b while c { c = b } }");
+    let text = string_to_chars("a :: (b: i32) -> i32 { c := b while c { c = b } }");
     let result = parse(&text);
     let Ok((statements, object_factory)) = result else {
         let err = result.err().unwrap();
         panic!("parsing error: {err}");
     };
     assert_eq!(statements.len(), 1);
-    let LinkedStatement::Function { object: function_object, args, body } = &statements[0] else {
+    let LinkedStatement::Function { object: function_object, args, returns, body } = &statements[0] else {
         panic!("expected function statement");
     };
+
+    assert!(matches!(returns, ObjType::Number), "{returns:?}");
 
     let function_type = object_factory.get_type(*function_object);
     assert!(matches!(function_type, ObjType::Function { .. }));
@@ -117,18 +120,19 @@ fn test_function_with_while() {
 fn test_function_call() {
     assert_no_error("a :: () {} a()");
     assert_no_error("a :: () {} b :: () { a() }");
-    assert_no_error("a :: (a1) {} a(0 + 0)");
-    assert_no_error("a :: (a1) {} a(0)");
-    assert_no_error("a :: (a1, a2) {} a(0, 0)");
-    assert_no_error("a :: (a1, a2, a3) {} a(0, 0, 0)");
+    assert_no_error("a :: (a1: i32) {} a(0 + 0)");
+    assert_no_error("a :: (a1: i32) {} a(0)");
+    assert_no_error("a :: (a1: i32, a2: i32) {} a(0, 0)");
+    assert_no_error("a :: (a1: i32, a2: i32, a3: i32) {} a(0, 0, 0)");
 
     assert_has_error("a :: (0) {}");
+    assert_has_error("a :: (0: i32) {}");
     assert_has_error("b :: () { a() }    a :: () {}");
 
     assert_has_error("a :: () {} a(0)");
-    assert_has_error("a :: (ar1) {} a()");
-    assert_has_error("a :: (ar1) {} a(0, 0)");
-    assert_has_error("a :: (ar1, ar2) {} a()");
-    assert_has_error("a :: (ar1, ar2) {} a(0)");
-    assert_has_error("a :: (ar1, ar2) {} a(0, 0, 0)");
+    assert_has_error("a :: (ar1: i32) {} a()");
+    assert_has_error("a :: (ar1: i32) {} a(0, 0)");
+    assert_has_error("a :: (ar1: i32, ar2: i32) {} a()");
+    assert_has_error("a :: (ar1: i32, ar2: i32) {} a(0)");
+    assert_has_error("a :: (ar1: i32, ar2: i32) {} a(0, 0, 0)");
 }

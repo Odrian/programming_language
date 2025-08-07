@@ -23,7 +23,7 @@ fn parse_inside_brackets(
         if let Some(bracket_type) = is_open_bracket(char) {
             // open bracket
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(&text[start_buffer_index..index]);
+                let mut tokens = split_text_without_brackets(&text[start_buffer_index..index], start_buffer_index);
                 result_tokens.append(&mut tokens);
             }
 
@@ -49,7 +49,7 @@ fn parse_inside_brackets(
             }
 
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(&text[start_buffer_index..index]);
+                let mut tokens = split_text_without_brackets(&text[start_buffer_index..index], start_buffer_index);
                 result_tokens.append(&mut tokens);
             }
 
@@ -60,7 +60,7 @@ fn parse_inside_brackets(
         }
     }
     if index != start_buffer_index {
-        let mut tokens = split_text_without_brackets(&text[start_buffer_index..index]);
+        let mut tokens = split_text_without_brackets(&text[start_buffer_index..index], start_buffer_index);
         result_tokens.append(&mut tokens);
     }
 
@@ -93,8 +93,8 @@ fn is_close_bracket(char: char) -> Option<BracketType> {
     }
 }
 
-pub fn split_text_without_brackets(text: &[char]) -> Vec<TokenWithPos> {
-    let mut state = TokenizeState::new(text);
+pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<TokenWithPos> {
+    let mut state = TokenizeState::new(text, offset_index);
 
     // let mut line = 1;
     // let mut column = 1;
@@ -122,8 +122,12 @@ pub fn split_text_without_brackets(text: &[char]) -> Vec<TokenWithPos> {
                 }
             }
             '-' => {
-                let token = Token::TwoSidedOperation(TwoSidedOperation::Minus);
-                state.add(1, Some(token));
+                let char_2th = state.peek_nth_char(2);
+                if char_2th == Some('>') {
+                    state.add(2, Some(Token::Arrow));
+                } else {
+                    state.add(1, Some(Token::TwoSidedOperation(TwoSidedOperation::Minus)));
+                }
             }
             '+' => {
                 let token = Token::TwoSidedOperation(TwoSidedOperation::Plus);
@@ -154,14 +158,16 @@ struct TokenizeState<'text> {
     tokens: Vec<TokenWithPos<'text>>,
     buffer_start: usize,
     buffer_end: usize,
+    offset_index: usize,
 }
 impl<'text> TokenizeState<'text> {
-    fn new(text: &'text [char]) -> Self {
+    fn new(text: &'text [char], offset_index: usize) -> Self {
         Self {
             text,
             tokens: Vec::new(),
             buffer_start: 0,
             buffer_end: 0,
+            offset_index,
         }
     }
     fn peek_char(&self) -> Option<char> {
@@ -179,7 +185,7 @@ impl<'text> TokenizeState<'text> {
     fn add(&mut self, skip_chars: usize, token: Option<Token<'text>>) {
         self.flush_buffer();
         if let Some(token) = token {
-            let place_info = PositionInFile::new(self.buffer_end, self.buffer_end + skip_chars);
+            let place_info = PositionInFile::new(self.offset_index + self.buffer_end, self.offset_index + self.buffer_end + skip_chars);
             self.tokens.push(TokenWithPos::new(token, place_info));
         }
         self.buffer_start += skip_chars;
@@ -197,7 +203,7 @@ impl<'text> TokenizeState<'text> {
             } else {
                 Token::String(token_text)
             };
-            let place_info = PositionInFile::new(self.buffer_start, self.buffer_end);
+            let place_info = PositionInFile::new(self.offset_index + self.buffer_start, self.offset_index + self.buffer_end);
             self.tokens
                 .push(TokenWithPos::new(token, place_info));
         }

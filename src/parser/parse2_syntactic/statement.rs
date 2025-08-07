@@ -10,7 +10,7 @@ pub enum TStatement<'text, Obj> {
     // Bracket(Box<Vec<Statement>>, BracketType),
     If { condition: TExpression<'text, Obj>, body: Vec<Self> },
     While { condition: TExpression<'text, Obj>, body: Vec<Self> },
-    Function { object: Obj, args: Vec<Obj>, body: Vec<Self> },
+    Function { object: Obj, args: Vec<(Obj, Typee<'text>)>, returns: Option<Typee<'text>>, body: Vec<Self> },
     Return(TExpression<'text, Obj>)
 }
 
@@ -21,6 +21,11 @@ pub enum TExpression<'text, Obj> {
     Variable(Obj),
     RoundBracket(Box<Self>),
     FunctionCall { object: Obj, args: Vec<Self> },
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum Typee<'text> {
+    String(&'text [char])
 }
 
 pub type Statement<'text> = TStatement<'text, &'text [char]>;
@@ -39,8 +44,8 @@ impl<'text, Obj> TStatement<'text, Obj> {
     pub fn new_while(condition: TExpression<'text, Obj>, body: Vec<Self>) -> Self {
         Self::While { condition, body }
     }
-    pub fn new_function(name: Obj, args: Vec<Obj>, body: Vec<Self>) -> Self {
-        Self::Function { object: name, args, body }
+    pub fn new_function(name: Obj, args: Vec<(Obj, Typee<'text>)>, returns: Option<Typee<'text>>, body: Vec<Self>) -> Self {
+        Self::Function { object: name, args, returns, body }
     }
 }
 impl<'text, Obj> TExpression<'text, Obj> {
@@ -85,12 +90,13 @@ impl fmt::Display for Statement<'_> {
                 let inside = statements_to_string_with_tabs(body);
                 write!(f, "while {condition} {{\n{inside}\n}}")
             }
-            Self::Function { object: name, args, body } => {
+            Self::Function { object: name, args, returns, body } => {
                 let name = name_to_str(name);
-                let args: Vec<String> = args.iter().map(|s| name_to_str(s)).collect();
+                let args: Vec<String> = args.iter().map(|s| format!("{}: {}", name_to_str(s.0), s.1)).collect();
                 let args = args.join(", ");
+                let returns = returns.clone().map_or(String::from("()"), |x| x.to_string());
                 let inside = statements_to_string_with_tabs(body);
-                write!(f, "{name} :: ({args}) {{\n{inside}\n}}")
+                write!(f, "{name} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
             Self::Return(exp) => {
                 write!(f, "return {exp}")
@@ -117,3 +123,12 @@ impl fmt::Display for Expression<'_> {
         }
     }
 }
+
+impl fmt::Display for Typee<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::String(string) => write!(f, "{}", string.iter().collect::<String>())
+        }
+    }
+}
+

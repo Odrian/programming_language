@@ -59,7 +59,7 @@ mod module_parsing {
         }
 
         fn create_function(&mut self, statement: &LinkedStatement) -> Result<(), CE> {
-            let LinkedStatement::Function { object, args, body } = statement else { unreachable!() };
+            let LinkedStatement::Function { object, args, returns, body } = statement else { unreachable!() };
 
             let i32_type = self.context.i32_type();
             let argument_count = args.len();

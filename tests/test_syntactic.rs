@@ -20,6 +20,11 @@ fn assert_no_error(str: &str) {
 fn assert_result(str: &str, result: Result<Vec<Statement>, CE>) {
     assert_eq!(parse(&string_to_chars(str)), result);
 }
+
+fn add_type<'a, 'b>(typee: Typee<'b>, args: Vec<&'a[char]>) -> Vec<(&'a[char], Typee<'b>)> {
+    args.iter().map(|a| (*a, typee)).collect()
+}
+
 #[test]
 fn test_set() {
     assert_no_error("cat = cat");
@@ -123,11 +128,13 @@ fn test_if_while() {
 #[test]
 fn test_function() {
     assert_no_error("foo :: () { }");
+    assert_no_error("foo :: () -> i32 { }");
 
     assert_has_error(":: () { }");
     assert_has_error("foo () { }");
     assert_has_error("foo :: { }");
     assert_has_error("foo :: ()");
+    assert_has_error("foo :: () -> i32");
 
     let name = &string_to_chars("foo");
     let arg1 = &string_to_chars("arg1");
@@ -137,29 +144,32 @@ fn test_function() {
     let v_kitten = &string_to_chars("kitten");
     let v_owl = &string_to_chars("owl");
 
+    let number_string = string_to_chars("i32");
+    let number_typee = Typee::String(&number_string);
+
     assert_result(
         "foo :: () { }",
-        Ok(vec![Statement::new_function(name, vec![], vec![])])
+        Ok(vec![Statement::new_function(name, vec![], None, vec![])])
     );
     assert_result(
-        "foo :: (arg1) { }",
-        Ok(vec![Statement::new_function(name, vec![arg1], vec![])])
+        "foo :: (arg1: i32) { }",
+        Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1]), None, vec![])])
     );
     assert_result(
-        "foo :: (arg1, arg2) { }",
-        Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![])])
+        "foo :: (arg1: i32, arg2: i32) { }",
+        Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![])])
     );
     let set_expr = Statement::new_variable(v_cat, Expression::Variable(v_dog));
     assert_result(
-        "foo :: (arg1, arg2) { cat := dog }",
-        Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
+        "foo :: (arg1: i32, arg2: i32) { cat := dog }",
+        Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![
             set_expr.clone(),
         ])])
     );
 
     assert_result(
-        "foo :: (arg1, arg2) { cat := dog cat := dog }",
-            Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
+        "foo :: (arg1: i32, arg2: i32) { cat := dog cat := dog }",
+            Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![
                 set_expr.clone(),
                 set_expr.clone(),
             ])])
@@ -168,8 +178,8 @@ fn test_function() {
         Expression::Variable(v_dog), Expression::Variable(v_kitten), TwoSidedOperation::Plus
     ));
     assert_result(
-        "foo :: (arg1, arg2) { owl := dog + kitten cat := dog owl := dog + kitten }",
-        Ok(vec![Statement::new_function(name, vec![arg1, arg2], vec![
+        "foo :: (arg1: i32, arg2: i32) { owl := dog + kitten cat := dog owl := dog + kitten }",
+        Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![
             another_set_expr.clone(),
             set_expr.clone(),
             another_set_expr.clone(),
@@ -183,6 +193,10 @@ fn test_function_with_while() {
     let arg1 = &string_to_chars("arg1");
     let arg2 = &string_to_chars("arg2");
     let v_1 = &string_to_chars("1");
+
+    let number_string = string_to_chars("i32");
+    let number_typee = Typee::String(&number_string);
+
     let set_statement = Statement::new_variable(
         arg2,
         Expression::new_two_sided_op(
@@ -196,29 +210,29 @@ fn test_function_with_while() {
         vec![set_statement.clone()]
     );
     let create_function_statement = |body| {
-        Statement::new_function(name, vec![arg1, arg2], body)
+        Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, body)
     };
     assert_result(
-        "foo :: (arg1, arg2) { while arg1 { arg2 := arg2 + 1 } }",
+        "foo :: (arg1: i32, arg2: i32) { while arg1 { arg2 := arg2 + 1 } }",
         Ok(vec![create_function_statement(vec![
             while_statement.clone(),
         ])])
     );
     assert_result(
-        "foo::(arg1,arg2){while arg1{arg2:=arg2+1}}",
+        "foo::(arg1:i32,arg2:i32){while arg1{arg2:=arg2+1}}",
         Ok(vec![create_function_statement(vec![
             while_statement.clone(),
         ])])
     );
     assert_result(
-        "foo :: (arg1, arg2) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } }",
+        "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } }",
         Ok(vec![create_function_statement(vec![
             set_statement.clone(),
             while_statement.clone(),
         ])])
     );
     assert_result(
-        "foo :: (arg1, arg2) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } arg2 := arg2 + 1 }",
+        "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } arg2 := arg2 + 1 }",
         Ok(vec![create_function_statement(vec![
             set_statement.clone(),
             while_statement.clone(),

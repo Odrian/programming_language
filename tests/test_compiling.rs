@@ -53,7 +53,7 @@ main :: () {
 "));
 
     assert_eq!(12, get_exit_code("\
-foo :: () {
+foo :: () -> i32 {
     return 12
 }
 
@@ -64,9 +64,25 @@ main :: () {
 }
 
 #[test]
+fn test_sum() {
+    let program = "\
+sum :: (a: i32, b: i32) -> i32 {
+    c := a + b
+    return c
+}
+
+main :: () {
+    return sum(5, 9)
+}
+";
+    let result = get_exit_code(program);
+    assert_eq!(result, 14);
+}
+
+#[test]
 fn test_fibonachi() {
     let program = "\
-fibonachi :: (n) {
+fibonachi :: (n: i32) -> i32 {
     f0 := 0
     f1 := 1
     while n {

@@ -3,24 +3,24 @@ use crate::parser::parse1_tokenize::token::TwoSidedOperation;
 
 use super::object::{Object, ObjType};
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct TypedExpression<'text> {
     pub typee: ObjType,
     pub expr: LinkedExpression<'text >,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum LinkedStatement<'text> {
     VariableDeclaration { object: Object<'text>, value: TypedExpression<'text> },
     SetVariable { object: Object<'text>, value: TypedExpression<'text> },
     Expression(TypedExpression<'text>),
     If { condition: TypedExpression<'text>, body: Vec<Self> },
     While { condition: TypedExpression<'text>, body: Vec<Self> },
-    Function { object: Object<'text>, args: Vec<Object<'text>>, body: Vec<Self> },
+    Function { object: Object<'text>, args: Vec<Object<'text>>, returns: ObjType, body: Vec<Self> },
     Return(TypedExpression<'text>)
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum LinkedExpression<'text> {
     TwoSidedOp(Box<TypedExpression<'text>>, Box<TypedExpression<'text>>, TwoSidedOperation),
     NumberLiteral(&'text [char]),
@@ -48,8 +48,8 @@ impl<'text> LinkedStatement<'text> {
     pub fn new_while(condition: TypedExpression<'text>, body: Vec<Self>) -> Self {
         Self::While { condition, body }
     }
-    pub fn new_function(name: Object<'text>, args: Vec<Object<'text>>, body: Vec<Self>) -> Self {
-        Self::Function { object: name, args, body }
+    pub fn new_function(name: Object<'text>, args: Vec<Object<'text>>, returns: ObjType, body: Vec<Self>) -> Self {
+        Self::Function { object: name, args, returns, body }
     }
 }
 
@@ -91,10 +91,10 @@ impl fmt::Display for LinkedStatement<'_> {
                 let inside = statements_to_string_with_tabs(body);
                 write!(f, "while {condition} {{\n{inside}\n}}")
             }
-            Self::Function { object, args, body } => {
+            Self::Function { object, args, returns, body } => {
                 let inside = statements_to_string_with_tabs(body);
                 let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
-                write!(f, "{object} :: ({args}) {{\n{inside}\n}}")
+                write!(f, "{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
             Self::Return(exp) => {
                 write!(f, "return {exp}")
@@ -117,6 +117,22 @@ impl fmt::Display for LinkedExpression<'_> {
                 let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>();
                 write!(f, "{} ({})", object, args.join(", "))
             },
+        }
+    }
+}
+
+impl fmt::Display for ObjType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unit => {
+                write!(f, "()")
+            }
+            Self::Number => {
+                write!(f, "i32")
+            }
+            Self::Function { .. } => {
+                unimplemented!()
+            }
         }
     }
 }

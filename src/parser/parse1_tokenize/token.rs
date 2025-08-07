@@ -18,6 +18,7 @@ pub enum Token<'text> {
     Comma,                      // ,
     Colon,                      // :
     DoubleColon,                // ::
+    Arrow,                      // ->
 
     EqualOperation(EqualOperation),
     TwoSidedOperation(TwoSidedOperation),

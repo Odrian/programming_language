@@ -56,15 +56,27 @@ impl<'text> LinkingContext<'text, '_> {
                     self.object_context_window.step_out();
                     LinkedStatement::new_while(condition, body)
                 }
-                Statement::Function { object: name, args, body } => {
-                    let args: Vec<Object> = args.iter().map(|x| {
-                        self.object_factory.create_object(x, ObjType::Number, &mut self.object_context_window)
-                    }).collect();
+                Statement::Function { object: name, args, returns, body } => {
+                    let mut arguments_obj = Vec::with_capacity(args.len());
+                    let mut arguments_type = Vec::with_capacity(args.len());
 
-                    let arguments_type: Vec<ObjType> = args.iter().map(|x| self.object_factory.get_type(*x).clone()).collect();
+                    for (name, typee) in args {
+                        let typee = self.parse_type(typee)?;
+                        arguments_type.push(typee.clone());
+                        let object = self.object_factory.create_object(name, typee, &mut self.object_context_window);
+                        arguments_obj.push(object);
+                    }
+
+                    let return_type = {
+                        match returns {
+                            Some(typee) => self.parse_type(typee)?,
+                            None => ObjType::Unit,
+                        }
+                    };
+
                     let func_type = ObjType::Function {
                         arguments: arguments_type,
-                        returns: Box::new(ObjType::Number), // FIXME
+                        returns: Box::new(return_type.clone()),
                     };
                     let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
 
@@ -72,7 +84,7 @@ impl<'text> LinkingContext<'text, '_> {
                     let body = self.link_statements_recursive(body)?;
                     self.object_context_window.step_out();
 
-                    LinkedStatement::new_function(function_object, args, body)
+                    LinkedStatement::new_function(function_object, arguments_obj, return_type, body)
                 }
                 Statement::Return(expression) => {
                     let expression = self.parse_expression(expression)?;
@@ -136,5 +148,18 @@ impl<'text> LinkingContext<'text, '_> {
             }
         };
         Ok(linked)
+    }
+    
+    fn parse_type(&self, typee: &Typee<'text>) -> Result<ObjType, CE> {
+        match typee {
+            Typee::String(chars) => {
+                let string = chars.iter().collect::<String>();
+                match string.as_str() {
+                    "()" => Ok(ObjType::Unit),
+                    "i32" => Ok(ObjType::Number),
+                    _ => Err(CE::LinkingError { name: string, context: format!("{:?}", self.object_context_window) }),
+                }
+            }
+        }
     }
 }
