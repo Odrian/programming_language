@@ -26,26 +26,26 @@ fn get_exit_code(text: &str) -> i32 {
 #[test]
 fn test_simplest() {
     assert_eq!(5, get_exit_code("\
-main :: () {
+main :: () -> i32 {
     return 5
 }
 "));
 
     assert_eq!(3, get_exit_code("\
-main :: () {
+main :: () -> i32 {
     return 1 + 2
 }
 "));
 
     assert_eq!(7, get_exit_code("\
-main :: () {
+main :: () -> i32 {
     a := 7
     return a
 }
 "));
 
     assert_eq!(9, get_exit_code("\
-main :: () {
+main :: () -> i32 {
     a := 7
     a = 9
     return a
@@ -57,7 +57,7 @@ foo :: () -> i32 {
     return 12
 }
 
-main :: () {
+main :: () -> i32 {
     return foo()
 }
 "));
@@ -71,7 +71,7 @@ sum :: (a: i32, b: i32) -> i32 {
     return c
 }
 
-main :: () {
+main :: () -> i32 {
     return sum(5, 9)
 }
 ";
@@ -95,7 +95,7 @@ fibonachi :: (n: i32) -> i32 {
     return f0
 }
 
-main :: () {
+main :: () -> i32 {
     return fibonachi(10)
 }
 ";

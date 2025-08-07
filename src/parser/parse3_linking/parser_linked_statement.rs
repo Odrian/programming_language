@@ -1,5 +1,5 @@
 use crate::error::CompilationError as CE;
-
+use crate::parser::parse1_tokenize::token::TwoSidedOperation;
 use super::super::parse2_syntactic::statement::*;
 use super::linked_statement::*;
 use super::object::{ObjectFactory, Object, ObjType};
@@ -13,12 +13,14 @@ pub fn link_names<'text>(statement: &Vec<Statement<'text>>, object_factory: &mut
 struct LinkingContext<'text, 'factory> {
     object_context_window: ObjectContextWindow<'text>,
     object_factory: &'factory mut ObjectFactory,
+    current_function_returns: Option<ObjType>,
 }
 impl<'factory> LinkingContext<'_, 'factory> {
     fn new(object_factory: &'factory mut ObjectFactory) -> Self {
         Self {
             object_context_window: ObjectContextWindow::new(),
             object_factory,
+            current_function_returns: None,
         }
     }
 }
@@ -51,6 +53,7 @@ impl<'text> LinkingContext<'text, '_> {
                 }
                 Statement::If { condition, body } => {
                     let condition = self.parse_expression(condition)?;
+                    check_condition_type(&condition)?;
                     self.object_context_window.step_in();
                     let body = self.link_statements_recursive(body)?;
                     self.object_context_window.step_out();
@@ -58,6 +61,7 @@ impl<'text> LinkingContext<'text, '_> {
                 }
                 Statement::While { condition, body } => {
                     let condition = self.parse_expression(condition)?;
+                    check_condition_type(&condition)?;
                     self.object_context_window.step_in();
                     let body = self.link_statements_recursive(body)?;
                     self.object_context_window.step_out();
@@ -88,13 +92,21 @@ impl<'text> LinkingContext<'text, '_> {
                     let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
 
                     self.object_context_window.step_in();
+                    self.current_function_returns = Some(return_type.clone());
                     let body = self.link_statements_recursive(body)?;
+                    self.current_function_returns = None;
                     self.object_context_window.step_out();
 
                     LinkedStatement::new_function(function_object, arguments_obj, return_type, body)
                 }
                 Statement::Return(expression) => {
                     let expression = self.parse_expression(expression)?;
+                    if Some(&expression.typee) != self.current_function_returns.as_ref() {
+                        return match &self.current_function_returns {
+                            None => Err(CE::UnexpectedReturn),
+                            Some(cfr) => Err(CE::IncorrectType { got: expression.typee.clone(), expected: cfr.clone() })
+                        }
+                    }
                     LinkedStatement::Return(expression)
                 }
             };
@@ -168,5 +180,27 @@ impl<'text> LinkingContext<'text, '_> {
                 }
             }
         }
+    }
+}
+
+impl ObjType {
+    fn from_two_op(type1: &ObjType, type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
+        match two_sided_operation {
+            TwoSidedOperation::Plus | TwoSidedOperation::Minus => {
+                if type1 == &ObjType::Number && type2 == &ObjType::Number {
+                    Some(ObjType::Number)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+
+fn check_condition_type(condition: &TypedExpression) -> Result<(), CE> {
+    match condition.typee {
+        ObjType::Number => Ok(()),
+        _ => Err(CE::IncorrectType { got: condition.typee.clone(), expected: ObjType::Number }),
     }
 }

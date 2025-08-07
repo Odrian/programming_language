@@ -33,17 +33,3 @@ impl ObjectFactory {
         &self.array[object.id as usize]
     }
 }
-
-impl ObjType {
-    pub fn from_two_op(type1: &ObjType, type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
-        match two_sided_operation {
-            TwoSidedOperation::Plus | TwoSidedOperation::Minus => {
-                if type1 == &ObjType::Number && type2 == &ObjType::Number {
-                    Some(ObjType::Number)
-                } else {
-                    None
-                }
-            }
-        }
-    }
-}
