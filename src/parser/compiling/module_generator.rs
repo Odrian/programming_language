@@ -70,7 +70,7 @@ mod module_parsing {
         }
 
         fn create_function(&mut self, statement: &LinkedStatement) -> Result<(), CE> {
-            let LinkedStatement::Function { object, args, returns, body } = statement else { unreachable!() };
+            let LinkedStatement::Function { object, args, returns: _, body } = statement else { unreachable!() };
 
             let i32_type = self.context.i32_type();
             let argument_count = args.len();
@@ -93,9 +93,6 @@ mod module_parsing {
 
             self.current_function = Some(function);
             self.parse_function_body(body)?;
-            if returns == &ObjType::Unit {
-                self.builder.build_return(None)?;
-            }
             if !function.verify(true) {
                 return Err(CE::LLVMVerifyFunctionError { name: object.get_name() });
             }
@@ -112,9 +109,10 @@ mod function_parsing {
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx, '_> {
-        pub fn parse_function_body(&mut self, body: &Vec<LinkedStatement>) -> Result<(), CE> {
-            for statement in body {
-                self.parse_statement(statement)?;
+        pub fn parse_function_body(&mut self, body: &[LinkedStatement]) -> Result<(), CE> {
+            let is_returned = self.parse_statements(body)?;
+            if !is_returned {
+                self.builder.build_return(None)?;
             }
 
             // TODO: don't require 'return' nothing and 'return 0' in 'main'
@@ -123,8 +121,16 @@ mod function_parsing {
             // self.code_module_gen.builder.build_return(Some(&zero))?;
             Ok(())
         }
+        fn parse_statements(&mut self, statements: &[LinkedStatement]) -> Result<bool, CE> {
+            for statement in statements {
+                if self.parse_statement(statement)? {
+                    return Ok(true)
+                }
+            }
+            Ok(false)
+        }
 
-        fn parse_statement(&mut self, statement: &LinkedStatement) -> Result<(), CE> {
+        fn parse_statement(&mut self, statement: &LinkedStatement) -> Result<bool, CE> {
             match statement {
                 LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
                 LinkedStatement::Expression(expression) => {
@@ -135,10 +141,9 @@ mod function_parsing {
                     let condition_value2 = match &condition.typee {
                         ObjType::Number => {
                             let zero = self.context.i32_type().const_int(0, false);
-                            let condition = self.builder.build_int_compare(
+                            self.builder.build_int_compare(
                                 IntPredicate::NE, condition_value.into_int_value(), zero, "if_cond"
-                            )?;
-                            condition
+                            )?
                         }
                         _ => {
                             unreachable!()
@@ -151,10 +156,10 @@ mod function_parsing {
                     self.builder.build_conditional_branch(condition_value2, then_bb, merge_bb)?;
 
                     self.builder.position_at_end(then_bb);
-                    for statement in body {
-                        self.parse_statement(statement)?;
+                    let has_return = self.parse_statements(body)?;
+                    if !has_return {
+                        self.builder.build_unconditional_branch(merge_bb)?;
                     }
-                    self.builder.build_unconditional_branch(merge_bb)?;
                     self.builder.position_at_end(merge_bb);
                 }
                 LinkedStatement::While { condition, body } => {
@@ -170,10 +175,9 @@ mod function_parsing {
                     let condition_value2 = match &condition.typee {
                         ObjType::Number => {
                             let zero = self.context.i32_type().const_int(0, false);
-                            let condition = self.builder.build_int_compare(
+                            self.builder.build_int_compare(
                                 IntPredicate::NE, condition_value.into_int_value(), zero, "if_cond"
-                            )?;
-                            condition
+                            )?
                         }
                         _ => {
                             unreachable!()
@@ -182,8 +186,9 @@ mod function_parsing {
                     self.builder.build_conditional_branch(condition_value2, body_bb, after_bb)?;
 
                     self.builder.position_at_end(body_bb);
-                    for statement in body {
-                        self.parse_statement(statement)?;
+                    let has_return = self.parse_statements(body)?;
+                    if has_return {
+                        return Ok(true)
                     }
                     self.builder.build_unconditional_branch(cond_bb)?;
                     self.builder.position_at_end(after_bb);
@@ -207,9 +212,10 @@ mod function_parsing {
                     } else {
                         self.builder.build_return(None)?;
                     }
+                    return Ok(true)
                 }
             }
-            Ok(())
+            Ok(false)
         }
 
         fn parse_expression(&self, expression: &TypedExpression) -> Result<BasicValueEnum<'ctx>, CE> {
@@ -225,7 +231,7 @@ mod function_parsing {
                     let returned = self.builder.build_call(function, &args, "function call")?;
                     // now all functions return i32
                     let returned_value = returned.try_as_basic_value().unwrap_left();
-                    Ok(returned_value.into())
+                    Ok(returned_value)
                 },
                 LinkedExpression::NumberLiteral(literal) => {
                     let number = literal.iter().collect::<String>().parse::<i32>().unwrap();
@@ -236,7 +242,7 @@ mod function_parsing {
                     let value_type = self.context.i32_type();
                     let pointer = self.context_window.get_pointer_unwrap(object);
                     let value = self.builder.build_load(value_type, pointer, "load")?;
-                    Ok(value.into())
+                    Ok(value)
                 }
                 LinkedExpression::TwoSidedOp(ex1, ex2, op) => {
                     match op {

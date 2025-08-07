@@ -98,7 +98,7 @@ impl fmt::Display for Statement<'_> {
                 let name = name_to_str(name);
                 let args: Vec<String> = args.iter().map(|s| format!("{}: {}", name_to_str(s.0), s.1)).collect();
                 let args = args.join(", ");
-                let returns = returns.clone().map_or(String::from("()"), |x| x.to_string());
+                let returns = returns.map_or(String::from("()"), |x| x.to_string());
                 let inside = statements_to_string_with_tabs(body);
                 write!(f, "{name} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }

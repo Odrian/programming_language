@@ -80,6 +80,27 @@ main :: () -> i32 {
 }
 
 #[test]
+fn text_return_in_while() {
+    let program = "\
+foo :: (n: i32) -> i32 {
+    while n {
+        if n - 5 {
+            return 10
+        }
+        n = n - 1
+    }
+    return n
+}
+
+main :: () -> i32 {
+    return foo(7)
+}
+";
+    let result = get_exit_code(program);
+    assert_eq!(result, 10);
+}
+
+#[test]
 fn test_fibonachi() {
     let program = "\
 fibonachi :: (n: i32) -> i32 {
