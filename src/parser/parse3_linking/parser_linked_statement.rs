@@ -100,6 +100,10 @@ impl<'text> LinkingContext<'text, '_> {
                     self.current_function_returns = None;
                     self.object_context_window.step_out();
 
+                    if return_type != ObjType::Unit && !check_is_returns(&body) {
+                        return Err(CE::FunctionMustReturn { function_name: name.iter().collect::<String>() })
+                    }
+
                     LinkedStatement::new_function(function_object, arguments_obj, return_type, body)
                 }
                 Statement::Return(option_expression) => {
@@ -191,6 +195,26 @@ impl<'text> LinkingContext<'text, '_> {
             }
         }
     }
+}
+
+fn check_is_returns(statements: &[LinkedStatement]) -> bool {
+    for statement in statements {
+        match statement {
+            LinkedStatement::Return(_) => return true,
+            LinkedStatement::If { condition: _, body } => {
+                if check_is_returns(body) {
+                    return true;
+                }
+            }
+            LinkedStatement::While { condition: _, body } => {
+                if check_is_returns(body) {
+                    return true;
+                }
+            }
+            _ => ()
+        }
+    }
+    false
 }
 
 impl ObjType {

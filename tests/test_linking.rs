@@ -67,7 +67,7 @@ fn test_function_with_while() {
     assert_has_error("a :: ()  { while 0 { x := 0 } e := x }");
     assert_has_error("a :: (b: i32) { while b { x := 0 } e := x }");
 
-    let text = string_to_chars("a :: (b: i32) -> i32 { c := b while c { c = b } }");
+    let text = string_to_chars("a :: (b: i32) -> i32 { c := b while c { c = b } return c }");
     let result = parse(&text);
     let Ok((statements, object_factory)) = result else {
         let err = result.err().unwrap();
@@ -88,7 +88,7 @@ fn test_function_with_while() {
 
     assert_eq!(args.len(), 1);
     let arg = &args[0];
-    assert_eq!(body.len(), 2);
+    assert_eq!(body.len(), 3);
 
     let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = &body[0] else {
         panic!("expected variable declaration");
@@ -103,6 +103,15 @@ fn test_function_with_while() {
     let LinkedExpression::Variable(condition) = &condition.expr else {
         panic!("expected variable declaration");
     };
+
+    let LinkedStatement::Return(option_return) = &body[2] else {
+        panic!("expected return")
+    };
+    let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().expr else {
+        panic!();
+    };
+    assert_eq!(c_var.name, &string_to_chars("c"));
+
     assert_eq!(while_body.len(), 1);
     let LinkedStatement::SetVariable { object: var2, value: value2 } = &while_body[0] else {
         panic!("expected variable declaration");

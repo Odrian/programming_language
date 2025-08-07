@@ -70,7 +70,7 @@ mod module_parsing {
         }
 
         fn create_function(&mut self, statement: &LinkedStatement) -> Result<(), CE> {
-            let LinkedStatement::Function { object, args, returns: _, body } = statement else { unreachable!() };
+            let LinkedStatement::Function { object, args, returns, body } = statement else { unreachable!() };
 
             let i32_type = self.context.i32_type();
             let argument_count = args.len();
@@ -93,6 +93,9 @@ mod module_parsing {
 
             self.current_function = Some(function);
             self.parse_function_body(body)?;
+            if returns == &ObjType::Unit {
+                self.builder.build_return(None)?;
+            }
             if !function.verify(true) {
                 return Err(CE::LLVMVerifyFunctionError { name: object.get_name() });
             }
@@ -114,8 +117,7 @@ mod function_parsing {
                 self.parse_statement(statement)?;
             }
 
-            // TODO: check that function always return something
-            // TODO: add return zero by default from main function
+            // TODO: don't require 'return' nothing and 'return 0' in 'main'
             // let i32_type = self.code_module_gen.context.i32_type();
             // let zero = i32_type.const_int(0, false);
             // self.code_module_gen.builder.build_return(Some(&zero))?;

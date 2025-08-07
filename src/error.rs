@@ -32,6 +32,7 @@ pub enum CompilationError {
     ArgumentTypeMismatch, // FIXME
     NoMainFunction,
     UnexpectedGlobalVariable,
+    FunctionMustReturn { function_name: String },
 
     LLVMError(BuilderError),
     LLVMVerifyModuleError { llvm_error: String },
@@ -113,6 +114,9 @@ impl fmt::Display for CompilationError {
             }
             Self::UnexpectedGlobalVariable => {
                 write!(f, "Error: Global variables are not supported")
+            }
+            Self::FunctionMustReturn { function_name } => {
+                write!(f, "Error: function {function_name} may not return")
             }
 
             Self::LLVMError(build_error) => {
