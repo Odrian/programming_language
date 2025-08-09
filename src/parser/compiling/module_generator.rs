@@ -1,5 +1,5 @@
 use crate::error::CompilationError as CE;
-use crate::parser::parse1_tokenize::token::TwoSidedOperation;
+use crate::parser::two_sided_operation::*;
 use crate::parser::parse3_linking::linked_statement::*;
 use super::context_window::ValueContextWindow;
 
@@ -246,12 +246,14 @@ mod function_parsing {
                 }
                 LinkedExpression::TwoSidedOp(ex1, ex2, op) => {
                     match op {
-                        TwoSidedOperation::Plus | TwoSidedOperation::Minus => {
+                        TwoSidedOperation::Number(num_op) => {
                             let ex1 = self.parse_expression(ex1)?.into_int_value();
                             let ex2 = self.parse_expression(ex2)?.into_int_value();
-                            match op {
-                                TwoSidedOperation::Plus => Ok(self.builder.build_int_add(ex1, ex2, "sum")?.into()),
-                                TwoSidedOperation::Minus => Ok(self.builder.build_int_sub(ex1, ex2, "dif")?.into()),
+                            match num_op {
+                                NumberOperation::Add => Ok(self.builder.build_int_add(ex1, ex2, "sum")?.into()),
+                                NumberOperation::Sub => Ok(self.builder.build_int_sub(ex1, ex2, "dif")?.into()),
+                                NumberOperation::Mul => Ok(self.builder.build_int_mul(ex1, ex2, "mul")?.into()),
+                                NumberOperation::Div => Ok(self.builder.build_int_signed_div(ex1, ex2, "div")?.into()),
                             }
                         }
                     }

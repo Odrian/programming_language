@@ -1,4 +1,5 @@
 use crate::parser::{BracketType, PositionInFile};
+use crate::parser::two_sided_operation::*;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct TokenWithPos<'text> {
@@ -27,12 +28,19 @@ pub enum Token<'text> {
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub enum TwoSidedOperation {
-    Plus,                       // +
-    Minus,                      // -
-}
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum EqualOperation {
     Equal,                      // =
     ColonEqual,                 // :=
+}
+
+impl From<EqualOperation> for Token<'_> {
+    fn from(value: EqualOperation) -> Self {
+        Self::EqualOperation(value)
+    }
+}
+
+impl From<NumberOperation> for Token<'_> {
+    fn from(value: NumberOperation) -> Self {
+        Self::TwoSidedOperation(TwoSidedOperation::Number(value))
+    }
 }

@@ -1,5 +1,5 @@
 use crate::error::CompilationError as CE;
-use crate::parser::parse1_tokenize::token::TwoSidedOperation;
+use crate::parser::two_sided_operation::TwoSidedOperation;
 use crate::parser::parse2_syntactic::statement::*;
 use super::linked_statement::*;
 use super::object::{ObjectFactory, ObjType};
@@ -220,7 +220,7 @@ fn check_is_returns(statements: &[LinkedStatement]) -> bool {
 impl ObjType {
     fn from_two_op(type1: &ObjType, type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
         match two_sided_operation {
-            TwoSidedOperation::Plus | TwoSidedOperation::Minus => {
+            TwoSidedOperation::Number(_) => {
                 if type1 == &ObjType::Number && type2 == &ObjType::Number {
                     Some(ObjType::Number)
                 } else {
@@ -230,7 +230,6 @@ impl ObjType {
         }
     }
 }
-
 
 fn check_condition_type(condition: &TypedExpression) -> Result<(), CE> {
     match condition.typee {

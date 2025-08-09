@@ -1,5 +1,5 @@
 use crate::error::CompilationError as CE;
-use crate::parser::{BracketType, PositionInFile};
+use crate::parser::{BracketType, PositionInFile, two_sided_operation::*};
 
 use super::token::*;
 
@@ -109,14 +109,14 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 // column = 1;
             }
             '=' => {
-                state.add(1, Some(Token::EqualOperation(EqualOperation::Equal)));
+                state.add(1, Some(EqualOperation::Equal.into()));
             }
             ':' => {
                 let char_2th = state.peek_nth_char(2);
                 if char_2th == Some(':') {
                     state.add(2, Some(Token::DoubleColon));
                 } else if char_2th == Some('=') {
-                    state.add(2, Some(Token::EqualOperation(EqualOperation::ColonEqual)));
+                    state.add(2, Some(EqualOperation::ColonEqual.into()));
                 } else {
                     state.add(1, Some(Token::Colon));
                 }
@@ -126,11 +126,16 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 if char_2th == Some('>') {
                     state.add(2, Some(Token::Arrow));
                 } else {
-                    state.add(1, Some(Token::TwoSidedOperation(TwoSidedOperation::Minus)));
+                    state.add(1, Some(NumberOperation::Sub.into()));
                 }
             }
-            '+' => {
-                let token = Token::TwoSidedOperation(TwoSidedOperation::Plus);
+            '+' | '*' | '/' => {
+                let token: Token = match char {
+                    '+' => NumberOperation::Add.into(),
+                    '*' => NumberOperation::Mul.into(),
+                    '/' => NumberOperation::Div.into(),
+                    _ => unreachable!()
+                };
                 state.add(1, Some(token));
             }
             ',' => {

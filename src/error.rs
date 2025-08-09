@@ -1,7 +1,7 @@
 use std::fmt;
 use inkwell::builder::BuilderError;
 use crate::parser::{PositionInFile, BracketType};
-use crate::parser::parse1_tokenize::token::TwoSidedOperation;
+use crate::parser::two_sided_operation::TwoSidedOperation;
 use crate::parser::parse3_linking::object::ObjType;
 
 #[derive(Debug, Eq, PartialEq)]

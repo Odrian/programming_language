@@ -1,6 +1,6 @@
 use programming_language::error::CompilationError as CE;
 use programming_language::parser::*;
-use programming_language::parser::parse1_tokenize::token::TwoSidedOperation;
+use programming_language::parser::two_sided_operation::*;
 use programming_language::parser::parse2_syntactic::statement::*;
 
 fn parse(text: &[char]) -> Result<Vec<Statement>, CE> {
@@ -75,9 +75,9 @@ fn test_set_with_brackets() {
             Expression::new_two_sided_op(
                 variable.clone(),
                 Expression::new_round_bracket(
-                    Expression::new_two_sided_op(variable.clone(), variable.clone(), TwoSidedOperation::Plus)
+                    Expression::new_two_sided_op(variable.clone(), variable.clone(), NumberOperation::Add.into())
                 ),
-                TwoSidedOperation::Plus
+                NumberOperation::Add.into()
             )
         )])
     );
@@ -92,6 +92,14 @@ fn test_minus() {
     assert_has_error("a := -1");
     assert_has_error("a := --1");
     assert_has_error("a := 0 a = -a");
+}
+
+#[test]
+fn test_two_sided_ops() {
+    assert_no_error("a := a * a / a + a - a");
+    assert_no_error("a := (a * (a / (a + (a - a))))");
+
+    // TODO: add tests for ordering
 }
 
 #[test]
@@ -180,7 +188,7 @@ fn test_function() {
             ])])
     );
     let another_set_expr = Statement::new_variable(v_owl, None, Expression::new_two_sided_op(
-        Expression::Variable(v_dog), Expression::Variable(v_kitten), TwoSidedOperation::Plus
+        Expression::Variable(v_dog), Expression::Variable(v_kitten), NumberOperation::Add.into()
     ));
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { owl := dog + kitten cat := dog owl := dog + kitten }",
@@ -208,7 +216,7 @@ fn test_function_with_while() {
         Expression::new_two_sided_op(
             Expression::Variable(arg2),
             Expression::NumberLiteral(v_1),
-            TwoSidedOperation::Plus
+            NumberOperation::Add.into()
         ),
     );
     let while_statement = Statement::new_while(

@@ -170,6 +170,7 @@ impl<'text, 'a> ParsingState<'text, 'a> {
         let token = &self.tokens[self.index];
         match &token.token {
             Token::TwoSidedOperation(op) => {
+                // TODO: order operations
                 self.index += 1;
                 let expression2 = self.parse_expression(token.position)?;
                 Ok(Expression::new_two_sided_op(expression1, expression2, *op))

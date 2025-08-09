@@ -1,6 +1,7 @@
 use programming_language::error::CompilationError as CE;
 use programming_language::parser::parse1_tokenize::{token::*, tokenize};
-use programming_language::parser::{BracketType, PositionInFile};
+use programming_language::parser::*;
+use programming_language::parser::two_sided_operation::*;
 
 fn map_remove_place(vec: Vec<TokenWithPos>) -> Vec<Token> {
     vec.into_iter().map(|x| x.token).collect()
@@ -121,7 +122,7 @@ fn test_parse_brackets() {
         ",+",
         Ok(vec![
             Token::Comma,
-            Token::TwoSidedOperation(TwoSidedOperation::Plus),
+            NumberOperation::Add.into(),
         ]),
     );
 
@@ -132,7 +133,7 @@ fn test_parse_brackets() {
             BracketType::Curly,
             vec![
                 Token::EqualOperation(EqualOperation::ColonEqual),
-                Token::TwoSidedOperation(TwoSidedOperation::Plus),
+                NumberOperation::Add.into(),
                 Token::String(v_cat),
                 Token::EqualOperation(EqualOperation::Equal),
                 Token::String(v_cat),
@@ -151,7 +152,7 @@ fn test_tokens() {
         "cat+323,cat=3d{,(,),}",
         Ok(vec![
             Token::String(&v_cat),
-            Token::TwoSidedOperation(TwoSidedOperation::Plus),
+            NumberOperation::Add.into(),
             Token::NumberLiteral(&v_323),
             Token::Comma,
             Token::String(&v_cat),

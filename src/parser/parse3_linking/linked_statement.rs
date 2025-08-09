@@ -1,5 +1,5 @@
 use std::fmt;
-use crate::parser::parse1_tokenize::token::TwoSidedOperation;
+use crate::parser::two_sided_operation::TwoSidedOperation;
 
 use super::object::{Object, ObjType};
 
@@ -109,10 +109,9 @@ impl fmt::Display for LinkedStatement<'_> {
 impl fmt::Display for LinkedExpression<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TwoSidedOp(a, b, op) => match op {
-                TwoSidedOperation::Plus => write!(f, "({a} + {b})"),
-                TwoSidedOperation::Minus => write!(f, "({a} - {b})"),
-            }
+            Self::TwoSidedOp(a, b, op) => {
+                write!(f, "({a} {op} {b})")
+            },
             Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
             Self::Variable(object) => write!(f, "{object}"),
             Self::RoundBracket(expression) => write!(f, "({expression})"),

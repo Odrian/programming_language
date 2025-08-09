@@ -1,5 +1,5 @@
 use std::fmt;
-use crate::parser::parse1_tokenize::token::TwoSidedOperation;
+use crate::parser::two_sided_operation::TwoSidedOperation;
 
 // FIXME: don't need abstraction
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -115,10 +115,9 @@ impl fmt::Display for Statement<'_> {
 impl fmt::Display for Expression<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TwoSidedOp(a, b, op) => match op {
-                TwoSidedOperation::Plus => write!(f, "({a} + {b})"),
-                TwoSidedOperation::Minus => write!(f, "({a} - {b})"),
-            }
+            Self::TwoSidedOp(a, b, op) => {
+                write!(f, "({a} {op} {b})")
+            },
             Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
             Self::Variable(name) => write!(f, "{}", name.iter().collect::<String>()),
             Self::RoundBracket(expression) => write!(f, "({expression})"),
