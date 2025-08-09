@@ -98,8 +98,8 @@ fn test_minus() {
 fn test_two_sided_ops() {
     assert_no_error("a := a * a / a + a - a");
     assert_no_error("a := (a * (a / (a + (a - a))))");
-
-    // TODO: add tests for ordering
+    
+    // correct order is tested at compiling
 }
 
 #[test]

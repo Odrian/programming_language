@@ -23,19 +23,20 @@ fn get_exit_code(text: &str) -> i32 {
     code.unwrap().code().unwrap()
 }
 
+fn check_single_expression(text: &str) -> i32 {
+    let program = "\
+main :: () -> i32 {
+    return ".to_owned() + text + "
+}
+";
+    get_exit_code(&program)
+}
+
 #[test]
 fn test_simplest() {
-    assert_eq!(5, get_exit_code("\
-main :: () -> i32 {
-    return 5
-}
-"));
+    assert_eq!(5, check_single_expression("5"));
 
-    assert_eq!(3, get_exit_code("\
-main :: () -> i32 {
-    return 1 + 2
-}
-"));
+    assert_eq!(3, check_single_expression("1 + 2"));
 
     assert_eq!(7, get_exit_code("\
 main :: () -> i32 {
@@ -122,4 +123,13 @@ main :: () -> i32 {
 ";
     let result = get_exit_code(program);
     assert_eq!(result, 55);
+}
+
+#[test]
+fn test_operation_order() {
+    assert_eq!(5, check_single_expression("1 + 2 * 2"));
+    assert_eq!(5, check_single_expression("2 * 2 + 1"));
+    assert_eq!(6, check_single_expression("1 + 2 * 2 + 1"));
+    assert_eq!(13, check_single_expression("2 * 2 + 3 * 3"));
+    assert_eq!(22, check_single_expression("2 * 2 + 3 * 3 + 1 * 7 + 1 + 1"));
 }

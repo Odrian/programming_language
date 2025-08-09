@@ -147,12 +147,11 @@ impl<'text, 'a> ParsingState<'text, 'a> {
             Token::Bracket(vec, BracketType::Round) => {
                 let mut new_state = ParsingState::new(vec);
                 let expression = new_state.parse_expression(token.position)?;
-                if new_state.at_end() {
-                    let expression1 = Expression::new_round_bracket(expression);
-                    self.parse_expression2(expression1)
-                } else {
-                    Err(CE::SyntacticsError(vec[new_state.index].position, String::from("expected ')'")))
+                if !new_state.at_end() {
+                    return Err(CE::SyntacticsError(vec[new_state.index].position, String::from("expected ')'")))
                 }
+                let expression1 = Expression::new_round_bracket(expression);
+                self.parse_expression2(expression1)
             }
             Token::Bracket(_, _) => {
                 Err(CE::SyntacticsError(token.position, String::from("expected expression, got open bracket")))
@@ -162,7 +161,7 @@ impl<'text, 'a> ParsingState<'text, 'a> {
             }
         }
     }
-    // parse "expression1 twoSidedOp expression2"
+    // parse "name .." or "(expr1) .."
     fn parse_expression2(&mut self, expression1: Expression<'text>) -> Result<Expression<'text>, CE> {
         if self.at_end() {
             return Ok(expression1);
@@ -170,7 +169,6 @@ impl<'text, 'a> ParsingState<'text, 'a> {
         let token = &self.tokens[self.index];
         match &token.token {
             Token::TwoSidedOperation(op) => {
-                // TODO: order operations
                 self.index += 1;
                 let expression2 = self.parse_expression(token.position)?;
                 Ok(Expression::new_two_sided_op(expression1, expression2, *op))
