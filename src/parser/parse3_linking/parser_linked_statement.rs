@@ -190,6 +190,7 @@ impl<'text> LinkingContext<'text, '_> {
                 match string.as_str() {
                     "()" => Ok(ObjType::Unit),
                     "i32" => Ok(ObjType::Number),
+                    "bool" => Ok(ObjType::Bool),
                     _ => Err(CE::LinkingError { name: string, context: format!("{:?}", self.object_context_window) }),
                 }
             }
@@ -227,13 +228,30 @@ impl ObjType {
                     None
                 }
             }
+            TwoSidedOperation::Bool(_) => {
+                if type1 == &ObjType::Bool && type2 == &ObjType::Bool {
+                    Some(ObjType::Bool)
+                } else {
+                    None
+                }
+            }
+            TwoSidedOperation::Compare(comp_op) => {
+                if type1 != type2 {
+                    None
+                } else if comp_op.is_equal_op() {
+                    Some(ObjType::Bool)
+                } else {
+                    // FIXME: not all types can be compared
+                    Some(ObjType::Bool)
+                }
+            }
         }
     }
 }
 
 fn check_condition_type(condition: &TypedExpression) -> Result<(), CE> {
     match condition.typee {
-        ObjType::Number => Ok(()),
-        _ => Err(CE::IncorrectType { got: condition.typee.clone(), expected: ObjType::Number }),
+        ObjType::Bool => Ok(()),
+        _ => Err(CE::IncorrectType { got: condition.typee.clone(), expected: ObjType::Bool }),
     }
 }

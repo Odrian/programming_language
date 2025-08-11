@@ -129,6 +129,9 @@ impl fmt::Display for ObjType {
             Self::Unit => {
                 write!(f, "()")
             }
+            Self::Bool => {
+                write!(f, "bool")
+            }
             Self::Number => {
                 write!(f, "i32")
             }

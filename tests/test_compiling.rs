@@ -84,8 +84,8 @@ main :: () -> i32 {
 fn text_return_in_while() {
     let program = "\
 foo :: (n: i32) -> i32 {
-    while n {
-        if n - 5 {
+    while n > 0 {
+        if n != 5 {
             return 10
         }
         n = n - 1
@@ -107,7 +107,7 @@ fn test_fibonachi() {
 fibonachi :: (n: i32) -> i32 {
     f0 := 0
     f1 := 1
-    while n {
+    while n > 0 {
         f0 = f0 + f1
         temp := f0
         f0 = f1
@@ -132,4 +132,39 @@ fn test_operation_order() {
     assert_eq!(6, check_single_expression("1 + 2 * 2 + 1"));
     assert_eq!(13, check_single_expression("2 * 2 + 3 * 3"));
     assert_eq!(22, check_single_expression("2 * 2 + 3 * 3 + 1 * 7 + 1 + 1"));
+}
+
+#[test]
+fn test_compare() {
+    let program = "\
+foo :: (x: i32) -> i32 {
+    if x == 2 { x = x + 4 }
+    if x > 1 { x = x * 3 }
+    if x < 2 { x = x - 1 }
+    if x != 0 { x = x - 17 }
+    if x >= 1 { x = x + 1 }
+    if x <= 1 { x = x + 1 }
+    return x
+}
+main :: () -> i32 {
+    return foo(1) + foo(2)
+}
+";
+    assert_eq!(1 + 2, get_exit_code(program))
+}
+
+#[test]
+fn test_bool_op() {
+    let program = "\
+foo :: (x: i32, y: i32) -> i32 {
+    if x == 1 && y == 1 { return 3 }
+    if x == 1 { return 2 }
+    if y == 1 { return 1 }
+    return 0
+}
+main :: () -> i32 {
+    return foo(1, 1) * foo(1, 8) + foo(9, 1) + 5 * foo(10, 10)
+}
+";
+    assert_eq!(3 * 2 + 1, get_exit_code(program));
 }

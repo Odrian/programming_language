@@ -42,6 +42,7 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
     fn get_type(&self, typee: &ObjType) -> Option<AnyTypeEnum> {
         match typee {
             ObjType::Unit => None,
+            ObjType::Bool => Some(self.context.bool_type().into()),
             ObjType::Number => Some(self.context.i32_type().into()),
             ObjType::Function { .. } => unimplemented!(),
         }
@@ -137,23 +138,12 @@ mod function_parsing {
                     self.parse_expression(expression)?;
                 }
                 LinkedStatement::If { condition, body } => {
-                    let condition_value = self.parse_expression(condition)?;
-                    let condition_value2 = match &condition.typee {
-                        ObjType::Number => {
-                            let zero = self.context.i32_type().const_int(0, false);
-                            self.builder.build_int_compare(
-                                IntPredicate::NE, condition_value.into_int_value(), zero, "if_cond"
-                            )?
-                        }
-                        _ => {
-                            unreachable!()
-                        }
-                    };
+                    let condition_value = self.parse_expression(condition)?.into_int_value();
 
                     let function = self.current_function.unwrap();
                     let then_bb = self.context.append_basic_block(function, "then");
                     let merge_bb = self.context.append_basic_block(function, "merge");
-                    self.builder.build_conditional_branch(condition_value2, then_bb, merge_bb)?;
+                    self.builder.build_conditional_branch(condition_value, then_bb, merge_bb)?;
 
                     self.builder.position_at_end(then_bb);
                     let has_return = self.parse_statements(body)?;
@@ -171,19 +161,8 @@ mod function_parsing {
                     self.builder.build_unconditional_branch(cond_bb)?;
 
                     self.builder.position_at_end(cond_bb);
-                    let condition_value = self.parse_expression(condition)?;
-                    let condition_value2 = match &condition.typee {
-                        ObjType::Number => {
-                            let zero = self.context.i32_type().const_int(0, false);
-                            self.builder.build_int_compare(
-                                IntPredicate::NE, condition_value.into_int_value(), zero, "if_cond"
-                            )?
-                        }
-                        _ => {
-                            unreachable!()
-                        }
-                    };
-                    self.builder.build_conditional_branch(condition_value2, body_bb, after_bb)?;
+                    let condition_value = self.parse_expression(condition)?.into_int_value();
+                    self.builder.build_conditional_branch(condition_value, body_bb, after_bb)?;
 
                     self.builder.position_at_end(body_bb);
                     let has_return = self.parse_statements(body)?;
@@ -245,16 +224,35 @@ mod function_parsing {
                     Ok(value)
                 }
                 LinkedExpression::TwoSidedOp(ex1, ex2, op) => {
+                    let ex1_parsed = self.parse_expression(ex1)?;
+                    let ex2_parsed = self.parse_expression(ex2)?;
                     match op {
                         TwoSidedOperation::Number(num_op) => {
-                            let ex1 = self.parse_expression(ex1)?.into_int_value();
-                            let ex2 = self.parse_expression(ex2)?.into_int_value();
+                            let num1 = ex1_parsed.into_int_value();
+                            let num2 = ex2_parsed.into_int_value();
                             match num_op {
-                                NumberOperation::Add => Ok(self.builder.build_int_add(ex1, ex2, "sum")?.into()),
-                                NumberOperation::Sub => Ok(self.builder.build_int_sub(ex1, ex2, "dif")?.into()),
-                                NumberOperation::Mul => Ok(self.builder.build_int_mul(ex1, ex2, "mul")?.into()),
-                                NumberOperation::Div => Ok(self.builder.build_int_signed_div(ex1, ex2, "div")?.into()),
+                                NumberOperation::Add => Ok(self.builder.build_int_add(num1, num2, "add")?.into()),
+                                NumberOperation::Sub => Ok(self.builder.build_int_sub(num1, num2, "sub")?.into()),
+                                NumberOperation::Mul => Ok(self.builder.build_int_mul(num1, num2, "mul")?.into()),
+                                NumberOperation::Div => Ok(self.builder.build_int_signed_div(num1, num2, "div")?.into()),
                             }
+                        }
+                        TwoSidedOperation::Bool(bool_op) => {
+                            let bool1 = ex1_parsed.into_int_value();
+                            let bool2 = ex2_parsed.into_int_value();
+                            match bool_op {
+                                BoolOperation::Or => Ok(self.builder.build_or(bool1, bool2, "or")?.into()),
+                                BoolOperation::And => Ok(self.builder.build_and(bool1, bool2, "and")?.into()),
+                            }
+                        }
+                        TwoSidedOperation::Compare(comp_op) => match ex1.typee {
+                            ObjType::Number | ObjType::Bool => {
+                                let ex1 = ex1_parsed.into_int_value();
+                                let ex2 = ex2_parsed.into_int_value();
+                                let predicate = comp_op.to_int_compare();
+                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "equals")?.into())
+                            }
+                            ObjType::Unit | ObjType::Function { .. } => unimplemented!(),
                         }
                     }
                 }
@@ -274,3 +272,26 @@ impl Object<'_> {
     }
 }
 
+impl CompareOperator {
+    fn to_int_compare(self) -> IntPredicate {
+        match self {
+            CompareOperator::Equal =>           IntPredicate::EQ,
+            CompareOperator::NotEqual =>        IntPredicate::NE,
+            CompareOperator::Greater =>         IntPredicate::SGT,
+            CompareOperator::GreaterEqual =>    IntPredicate::SGE,
+            CompareOperator::Less =>            IntPredicate::SLT,
+            CompareOperator::LessEqual =>       IntPredicate::SLE,
+        }
+    }
+
+    fn to_uint_compare(self) -> IntPredicate {
+        match self {
+            CompareOperator::Equal =>           IntPredicate::EQ,
+            CompareOperator::NotEqual =>        IntPredicate::NE,
+            CompareOperator::Greater =>         IntPredicate::UGT,
+            CompareOperator::GreaterEqual =>    IntPredicate::UGE,
+            CompareOperator::Less =>            IntPredicate::ULT,
+            CompareOperator::LessEqual =>       IntPredicate::ULE,
+        }
+    }
+}

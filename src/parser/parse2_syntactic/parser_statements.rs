@@ -83,7 +83,7 @@ impl<'text, 'a> ParsingState<'text, 'a> {
     }
     fn parse_statement2(&mut self, string: &'text [char], previous_place_info: PositionInFile) -> Result<Statement<'text>, CE> {
         if self.at_end() {
-            return Err(CE::SyntacticsError(previous_place_info, String::from("expected statement")));
+            return Err(CE::SyntacticsError(previous_place_info, String::from("expected statement, got EOL")));
         }
         let new_token = &self.tokens[self.index];
         self.index += 1;
@@ -179,7 +179,7 @@ impl<'text, 'a> ParsingState<'text, 'a> {
                     return Err(CE::SyntacticsError(token.position, String::from("unexpected round brackets after expression")));
                 };
                 let args = parse_function_arguments(vec, token.position)?;
-                Ok(Expression::new_function_call(name, args))
+                self.parse_expression2(Expression::new_function_call(name, args))
             }
             Token::Bracket(_, _) | Token::String(_) | Token::NumberLiteral(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon | Token::Arrow => {
                 Ok(expression1)

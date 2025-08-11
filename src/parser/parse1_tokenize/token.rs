@@ -44,3 +44,15 @@ impl From<NumberOperation> for Token<'_> {
         Self::TwoSidedOperation(TwoSidedOperation::Number(value))
     }
 }
+
+impl From<BoolOperation> for Token<'_> {
+    fn from(value: BoolOperation) -> Self {
+        Self::TwoSidedOperation(TwoSidedOperation::Bool(value))
+    }
+}
+
+impl From<CompareOperator> for Token<'_> {
+    fn from(value: CompareOperator) -> Self {
+        Self::TwoSidedOperation(TwoSidedOperation::Compare(value))
+    }
+}

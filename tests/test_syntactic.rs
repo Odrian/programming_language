@@ -137,6 +137,27 @@ fn test_if_while() {
 }
 
 #[test]
+fn test_compare() {
+    assert_no_error("if a != b {}");
+    assert_no_error("while a != b {}");
+    assert_no_error("while a == b {}");
+    assert_no_error("while a > b {}");
+    assert_no_error("while a < b {}");
+    assert_no_error("while a >= b {}");
+    assert_no_error("while a <= b {}");
+}
+
+#[test]
+fn test_bool_ops() {
+    assert_no_error("if a && c {}");
+    assert_no_error("if a || c {}");
+    assert_no_error("if a || c && d {}");
+    assert_no_error("if a && c || d {}");
+    assert_no_error("if a == b && c == d {}");
+    assert_no_error("if a == b || c == d {}");
+}
+
+#[test]
 fn test_function() {
     assert_no_error("foo :: () { }");
     assert_no_error("foo :: () -> i32 { }");
@@ -264,6 +285,12 @@ fn test_function_call() {
     assert_no_error("foo(0, 1)");
     assert_no_error("foo((0 + 1))");
     assert_no_error("foo(foo(0))");
+
+    assert_no_error("a = foo(0) + foo(0) + foo(0) + 0");
+
+    assert_has_error("0 + 0");
+    assert_has_error("foo(0) + foo(0)");
+    assert_has_error("foo(0) + foo(0) + foo(0) + 0");
 
     assert_has_error("foo(cat := cat)");
 

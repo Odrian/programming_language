@@ -2,7 +2,9 @@ use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TwoSidedOperation {
-    Number(NumberOperation)
+    Number(NumberOperation),
+    Bool(BoolOperation),
+    Compare(CompareOperator),
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -13,18 +15,44 @@ pub enum NumberOperation {
     Div,
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum BoolOperation {
+    And,
+    Or,
+    // Xor,
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum CompareOperator {
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+}
+
 impl TwoSidedOperation {
     pub fn get_prior(&self) -> u8 {
         match self {
-            Self::Number(num_op) => {
-                match num_op {
-                    NumberOperation::Add => 0,
-                    NumberOperation::Sub => 0,
-                    NumberOperation::Mul => 1,
-                    NumberOperation::Div => 1,
-                }
+            Self::Number(num_op) => match num_op {
+                NumberOperation::Add => 2,
+                NumberOperation::Sub => 2,
+                NumberOperation::Mul => 3,
+                NumberOperation::Div => 3,
+            }
+            Self::Compare(_comp_op) => 4,
+            Self::Bool(bool_op) => match bool_op {
+                BoolOperation::And => 1,
+                BoolOperation::Or => 0,
             }
         }
+    }
+}
+
+impl CompareOperator {
+    pub fn is_equal_op(&self) -> bool {
+        matches!(self, Self::Equal | Self::NotEqual)
     }
 }
 
@@ -35,14 +63,38 @@ impl From<NumberOperation> for TwoSidedOperation {
     }
 }
 
+impl From<BoolOperation> for TwoSidedOperation {
+    fn from(value: BoolOperation) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<CompareOperator> for TwoSidedOperation {
+    fn from(value: CompareOperator) -> Self {
+        Self::Compare(value)
+    }
+}
+
 impl fmt::Display for TwoSidedOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let op_char = match self {
-            TwoSidedOperation::Number(num_op) => match num_op {
+            Self::Number(num_op) => match num_op {
                 NumberOperation::Add =>    "+",
                 NumberOperation::Sub =>   "-",
                 NumberOperation::Mul =>   "*",
                 NumberOperation::Div =>  "/",
+            }
+            Self::Compare(comp_op) => match comp_op {
+                CompareOperator::Equal => "==",
+                CompareOperator::NotEqual => "!=",
+                CompareOperator::Greater => ">",
+                CompareOperator::GreaterEqual => ">=",
+                CompareOperator::Less => "<",
+                CompareOperator::LessEqual => "<=",
+            }
+            Self::Bool(bool_op) => match bool_op {
+                BoolOperation::And => "&&",
+                BoolOperation::Or => "||",
             }
         };
         write!(f, "{op_char}")

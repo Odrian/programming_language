@@ -109,24 +109,48 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 // column = 1;
             }
             '=' => {
-                state.add(1, Some(EqualOperation::Equal.into()));
+                let char_2th = state.peek_nth_char(2);
+                if char_2th == Some('=') {
+                    state.add(2, Some(CompareOperator::Equal.into())); // ==
+                } else {
+                    state.add(1, Some(EqualOperation::Equal.into())); // =
+                }
+            }
+            '!' if state.peek_nth_char(2) == Some('=') => {
+                state.add(2, Some(CompareOperator::NotEqual.into())); // !=
+            }
+            '>' => {
+                let char_2th = state.peek_nth_char(2);
+                if char_2th == Some('=') {
+                    state.add(2, Some(CompareOperator::GreaterEqual.into())); // >=
+                } else {
+                    state.add(1, Some(CompareOperator::Greater.into())); // >
+                }
+            }
+            '<' => {
+                let char_2th = state.peek_nth_char(2);
+                if char_2th == Some('=') {
+                    state.add(2, Some(CompareOperator::LessEqual.into())); // >=
+                } else {
+                    state.add(1, Some(CompareOperator::Less.into())); // >
+                }
             }
             ':' => {
                 let char_2th = state.peek_nth_char(2);
                 if char_2th == Some(':') {
-                    state.add(2, Some(Token::DoubleColon));
+                    state.add(2, Some(Token::DoubleColon)); // ::
                 } else if char_2th == Some('=') {
-                    state.add(2, Some(EqualOperation::ColonEqual.into()));
+                    state.add(2, Some(EqualOperation::ColonEqual.into())); // :=
                 } else {
-                    state.add(1, Some(Token::Colon));
+                    state.add(1, Some(Token::Colon)); // :
                 }
             }
             '-' => {
                 let char_2th = state.peek_nth_char(2);
                 if char_2th == Some('>') {
-                    state.add(2, Some(Token::Arrow));
+                    state.add(2, Some(Token::Arrow)); // ->
                 } else {
-                    state.add(1, Some(NumberOperation::Sub.into()));
+                    state.add(1, Some(NumberOperation::Sub.into())); // -
                 }
             }
             '+' | '*' | '/' => {
@@ -137,6 +161,24 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                     _ => unreachable!()
                 };
                 state.add(1, Some(token));
+            }
+            '&' => {
+                let char_2th = state.peek_nth_char(2);
+                if char_2th == Some('&') {
+                    state.add(2, Some(BoolOperation::And.into())); // &&
+                } else {
+                    // state.add(1, Some(NumberOperation::BinAnd.into())); // &
+                    todo!()
+                }
+            }
+            '|' => {
+                let char_2th = state.peek_nth_char(2);
+                if char_2th == Some('|') {
+                    state.add(2, Some(BoolOperation::Or.into())); // ||
+                } else {
+                    // state.add(1, Some(NumberOperation::BinOr.into())); // |
+                    todo!()
+                }
             }
             ',' => {
                 let token = Token::Comma;

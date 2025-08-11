@@ -11,6 +11,7 @@ pub struct Object<'text> {
 pub enum ObjType {
     Unit,
     Number,
+    Bool,
     Function { arguments: Vec<ObjType>, returns: Box<ObjType> }
 }
 
