@@ -171,3 +171,20 @@ main :: () -> i32 {
 ";
     assert_eq!(3 * 2 + 1, get_exit_code(program));
 }
+
+#[test]
+fn test_equal_set() {
+    let program = "\
+foo :: (n: i32) -> i32 {
+    n /= 2
+    n -= 4
+    n += 1
+    n *= 7
+    return n
+}
+main :: () -> i32 {
+    return foo(8)
+}
+";
+    assert_eq!(7, get_exit_code(program));
+}

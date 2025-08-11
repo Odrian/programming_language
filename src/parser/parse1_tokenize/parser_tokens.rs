@@ -109,79 +109,65 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 // column = 1;
             }
             '=' => {
-                let char_2th = state.peek_nth_char(2);
-                if char_2th == Some('=') {
-                    state.add(2, Some(CompareOperator::Equal.into())); // ==
-                } else {
-                    state.add(1, Some(EqualOperation::Equal.into())); // =
+                match state.peek_nth_char(2) {
+                    Some('=') => state.add(2, Some(CompareOperator::Equal.into())), // ==
+                    _ =>         state.add(1, Some(EqualOperation::Equal.into())), // =
                 }
             }
             '!' => {
-                let char_2th = state.peek_nth_char(2);
-                if char_2th == Some('=') {
-                    state.add(2, Some(CompareOperator::NotEqual.into())); // !=
-                } else {
-                    state.add(1, Some(OneSidedOperation::BoolNot.into())); // !
+                match state.peek_nth_char(2) {
+                    Some('=') => state.add(2, Some(CompareOperator::NotEqual.into())), // !=
+                    _ =>         state.add(1, Some(OneSidedOperation::BoolNot.into())), // !
                 }
             }
             '>' => {
-                let char_2th = state.peek_nth_char(2);
-                if char_2th == Some('=') {
-                    state.add(2, Some(CompareOperator::GreaterEqual.into())); // >=
-                } else {
-                    state.add(1, Some(CompareOperator::Greater.into())); // >
+                match state.peek_nth_char(2) {
+                    Some('=') => state.add(2, Some(CompareOperator::GreaterEqual.into())), // >=
+                    _ =>         state.add(1, Some(CompareOperator::Greater.into())), // >
                 }
             }
             '<' => {
-                let char_2th = state.peek_nth_char(2);
-                if char_2th == Some('=') {
-                    state.add(2, Some(CompareOperator::LessEqual.into())); // >=
-                } else {
-                    state.add(1, Some(CompareOperator::Less.into())); // >
+                match state.peek_nth_char(2) {
+                    Some('=') => state.add(2, Some(CompareOperator::LessEqual.into())), // <=
+                    _ =>         state.add(1, Some(CompareOperator::Less.into())), // <
                 }
             }
             ':' => {
-                let char_2th = state.peek_nth_char(2);
-                if char_2th == Some(':') {
-                    state.add(2, Some(Token::DoubleColon)); // ::
-                } else if char_2th == Some('=') {
-                    state.add(2, Some(EqualOperation::ColonEqual.into())); // :=
-                } else {
-                    state.add(1, Some(Token::Colon)); // :
+                match state.peek_nth_char(2) {
+                    Some('=') => state.add(2, Some(EqualOperation::ColonEqual.into())), // :=
+                    Some(':') => state.add(2, Some(Token::DoubleColon)), // ::
+                    _ =>         state.add(1, Some(Token::Colon)), // :
                 }
             }
             '-' => {
-                let char_2th = state.peek_nth_char(2);
-                if char_2th == Some('>') {
-                    state.add(2, Some(Token::Arrow)); // ->
-                } else {
-                    // unary minus parsed at syntactic part
-                    state.add(1, Some(NumberOperation::Sub.into())); // -
+                match state.peek_nth_char(2) {
+                    Some('=') => state.add(2, Some(EqualOperation::OperationEqual(NumberOperation::Sub.into()).into())), // -=
+                    Some('>') => state.add(2, Some(Token::Arrow)), // ->
+                    _ =>         state.add(1, Some(NumberOperation::Sub.into())), // -
                 }
             }
             '+' | '*' | '/' => {
-                let token: Token = match char {
+                let token: TwoSidedOperation = match char {
                     '+' => NumberOperation::Add.into(),
                     '*' => NumberOperation::Mul.into(),
                     '/' => NumberOperation::Div.into(),
                     _ => unreachable!()
                 };
-                state.add(1, Some(token));
+                match state.peek_nth_char(2) {
+                    Some('=') => state.add(2, Some(EqualOperation::OperationEqual(token).into())), // +=
+                    _ =>         state.add(1, Some(token.into())), // +
+                }
             }
             '&' => {
-                let char_2th = state.peek_nth_char(2);
-                if char_2th == Some('&') {
-                    state.add(2, Some(BoolOperation::And.into())); // &&
-                } else {
-                    state.add(1, Some(NumberOperation::BitAnd.into())); // &
+                match state.peek_nth_char(2) {
+                    Some('&') => state.add(2, Some(BoolOperation::And.into())), // &&
+                    _ =>         state.add(1, Some(NumberOperation::BitAnd.into())), // &
                 }
             }
             '|' => {
-                let char_2th = state.peek_nth_char(2);
-                if char_2th == Some('|') {
-                    state.add(2, Some(BoolOperation::Or.into())); // ||
-                } else {
-                    state.add(1, Some(NumberOperation::BitOr.into())); // |
+                match state.peek_nth_char(2) {
+                    Some('|') => state.add(2, Some(BoolOperation::Or.into())), // ||
+                    _ =>         state.add(1, Some(NumberOperation::BitOr.into())), // |
                 }
             }
             ',' => {

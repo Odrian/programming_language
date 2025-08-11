@@ -5,6 +5,8 @@ use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 pub enum Statement<'text> {
     VariableDeclaration { object: &'text [char], typee: Option<Typee<'text>>, value: Expression<'text> },
     SetVariable { object: &'text [char], value: Expression<'text> },
+    EqualSetVariable { object: &'text [char], value: Expression<'text>, op: TwoSidedOperation },
+
     Expression(Expression<'text>),
     If { condition: Expression<'text>, body: Vec<Self> },
     While { condition: Expression<'text>, body: Vec<Self> },
@@ -31,8 +33,11 @@ impl<'text> Statement<'text> {
     pub fn new_variable(obj: &'text [char], typee: Option<Typee<'text>>, value: Expression<'text>) -> Self {
         Self::VariableDeclaration { object: obj, typee, value }
     }
-    pub fn new_set(obj: &'text [char], value: Expression<'text>) -> Self {
-        Self::SetVariable { object: obj, value }
+    pub fn new_set(object: &'text [char], value: Expression<'text>) -> Self {
+        Self::SetVariable { object, value }
+    }
+    pub fn new_equal_set(object: &'text [char], value: Expression<'text>, op: TwoSidedOperation) -> Self {
+        Self::EqualSetVariable { object, value, op }
     }
     pub fn new_if(condition: Expression<'text>, body: Vec<Self>) -> Self {
         Self::If { condition, body }
@@ -80,7 +85,10 @@ impl fmt::Display for Statement<'_> {
                 }
             }
             Self::SetVariable { object: name, value } => {
-                write!(f, "{} = {}", name_to_str(name), value)
+                write!(f, "{} = {value}", name_to_str(name))
+            }
+            Self::EqualSetVariable { object: name, value, op } => {
+                write!(f, "{} {op}= {value}", name_to_str(name))
             }
             Self::Expression(expression) => {
                 write!(f, "{expression}")

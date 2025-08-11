@@ -112,6 +112,9 @@ impl<'text, 'a> ParsingState<'text, 'a> {
                 let statement = match equal_operation {
                     EqualOperation::ColonEqual => Statement::new_variable(string, None, expression2),
                     EqualOperation::Equal => Statement::new_set(string, expression2),
+                    EqualOperation::OperationEqual(op) => {
+                        Statement::new_equal_set(string, expression2, *op)
+                    }
                 };
                 Ok(statement)
             }

@@ -32,6 +32,7 @@ pub enum Token<'text> {
 pub enum EqualOperation {
     Equal,                      // =
     ColonEqual,                 // :=
+    OperationEqual(TwoSidedOperation), // _=
 }
 
 impl From<EqualOperation> for Token<'_> {
@@ -43,6 +44,12 @@ impl From<EqualOperation> for Token<'_> {
 impl From<OneSidedOperation> for Token<'_> {
     fn from(value: OneSidedOperation) -> Self {
         Self::UnaryOperation(value)
+    }
+}
+
+impl From<TwoSidedOperation> for Token<'_> {
+    fn from(value: TwoSidedOperation) -> Self {
+        Self::Operation(value)
     }
 }
 

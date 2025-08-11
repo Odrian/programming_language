@@ -47,6 +47,23 @@ impl<'text> LinkingContext<'text, '_> {
                     let object = self.object_context_window.get_or_error(name)?;
                     LinkedStatement::new_set(object, value)
                 }
+                Statement::EqualSetVariable { object: name, value, op } => {
+                    let value = self.parse_expression(value)?;
+                    let object = self.object_context_window.get_or_error(name)?;
+
+                    let object_type = self.object_factory.get_type(object);
+                    let Some(result_type) = ObjType::from_operation(&value.typee, object_type, op) else {
+                        return Err(CE::IncorrectTwoOper { type1: value.typee, type2: object_type.clone(), op: *op })
+                    };
+                    assert_eq!(&result_type, object_type, "EqualSet should not change type");
+
+                    let object_value = TypedExpression::new(object_type.clone(), LinkedExpression::Variable(object));
+                    let result_expression = TypedExpression::new(
+                        result_type,
+                        LinkedExpression::new_operation(object_value, value, *op)
+                    );
+                    LinkedStatement::new_set(object, result_expression)
+                }
                 Statement::Expression(expression) => {
                     let expression = self.parse_expression(expression)?;
                     LinkedStatement::Expression(expression)

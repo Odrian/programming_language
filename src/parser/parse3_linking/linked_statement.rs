@@ -1,6 +1,5 @@
 use std::fmt;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
-
 use super::object::{Object, ObjType};
 
 #[derive(Debug, Clone)]
@@ -13,6 +12,7 @@ pub struct TypedExpression<'text> {
 pub enum LinkedStatement<'text> {
     VariableDeclaration { object: Object<'text>, value: TypedExpression<'text> },
     SetVariable { object: Object<'text>, value: TypedExpression<'text> },
+
     Expression(TypedExpression<'text>),
     If { condition: TypedExpression<'text>, body: Vec<Self> },
     While { condition: TypedExpression<'text>, body: Vec<Self> },

@@ -10,6 +10,9 @@ pub fn reorder_statements(statements: Vec<Statement>) -> Vec<Statement> {
             Statement::SetVariable { object, value } => {
                 Statement::SetVariable { object, value: reorder_expression(value) }
             }
+            Statement::EqualSetVariable { object, value, op } => {
+                Statement::EqualSetVariable { object, value: reorder_expression(value), op }
+            }
             Statement::Expression(expression) => {
                 Statement::Expression(reorder_expression(expression))
             }

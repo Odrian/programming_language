@@ -43,7 +43,6 @@ fn test_set() {
     assert_has_error("cat + cat = cat");
     assert_has_error("cat + 4 = cat");
     assert_has_error("cat + cat");
-    assert_has_error("cat += cat");
     assert_has_error("cat =+ cat");
     assert_has_error("cat = +cat");
     assert_has_error("cat == cat");
@@ -100,6 +99,18 @@ fn test_two_sided_ops() {
     assert_no_error("a := (a * (a / (a + (a - a))))");
     
     // correct order is tested at compiling
+}
+
+#[test]
+fn test_equal_set() {
+    assert_no_error("a += a");
+    assert_no_error("a -= a");
+    assert_no_error("a *= a");
+    assert_no_error("a /= a");
+    // assert_no_error("a &= a");
+    // assert_no_error("a &&= a");
+    // assert_no_error("a |= a");
+    // assert_no_error("a ||= a");
 }
 
 #[test]
