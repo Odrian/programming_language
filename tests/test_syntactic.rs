@@ -137,7 +137,11 @@ fn test_if_while() {
 }
 
 #[test]
-fn test_compare() {
+fn test_operations() {
+    assert_no_error("a := a & a");
+    assert_no_error("a := a | a");
+    assert_no_error("a := a & a | a");
+
     assert_no_error("if a != b {}");
     assert_no_error("while a != b {}");
     assert_no_error("while a == b {}");
@@ -145,10 +149,7 @@ fn test_compare() {
     assert_no_error("while a < b {}");
     assert_no_error("while a >= b {}");
     assert_no_error("while a <= b {}");
-}
 
-#[test]
-fn test_bool_ops() {
     assert_no_error("if a && c {}");
     assert_no_error("if a || c {}");
     assert_no_error("if a || c && d {}");

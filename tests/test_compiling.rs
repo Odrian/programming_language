@@ -62,6 +62,9 @@ main :: () -> i32 {
     return foo()
 }
 "));
+
+    assert_eq!(10, check_single_expression("8|3&6"));
+    assert_eq!(10, check_single_expression("3&6|8"));
 }
 
 #[test]

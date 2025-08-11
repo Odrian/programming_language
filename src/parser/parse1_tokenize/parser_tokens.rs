@@ -167,8 +167,7 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 if char_2th == Some('&') {
                     state.add(2, Some(BoolOperation::And.into())); // &&
                 } else {
-                    // state.add(1, Some(NumberOperation::BinAnd.into())); // &
-                    todo!()
+                    state.add(1, Some(NumberOperation::BitAnd.into())); // &
                 }
             }
             '|' => {
@@ -176,8 +175,7 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 if char_2th == Some('|') {
                     state.add(2, Some(BoolOperation::Or.into())); // ||
                 } else {
-                    // state.add(1, Some(NumberOperation::BinOr.into())); // |
-                    todo!()
+                    state.add(1, Some(NumberOperation::BitOr.into())); // |
                 }
             }
             ',' => {
