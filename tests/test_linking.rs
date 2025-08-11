@@ -40,6 +40,13 @@ fn test_variables() {
 }
 
 #[test]
+fn test_literals() {
+    assert_no_error("a := true");
+    assert_no_error("a := false");
+    assert_no_error("a := 0.0");
+}
+
+#[test]
 fn test_compare() {
     assert_no_error("cat := 0 == 0");
     assert_no_error("cat := 0 != 0");

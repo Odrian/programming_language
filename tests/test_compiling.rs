@@ -23,34 +23,34 @@ fn get_exit_code(text: &str) -> i32 {
     code.unwrap().code().unwrap()
 }
 
-fn check_single_expression(text: &str) -> i32 {
+fn get_main_return(text: &str) -> i32 {
     let program = "\
 main :: () -> i32 {
-    return ".to_owned() + text + "
+    ".to_owned() + text + "
 }
 ";
     get_exit_code(&program)
 }
 
+fn get_single_expression(text: &str) -> i32 {
+    get_main_return(&format!("return {text}"))
+}
+
 #[test]
 fn test_simplest() {
-    assert_eq!(5, check_single_expression("5"));
+    assert_eq!(5, get_single_expression("5"));
 
-    assert_eq!(3, check_single_expression("1 + 2"));
+    assert_eq!(3, get_single_expression("1 + 2"));
 
-    assert_eq!(7, get_exit_code("\
-main :: () -> i32 {
-    a := 7
-    return a
-}
+    assert_eq!(7, get_main_return("\
+a := 7
+return a
 "));
 
-    assert_eq!(9, get_exit_code("\
-main :: () -> i32 {
-    a := 7
-    a = 9
-    return a
-}
+    assert_eq!(9, get_main_return("\
+a := 7
+a = 9
+return a
 "));
 
     assert_eq!(12, get_exit_code("\
@@ -63,8 +63,8 @@ main :: () -> i32 {
 }
 "));
 
-    assert_eq!(10, check_single_expression("8|3&6"));
-    assert_eq!(10, check_single_expression("3&6|8"));
+    assert_eq!(10, get_single_expression("8|3&6"));
+    assert_eq!(10, get_single_expression("3&6|8"));
 }
 
 #[test]
@@ -130,11 +130,11 @@ main :: () -> i32 {
 
 #[test]
 fn test_operation_order() {
-    assert_eq!(5, check_single_expression("1 + 2 * 2"));
-    assert_eq!(5, check_single_expression("2 * 2 + 1"));
-    assert_eq!(6, check_single_expression("1 + 2 * 2 + 1"));
-    assert_eq!(13, check_single_expression("2 * 2 + 3 * 3"));
-    assert_eq!(22, check_single_expression("2 * 2 + 3 * 3 + 1 * 7 + 1 + 1"));
+    assert_eq!(5, get_single_expression("1 + 2 * 2"));
+    assert_eq!(5, get_single_expression("2 * 2 + 1"));
+    assert_eq!(6, get_single_expression("1 + 2 * 2 + 1"));
+    assert_eq!(13, get_single_expression("2 * 2 + 3 * 3"));
+    assert_eq!(22, get_single_expression("2 * 2 + 3 * 3 + 1 * 7 + 1 + 1"));
 }
 
 #[test]
@@ -170,6 +170,9 @@ main :: () -> i32 {
 }
 ";
     assert_eq!(3 * 2 + 1, get_exit_code(program));
+    
+    assert_eq!(3, get_main_return("if true  { return 3 } return 4"));
+    assert_eq!(4, get_main_return("if false { return 3 } return 4"));
 }
 
 #[test]

@@ -140,7 +140,12 @@ impl<'text, 'a> ParsingState<'text, 'a> {
         self.index += 1;
         match &token.token {
             Token::String(string) => {
-                let expression1 = Expression::Variable(string);
+                let s = string.iter().collect::<String>();
+                let expression1 = match s.as_str() {
+                    "true" => Expression::BoolLiteral(true),
+                    "false" => Expression::BoolLiteral(false),
+                    _ => Expression::Variable(string),
+                };
                 self.parse_expression2(expression1)
             }
             Token::NumberLiteral(value) => {

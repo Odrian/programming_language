@@ -198,7 +198,6 @@ mod function_parsing {
         }
 
         fn parse_expression(&self, expression: &TypedExpression) -> Result<BasicValueEnum<'ctx>, CE> {
-            let i32_type = self.context.i32_type();
             match &expression.expr {
                 LinkedExpression::FunctionCall { object, args } => {
                     let args: Vec<_> = args.iter().map(|a|
@@ -214,7 +213,11 @@ mod function_parsing {
                 },
                 LinkedExpression::NumberLiteral(literal) => {
                     let number = literal.iter().collect::<String>().parse::<i32>().unwrap();
-                    Ok(i32_type.const_int(number as u64, false).into())
+                    Ok(self.context.i32_type().const_int(number as u64, false).into())
+                }
+                LinkedExpression::BoolLiteral(value) => {
+                    let number = match value { true => 1, false => 0 };
+                    Ok(self.context.bool_type().const_int(number, false).into())
                 }
                 LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed),
                 LinkedExpression::Variable(object) => {

@@ -24,7 +24,8 @@ pub enum LinkedStatement<'text> {
 pub enum LinkedExpression<'text> {
     Operation(Box<TypedExpression<'text>>, Box<TypedExpression<'text>>, TwoSidedOperation),
     UnaryOperation(Box<TypedExpression<'text>>, OneSidedOperation),
-    NumberLiteral(&'text [char]),
+    NumberLiteral(&'text [char]), // TODO: parse literals on linking step
+    BoolLiteral(bool),
     Variable(Object<'text>),
     RoundBracket(Box<TypedExpression<'text>>),
     FunctionCall { object: Object<'text>, args: Vec<TypedExpression<'text>> },
@@ -120,6 +121,10 @@ impl fmt::Display for LinkedExpression<'_> {
                 write!(f, "{op}{ex}")
             }
             Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
+            Self::BoolLiteral(value) => match value {
+                true => write!(f, "true"),
+                false => write!(f, "false"),
+            }
             Self::Variable(object) => write!(f, "{object}"),
             Self::RoundBracket(expression) => write!(f, "({expression})"),
             Self::FunctionCall { object, args } => {

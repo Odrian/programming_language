@@ -18,7 +18,10 @@ pub enum Statement<'text> {
 pub enum Expression<'text> {
     Operation(Box<Self>, Box<Self>, TwoSidedOperation),
     UnaryOperation(Box<Self>, OneSidedOperation),
+
     NumberLiteral(&'text [char]),
+    BoolLiteral(bool),
+
     Variable(&'text [char]),
     RoundBracket(Box<Self>),
     FunctionCall { object: &'text [char], args: Vec<Self> },
@@ -129,6 +132,10 @@ impl fmt::Display for Expression<'_> {
                 write!(f, "{op}{ex}")
             }
             Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
+            Self::BoolLiteral(value) => match value {
+                true => write!(f, "true"),
+                false => write!(f, "false"),
+            }
             Self::Variable(name) => write!(f, "{}", name.iter().collect::<String>()),
             Self::RoundBracket(expression) => write!(f, "({expression})"),
             Self::FunctionCall { object: name, args } => {

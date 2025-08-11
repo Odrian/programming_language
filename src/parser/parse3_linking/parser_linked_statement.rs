@@ -175,6 +175,12 @@ impl<'text> LinkingContext<'text, '_> {
                     LinkedExpression::NumberLiteral(string),
                 )
             },
+            Expression::BoolLiteral(value) => {
+                TypedExpression::new(
+                    ObjType::Bool,
+                    LinkedExpression::BoolLiteral(*value),
+                )
+            }
             Expression::RoundBracket(ex1) => {
                 let ex1 = self.parse_expression(ex1)?;
                 TypedExpression::new(ex1.typee.clone(), LinkedExpression::new_round_bracket(ex1))
