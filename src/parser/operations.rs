@@ -1,6 +1,12 @@
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum OneSidedOperation {
+    BoolNot,
+    UnaryMinus,
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TwoSidedOperation {
     Number(NumberOperation),
     Bool(BoolOperation),
@@ -75,6 +81,16 @@ impl From<BoolOperation> for TwoSidedOperation {
 impl From<CompareOperator> for TwoSidedOperation {
     fn from(value: CompareOperator) -> Self {
         Self::Compare(value)
+    }
+}
+
+impl fmt::Display for OneSidedOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let op_char = match self {
+            Self::BoolNot =>        "!",
+            Self::UnaryMinus => "-"
+        };
+        write!(f, "{op_char}")
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::error::CompilationError as CE;
-use crate::parser::two_sided_operation::TwoSidedOperation;
+use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse2_syntactic::statement::*;
 use super::linked_statement::*;
 use super::object::{ObjectFactory, ObjType};
@@ -131,15 +131,25 @@ impl<'text> LinkingContext<'text, '_> {
 
     fn parse_expression(&mut self, expression: &Expression<'text>) -> Result<TypedExpression<'text>, CE> {
         let linked: TypedExpression = match expression {
-            Expression::TwoSidedOp(expression1, expression2, op) => {
+            Expression::Operation(expression1, expression2, op) => {
                 let ex1 = self.parse_expression(expression1)?;
                 let ex2 = self.parse_expression(expression2)?;
-                let Some(result_type) = ObjType::from_two_op(&ex1.typee, &ex2.typee, op) else {
+                let Some(result_type) = ObjType::from_operation(&ex1.typee, &ex2.typee, op) else {
                     return Err(CE::IncorrectTwoOper { type1: ex1.typee, type2: ex2.typee, op: *op })
                 };
                 TypedExpression::new(
                     result_type,
-                    LinkedExpression::new_two_sided_op(ex1, ex2, *op)
+                    LinkedExpression::new_operation(ex1, ex2, *op)
+                )
+            }
+            Expression::UnaryOperation(expression, op) => {
+                let ex = self.parse_expression(expression)?;
+                let Some(result_type) = ObjType::from_unary_operation(&ex.typee, op) else {
+                    return Err(CE::IncorrectOneOper { typee: ex.typee, op: *op })
+                };
+                TypedExpression::new(
+                    result_type,
+                    LinkedExpression::new_unary_operation(ex, *op)
                 )
             }
             Expression::NumberLiteral(string) => {
@@ -219,7 +229,25 @@ fn check_is_returns(statements: &[LinkedStatement]) -> bool {
 }
 
 impl ObjType {
-    fn from_two_op(type1: &ObjType, type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
+    fn from_unary_operation(typee: &ObjType, one_sided_operation: &OneSidedOperation) -> Option<ObjType> {
+        match one_sided_operation {
+            OneSidedOperation::BoolNot => {
+                if typee == &ObjType::Bool {
+                    Some(ObjType::Bool)
+                } else {
+                    None
+                }
+            }
+            OneSidedOperation::UnaryMinus => {
+                if typee == &ObjType::Number {
+                    Some(ObjType::Number)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+    fn from_operation(type1: &ObjType, type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
         match two_sided_operation {
             TwoSidedOperation::Number(_) => {
                 if type1 == &ObjType::Number && type2 == &ObjType::Number {

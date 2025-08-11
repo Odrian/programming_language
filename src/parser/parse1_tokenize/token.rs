@@ -1,5 +1,5 @@
 use crate::parser::{BracketType, PositionInFile};
-use crate::parser::two_sided_operation::*;
+use crate::parser::operations::*;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct TokenWithPos<'text> {
@@ -22,7 +22,8 @@ pub enum Token<'text> {
     Arrow,                      // ->
 
     EqualOperation(EqualOperation),
-    TwoSidedOperation(TwoSidedOperation),
+    Operation(TwoSidedOperation),
+    UnaryOperation(OneSidedOperation),
 
     Bracket(Vec<TokenWithPos<'text>>, BracketType),
 }
@@ -39,20 +40,26 @@ impl From<EqualOperation> for Token<'_> {
     }
 }
 
+impl From<OneSidedOperation> for Token<'_> {
+    fn from(value: OneSidedOperation) -> Self {
+        Self::UnaryOperation(value)
+    }
+}
+
 impl From<NumberOperation> for Token<'_> {
     fn from(value: NumberOperation) -> Self {
-        Self::TwoSidedOperation(TwoSidedOperation::Number(value))
+        Self::Operation(TwoSidedOperation::Number(value))
     }
 }
 
 impl From<BoolOperation> for Token<'_> {
     fn from(value: BoolOperation) -> Self {
-        Self::TwoSidedOperation(TwoSidedOperation::Bool(value))
+        Self::Operation(TwoSidedOperation::Bool(value))
     }
 }
 
 impl From<CompareOperator> for Token<'_> {
     fn from(value: CompareOperator) -> Self {
-        Self::TwoSidedOperation(TwoSidedOperation::Compare(value))
+        Self::Operation(TwoSidedOperation::Compare(value))
     }
 }

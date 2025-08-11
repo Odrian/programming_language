@@ -1,6 +1,6 @@
 use crate::error::CompilationError as CE;
 use crate::parser::{BracketType, PositionInFile};
-
+use crate::parser::operations::{NumberOperation, OneSidedOperation, TwoSidedOperation};
 use super::statement::*;
 use crate::parser::parse1_tokenize::token::*;
 
@@ -76,7 +76,7 @@ impl<'text, 'a> ParsingState<'text, 'a> {
             Token::Bracket(_, _) => {
                 Err(CE::SyntacticsError(token.position, format!("unexpected bracket open at {}, expected statement", token.position)))
             }
-            Token::NumberLiteral(_) | Token::TwoSidedOperation(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon | Token::Arrow => {
+            _ => {
                 Err(CE::SyntacticsError(token.position, String::from("expected statement")))
             }
         }
@@ -153,10 +153,21 @@ impl<'text, 'a> ParsingState<'text, 'a> {
                 let expression1 = Expression::new_round_bracket(expression);
                 self.parse_expression2(expression1)
             }
+            Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)) => {
+                let op = OneSidedOperation::UnaryMinus;
+                let expression = self.parse_expression(token.position)?;
+                let unary_expression = Expression::new_unary_operation(expression, op);
+                Ok(unary_expression)
+            }
+            Token::UnaryOperation(op) => {
+                let expression = self.parse_expression(token.position)?;
+                let unary_expression = Expression::new_unary_operation(expression, *op);
+                Ok(unary_expression)
+            }
             Token::Bracket(_, _) => {
                 Err(CE::SyntacticsError(token.position, String::from("expected expression, got open bracket")))
             }
-            Token::TwoSidedOperation(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon | Token::Arrow => {
+            _ => {
                 Err(CE::SyntacticsError(token.position, String::from("expected expression")))
             }
         }
@@ -168,10 +179,10 @@ impl<'text, 'a> ParsingState<'text, 'a> {
         }
         let token = &self.tokens[self.index];
         match &token.token {
-            Token::TwoSidedOperation(op) => {
+            Token::Operation(op) => {
                 self.index += 1;
                 let expression2 = self.parse_expression(token.position)?;
-                Ok(Expression::new_two_sided_op(expression1, expression2, *op))
+                Ok(Expression::new_operation(expression1, expression2, *op))
             }
             Token::Bracket(vec, BracketType::Round) => {
                 self.index += 1;
@@ -181,7 +192,8 @@ impl<'text, 'a> ParsingState<'text, 'a> {
                 let args = parse_function_arguments(vec, token.position)?;
                 self.parse_expression2(Expression::new_function_call(name, args))
             }
-            Token::Bracket(_, _) | Token::String(_) | Token::NumberLiteral(_) | Token::EqualOperation(_) | Token::Comma | Token::Colon | Token::DoubleColon | Token::Arrow => {
+            _ => {
+                // FIXME: bad for debugging
                 Ok(expression1)
             }
         }

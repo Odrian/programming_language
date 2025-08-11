@@ -1,5 +1,5 @@
 use crate::error::CompilationError as CE;
-use crate::parser::two_sided_operation::*;
+use crate::parser::operations::*;
 use crate::parser::parse3_linking::linked_statement::*;
 use super::context_window::ValueContextWindow;
 
@@ -223,7 +223,20 @@ mod function_parsing {
                     let value = self.builder.build_load(value_type, pointer, "load")?;
                     Ok(value)
                 }
-                LinkedExpression::TwoSidedOp(ex1, ex2, op) => {
+                LinkedExpression::UnaryOperation(exp, op) => {
+                    let exp_parsed = self.parse_expression(exp)?;
+                    match op {
+                        OneSidedOperation::BoolNot => {
+                            let num = exp_parsed.into_int_value();
+                            Ok(self.builder.build_not(num, "not")?.into())
+                        }
+                        OneSidedOperation::UnaryMinus => {
+                            let num = exp_parsed.into_int_value();
+                            Ok(self.builder.build_int_neg(num, "neg")?.into())
+                        }
+                    }
+                }
+                LinkedExpression::Operation(ex1, ex2, op) => {
                     let ex1_parsed = self.parse_expression(ex1)?;
                     let ex2_parsed = self.parse_expression(ex2)?;
                     match op {

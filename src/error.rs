@@ -1,7 +1,7 @@
 use std::fmt;
 use inkwell::builder::BuilderError;
 use crate::parser::{PositionInFile, BracketType};
-use crate::parser::two_sided_operation::TwoSidedOperation;
+use crate::parser::operations::{TwoSidedOperation, OneSidedOperation};
 use crate::parser::parse3_linking::object::ObjType;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -28,8 +28,8 @@ pub enum CompilationError {
     LinkingErrorFunctionUsage { name: String },
     UnexpectedReturn,
     IncorrectType { got: ObjType, expected: ObjType },
+    IncorrectOneOper { typee: ObjType, op: OneSidedOperation },
     IncorrectTwoOper { type1: ObjType, type2: ObjType, op: TwoSidedOperation },
-    ArgumentTypeMismatch, // FIXME
     NoMainFunction,
     UnexpectedGlobalVariable,
     FunctionMustReturn { function_name: String },
@@ -103,11 +103,11 @@ impl fmt::Display for CompilationError {
             Self::IncorrectType { got, expected } => {
                 write!(f, "Error: incorrect type, got {got}, expected {expected}")
             }
-            Self::IncorrectTwoOper { .. } => {
-                write!(f, "Error: can't do this two-sided operation") // FIXME
+            Self::IncorrectOneOper { typee, op } => {
+                write!(f, "Error: can't use '{op}' to '{typee}'")
             }
-            Self::ArgumentTypeMismatch => {
-                write!(f, "Error: incorrect function argument type")
+            Self::IncorrectTwoOper { type1, type2, op } => {
+                write!(f, "Error: can't use '{op}' between '{type1}' and '{type2}'")
             }
             Self::NoMainFunction => {
                 write!(f, "Error: No 'main' function")

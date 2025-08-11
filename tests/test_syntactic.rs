@@ -1,6 +1,6 @@
 use programming_language::error::CompilationError as CE;
 use programming_language::parser::*;
-use programming_language::parser::two_sided_operation::*;
+use programming_language::parser::operations::*;
 use programming_language::parser::parse2_syntactic::statement::*;
 
 fn parse(text: &[char]) -> Result<Vec<Statement>, CE> {
@@ -72,10 +72,10 @@ fn test_set_with_brackets() {
         Ok(vec![Statement::new_variable(
             v_cat,
             None,
-            Expression::new_two_sided_op(
+            Expression::new_operation(
                 variable.clone(),
                 Expression::new_round_bracket(
-                    Expression::new_two_sided_op(variable.clone(), variable.clone(), NumberOperation::Add.into())
+                    Expression::new_operation(variable.clone(), variable.clone(), NumberOperation::Add.into())
                 ),
                 NumberOperation::Add.into()
             )
@@ -89,9 +89,9 @@ fn test_minus() {
     assert_no_error("a := 0 - 0 a = 0 - a");
     assert_no_error("a := 0 - 0 a = a - 0");
 
-    assert_has_error("a := -1");
-    assert_has_error("a := --1");
-    assert_has_error("a := 0 a = -a");
+    assert_no_error("a := -1");
+    assert_no_error("a := --1");
+    assert_no_error("a := 0 a = -a");
 }
 
 #[test]
@@ -156,6 +156,9 @@ fn test_operations() {
     assert_no_error("if a && c || d {}");
     assert_no_error("if a == b && c == d {}");
     assert_no_error("if a == b || c == d {}");
+
+    assert_no_error("if !a {}");
+    assert_no_error("if -a {}");
 }
 
 #[test]
@@ -209,7 +212,7 @@ fn test_function() {
                 set_expr.clone(),
             ])])
     );
-    let another_set_expr = Statement::new_variable(v_owl, None, Expression::new_two_sided_op(
+    let another_set_expr = Statement::new_variable(v_owl, None, Expression::new_operation(
         Expression::Variable(v_dog), Expression::Variable(v_kitten), NumberOperation::Add.into()
     ));
     assert_result(
@@ -235,7 +238,7 @@ fn test_function_with_while() {
     let set_statement = Statement::new_variable(
         arg2,
         None,
-        Expression::new_two_sided_op(
+        Expression::new_operation(
             Expression::Variable(arg2),
             Expression::NumberLiteral(v_1),
             NumberOperation::Add.into()

@@ -1,5 +1,5 @@
 use std::fmt;
-use crate::parser::two_sided_operation::TwoSidedOperation;
+use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 
 // FIXME: don't need abstraction
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -7,7 +7,6 @@ pub enum TStatement<'text, Obj> {
     VariableDeclaration { object: Obj, typee: Option<Typee<'text>>, value: TExpression<'text, Obj> },
     SetVariable { object: Obj, value: TExpression<'text, Obj> },
     Expression(TExpression<'text, Obj>),
-    // Bracket(Box<Vec<Statement>>, BracketType),
     If { condition: TExpression<'text, Obj>, body: Vec<Self> },
     While { condition: TExpression<'text, Obj>, body: Vec<Self> },
     Function { object: Obj, args: Vec<(Obj, Typee<'text>)>, returns: Option<Typee<'text>>, body: Vec<Self> },
@@ -16,7 +15,8 @@ pub enum TStatement<'text, Obj> {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum TExpression<'text, Obj> {
-    TwoSidedOp(Box<Self>, Box<Self>, TwoSidedOperation),
+    Operation(Box<Self>, Box<Self>, TwoSidedOperation),
+    UnaryOperation(Box<Self>, OneSidedOperation),
     NumberLiteral(&'text [char]),
     Variable(Obj),
     RoundBracket(Box<Self>),
@@ -49,8 +49,11 @@ impl<'text, Obj> TStatement<'text, Obj> {
     }
 }
 impl<'text, Obj> TExpression<'text, Obj> {
-    pub fn new_two_sided_op(expression1: Self, expression2: Self, op: TwoSidedOperation) -> Self {
-        Self::TwoSidedOp(Box::new(expression1), Box::new(expression2), op)
+    pub fn new_operation(expression1: Self, expression2: Self, op: TwoSidedOperation) -> Self {
+        Self::Operation(Box::new(expression1), Box::new(expression2), op)
+    }
+    pub fn new_unary_operation(expression: Self, op: OneSidedOperation) -> Self {
+        Self::UnaryOperation(Box::new(expression), op)
     }
     pub fn new_round_bracket(expression: Self) -> Self {
         Self::RoundBracket(Box::new(expression))
@@ -115,9 +118,12 @@ impl fmt::Display for Statement<'_> {
 impl fmt::Display for Expression<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TwoSidedOp(a, b, op) => {
+            Self::Operation(a, b, op) => {
                 write!(f, "({a} {op} {b})")
             },
+            Self::UnaryOperation(ex, op) => {
+                write!(f, "{op}{ex}")
+            }
             Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
             Self::Variable(name) => write!(f, "{}", name.iter().collect::<String>()),
             Self::RoundBracket(expression) => write!(f, "({expression})"),

@@ -1,5 +1,5 @@
 use crate::parser::parse2_syntactic::statement::{Statement, Expression};
-use crate::parser::two_sided_operation::TwoSidedOperation;
+use crate::parser::operations::TwoSidedOperation;
 
 pub fn reorder_statements(statements: Vec<Statement>) -> Vec<Statement> {
     statements.into_iter().map(|statement| {
@@ -32,13 +32,16 @@ pub fn reorder_statements(statements: Vec<Statement>) -> Vec<Statement> {
 
 fn reorder_expression(expression: Expression) -> Expression {
     match expression {
-        Expression::TwoSidedOp(expression1, expression2, op) => {
-            let expr = Expression::TwoSidedOp(expression1, expression2, op);
+        Expression::Operation(expression1, expression2, op) => {
+            let expr = Expression::Operation(expression1, expression2, op);
             reorder_two_sided_expr(expr)
         }
+        Expression::UnaryOperation(expression, op) => {
+            Expression::new_unary_operation(reorder_expression(*expression), op)
+        },
         Expression::NumberLiteral(string) => Expression::NumberLiteral(string),
         Expression::RoundBracket(ex1) => {
-            Expression::RoundBracket(Box::new(reorder_expression(*ex1)))
+            Expression::new_round_bracket(reorder_expression(*ex1))
         }
         Expression::Variable(name) => Expression::Variable(name),
         Expression::FunctionCall { object, args } => {
@@ -50,7 +53,7 @@ fn reorder_expression(expression: Expression) -> Expression {
 
 fn reorder_two_sided_expr(exp: Expression) -> Expression {
     fn unwrap_expr<'a>(exp: Expression<'a>, exps: &mut Vec<Expression<'a>>, ops: &mut Vec<TwoSidedOperation>) {
-        if let Expression::TwoSidedOp(left, right, op) = exp {
+        if let Expression::Operation(left, right, op) = exp {
             unwrap_expr(*left, exps, ops);
             ops.push(op);
             unwrap_expr(*right, exps, ops);
@@ -75,7 +78,7 @@ fn reorder_two_sided_expr(exp: Expression) -> Expression {
         
         let left_exp = create_expression(exps, ops);
         let right_exp = create_expression(exps_right, ops_right);
-        Expression::new_two_sided_op(left_exp, right_exp, op_middle)
+        Expression::new_operation(left_exp, right_exp, op_middle)
     }
     
     create_expression(exps, ops)

@@ -2,7 +2,7 @@ use programming_language::error::CompilationError as CE;
 use programming_language::parser::*;
 use programming_language::parser::parse3_linking::linked_statement::*;
 use programming_language::parser::parse3_linking::object::*;
-use programming_language::parser::two_sided_operation::*;
+use programming_language::parser::operations::*;
 
 fn parse(text: &[char]) -> Result<(Vec<LinkedStatement>, ObjectFactory), CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
@@ -50,14 +50,19 @@ fn test_compare() {
 }
 
 #[test]
-fn test_bool_ops() {
-    fn assert_no_error1(string: &str) {
+fn test_operations() {
+    fn assert_no_error_bool(string: &str) {
         assert_no_error(&format!("a := 0 != 0 b := {string}"))
     }
+    fn assert_no_error_int(string: &str) {
+        assert_no_error(&format!("a := 0 b := {string}"))
+    }
 
-    assert_no_error1("a && a");
-    assert_no_error1("a || a");
-    assert_no_error1("a || a && a || a");
+    assert_no_error_int("-a");
+    assert_no_error_bool("!a");
+    assert_no_error_bool("a && a");
+    assert_no_error_bool("a || a");
+    assert_no_error_bool("a || a && a || a");
 }
 
 #[test]
@@ -114,7 +119,7 @@ fn test_function_with_while() {
     let LinkedExpression::Variable(value1) = &value1.expr else { panic!() };
 
     let LinkedStatement::While { condition, body: while_body } = &body[1] else { panic!() };
-    let LinkedExpression::TwoSidedOp(left, right, op) = &condition.expr else { panic!() };
+    let LinkedExpression::Operation(left, right, op) = &condition.expr else { panic!() };
     let LinkedExpression::Variable(condition_var) = left.expr else { panic!() };
     
     let LinkedExpression::NumberLiteral(zero) = right.expr else { panic!() };

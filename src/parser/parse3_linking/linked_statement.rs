@@ -1,5 +1,5 @@
 use std::fmt;
-use crate::parser::two_sided_operation::TwoSidedOperation;
+use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 
 use super::object::{Object, ObjType};
 
@@ -22,7 +22,8 @@ pub enum LinkedStatement<'text> {
 
 #[derive(Debug, Clone)]
 pub enum LinkedExpression<'text> {
-    TwoSidedOp(Box<TypedExpression<'text>>, Box<TypedExpression<'text>>, TwoSidedOperation),
+    Operation(Box<TypedExpression<'text>>, Box<TypedExpression<'text>>, TwoSidedOperation),
+    UnaryOperation(Box<TypedExpression<'text>>, OneSidedOperation),
     NumberLiteral(&'text [char]),
     Variable(Object<'text>),
     RoundBracket(Box<TypedExpression<'text>>),
@@ -54,8 +55,11 @@ impl<'text> LinkedStatement<'text> {
 }
 
 impl<'text> LinkedExpression<'text> {
-    pub fn new_two_sided_op(expression1: TypedExpression<'text>, expression2: TypedExpression<'text>, op: TwoSidedOperation) -> Self {
-        Self::TwoSidedOp(Box::new(expression1), Box::new(expression2), op)
+    pub fn new_operation(expression1: TypedExpression<'text>, expression2: TypedExpression<'text>, op: TwoSidedOperation) -> Self {
+        Self::Operation(Box::new(expression1), Box::new(expression2), op)
+    }
+    pub fn new_unary_operation(expression: TypedExpression<'text>, op: OneSidedOperation) -> Self {
+        Self::UnaryOperation(Box::new(expression), op)
     }
     pub fn new_round_bracket(expression: TypedExpression<'text>) -> Self {
         Self::RoundBracket(Box::new(expression))
@@ -109,9 +113,12 @@ impl fmt::Display for LinkedStatement<'_> {
 impl fmt::Display for LinkedExpression<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TwoSidedOp(a, b, op) => {
+            Self::Operation(a, b, op) => {
                 write!(f, "({a} {op} {b})")
             },
+            Self::UnaryOperation(ex, op) => {
+                write!(f, "{op}{ex}")
+            }
             Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
             Self::Variable(object) => write!(f, "{object}"),
             Self::RoundBracket(expression) => write!(f, "({expression})"),

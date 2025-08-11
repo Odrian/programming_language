@@ -1,7 +1,7 @@
 use programming_language::error::CompilationError as CE;
 use programming_language::parser::parse1_tokenize::{token::*, tokenize};
 use programming_language::parser::*;
-use programming_language::parser::two_sided_operation::*;
+use programming_language::parser::operations::*;
 
 fn map_remove_place(vec: Vec<TokenWithPos>) -> Vec<Token> {
     vec.into_iter().map(|x| x.token).collect()

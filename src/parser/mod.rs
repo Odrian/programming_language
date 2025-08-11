@@ -9,7 +9,7 @@ pub use position_in_file::PositionInFile;
 mod bracket_type;
 pub use bracket_type::BracketType;
 
-pub mod two_sided_operation;
+pub mod operations;
 
 use crate::error::CompilationError as CE;
 use std::fs;

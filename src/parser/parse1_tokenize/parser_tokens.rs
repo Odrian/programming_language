@@ -1,5 +1,5 @@
 use crate::error::CompilationError as CE;
-use crate::parser::{BracketType, PositionInFile, two_sided_operation::*};
+use crate::parser::{BracketType, PositionInFile, operations::*};
 
 use super::token::*;
 
@@ -116,8 +116,13 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                     state.add(1, Some(EqualOperation::Equal.into())); // =
                 }
             }
-            '!' if state.peek_nth_char(2) == Some('=') => {
-                state.add(2, Some(CompareOperator::NotEqual.into())); // !=
+            '!' => {
+                let char_2th = state.peek_nth_char(2);
+                if char_2th == Some('=') {
+                    state.add(2, Some(CompareOperator::NotEqual.into())); // !=
+                } else {
+                    state.add(1, Some(OneSidedOperation::BoolNot.into())); // !
+                }
             }
             '>' => {
                 let char_2th = state.peek_nth_char(2);
@@ -150,6 +155,7 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 if char_2th == Some('>') {
                     state.add(2, Some(Token::Arrow)); // ->
                 } else {
+                    // unary minus parsed at syntactic part
                     state.add(1, Some(NumberOperation::Sub.into())); // -
                 }
             }
