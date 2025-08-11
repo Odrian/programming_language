@@ -19,6 +19,7 @@ pub enum NumberOperation {
     Sub,
     Mul,
     Div,
+    Rem,
     BitAnd,
     BitOr,
 }
@@ -47,6 +48,7 @@ impl TwoSidedOperation {
                 NumberOperation::Sub => 4,
                 NumberOperation::Mul => 5,
                 NumberOperation::Div => 5,
+                NumberOperation::Rem => 5,
                 NumberOperation::BitAnd => 3,
                 NumberOperation::BitOr => 2,
             }
@@ -102,6 +104,7 @@ impl fmt::Display for TwoSidedOperation {
                 NumberOperation::Sub =>     "-",
                 NumberOperation::Mul =>     "*",
                 NumberOperation::Div =>     "/",
+                NumberOperation::Rem =>     "%",
                 NumberOperation::BitOr =>   "|",
                 NumberOperation::BitAnd =>  "&",
             }

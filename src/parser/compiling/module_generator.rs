@@ -248,6 +248,7 @@ mod function_parsing {
                                 NumberOperation::Sub => Ok(self.builder.build_int_sub(num1, num2, "sub")?.into()),
                                 NumberOperation::Mul => Ok(self.builder.build_int_mul(num1, num2, "mul")?.into()),
                                 NumberOperation::Div => Ok(self.builder.build_int_signed_div(num1, num2, "div")?.into()),
+                                NumberOperation::Rem => Ok(self.builder.build_int_signed_rem(num1, num2, "rem")?.into()),
                                 NumberOperation::BitAnd => Ok(self.builder.build_and(num1, num2, "bitand")?.into()),
                                 NumberOperation::BitOr => Ok(self.builder.build_or(num1, num2, "bitor")?.into()),
                             }

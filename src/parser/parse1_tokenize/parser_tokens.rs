@@ -146,11 +146,12 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                     _ =>         state.add(1, Some(NumberOperation::Sub.into())), // -
                 }
             }
-            '+' | '*' | '/' => {
+            '+' | '*' | '/' | '%' => {
                 let token: TwoSidedOperation = match char {
                     '+' => NumberOperation::Add.into(),
                     '*' => NumberOperation::Mul.into(),
                     '/' => NumberOperation::Div.into(),
+                    '%' => NumberOperation::Rem.into(),
                     _ => unreachable!()
                 };
                 match state.peek_nth_char(2) {

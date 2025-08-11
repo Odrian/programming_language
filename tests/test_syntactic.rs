@@ -95,8 +95,8 @@ fn test_minus() {
 
 #[test]
 fn test_two_sided_ops() {
-    assert_no_error("a := a * a / a + a - a");
-    assert_no_error("a := (a * (a / (a + (a - a))))");
+    assert_no_error("a := a * a / a + a - a % a");
+    assert_no_error("a := (a * (a / (a + (a - (a % a)))))");
     
     // correct order is tested at compiling
 }
@@ -107,6 +107,7 @@ fn test_equal_set() {
     assert_no_error("a -= a");
     assert_no_error("a *= a");
     assert_no_error("a /= a");
+    assert_no_error("a %= a");
     // assert_no_error("a &= a");
     // assert_no_error("a &&= a");
     // assert_no_error("a |= a");

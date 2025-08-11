@@ -179,12 +179,13 @@ foo :: (n: i32) -> i32 {
     n /= 2
     n -= 4
     n += 1
-    n *= 7
+    n *= 9
+    n %= 8
     return n
 }
 main :: () -> i32 {
     return foo(8)
 }
 ";
-    assert_eq!(7, get_exit_code(program));
+    assert_eq!(1, get_exit_code(program));
 }
