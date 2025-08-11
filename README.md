@@ -1,68 +1,83 @@
 # TODO
-* parse "x = y" (done)
-* parse if, while (done)
-* parse function (done)
-* linking (done)
-* compile with int8 type only (done)
 * add types (in progress)
+* add pointers
 * add arrays
+* import another files
+* add print/read function
+* add structs
+* add enums
+
+
+* add vararg
+* add default arguments
+* add function overloading
 
 # Programming language
 
-Variable declaration
+File can contain any number of functions. Each function must return at any scenario.
+```
+foo :: (argument : i32) {
+    return;
+}
+
+bar :: (argument : i32) -> i32 {
+    return 0;
+}
+```
+
+you can call functions with ```name(arg1, ...)```, redundant comma allowed.
+
+You can define variable as follows. Type annotation is sugar, type always can be determinate by value type
 ```
 name : type = value;
 name := value;
 ```
 
-Set variable
+Each variable and argument is mutable
 ```
 name = value;
+name += value;
+name %= value;
 ```
 
-If statement
+if and while condition is bool expression:
 ```
 if expression {
     ...
 }
-```
-
-Loop
-```
 while expression {
     ...
 }
 ```
 
-Function declaration
+Each statement in function must end with ';' except last in each scope, for example
 ```
-name :: (argument : type) -> result_type {
-    ...
-    return ...
+foo :: () {
+    a := 0;
+    if a > 0 {
+        b := 0;
+        b := 0
+    }
+    return a
 }
-
-name(argument)
 ```
 
-# Parsing algorithm
+### Operators precedence:  
+=, :=, _=  
+unary -, !  
+==, !=, >, >=, <, <=  
+*, /, %  
++, -  
+&  
+|  
+&&  
+||  
 
-input file must contain any number of statements
+### types
 
-## valid statements
+i32, bool
 
-* 'any expression'
-* name := expression
-* name = expression
-* if expression { 'any number of statements' }
-* while expression { 'any number of statements' }
-* name :: ('arguments') { 'any number of statements' }\
-  'arguments' - any number of name seperated with comma
-* return expression
+### literals
 
-## valid expression
-
-* name
-* number
-* (expression)
-* expression + expression
-* name()
+bool: true, false  
+i32: any number
