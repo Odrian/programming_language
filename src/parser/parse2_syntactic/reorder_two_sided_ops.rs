@@ -49,14 +49,14 @@ fn reorder_expression(expression: Expression) -> Expression {
         }
         Expression::Variable(name) => Expression::Variable(name),
         Expression::FunctionCall { object, args } => {
-            let args: Vec<Expression> = args.into_iter().map(|a| reorder_expression(a)).collect();
+            let args: Vec<Expression> = args.into_iter().map(reorder_expression).collect();
             Expression::FunctionCall { object, args }
         }
     }
 }
 
 fn reorder_two_sided_expr(exp: Expression) -> Expression {
-    fn unwrap_expr<'a>(exp: Expression<'a>, exps: &mut Vec<Expression<'a>>, ops: &mut Vec<TwoSidedOperation>) {
+    fn unwrap_expr(exp: Expression, exps: &mut Vec<Expression>, ops: &mut Vec<TwoSidedOperation>) {
         if let Expression::Operation(left, right, op) = exp {
             unwrap_expr(*left, exps, ops);
             ops.push(op);

@@ -41,12 +41,6 @@ pub enum CompilationError {
     FailedToRunLinker { description: String },
 }
 
-impl CompilationError {
-    pub fn string_from(chars: &[char]) -> String {
-        chars.iter().collect()
-    }
-}
-
 impl From<BuilderError> for CompilationError {
     fn from(value: BuilderError) -> Self {
         Self::LLVMError(value)

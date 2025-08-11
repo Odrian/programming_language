@@ -4,21 +4,18 @@ use programming_language::parser::parse3_linking::linked_statement::*;
 use programming_language::parser::parse3_linking::object::*;
 use programming_language::parser::operations::*;
 
-fn parse(text: &[char]) -> Result<(Vec<LinkedStatement>, ObjectFactory), CE> {
+fn parse(text: &str) -> Result<(Vec<LinkedStatement>, ObjectFactory), CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
-    let statements = parse2_syntactic::parse_statements(&tokens)?;
+    let statements = parse2_syntactic::parse_statements(tokens)?;
     let mut object_factory = ObjectFactory::default();
-    let linked_statements = parse3_linking::link_variables(&statements, &mut object_factory)?;
+    let linked_statements = parse3_linking::link_variables(statements, &mut object_factory)?;
     Ok((linked_statements, object_factory))
 }
-fn string_to_chars(s: &str) -> Vec<char> {
-    s.chars().collect()
-}
 fn assert_has_error(str: &str) {
-    assert_ne!(parse(&string_to_chars(str)).err(), None);
+    assert_ne!(parse(str).err(), None);
 }
 fn assert_no_error(str: &str) {
-    assert_eq!(parse(&string_to_chars(str)).err(), None);
+    assert_eq!(parse(str).err(), None);
 }
 
 #[test]
@@ -32,11 +29,11 @@ fn test_variables() {
     assert_has_error("dog := cat");
     assert_has_error("cat := (cat + 0)");
 
-    assert_no_error("cat := 0 cat = 0");
-    assert_no_error("cat := 0 cat := 0");
-    assert_no_error("cat := 0 dog := cat");
-    assert_no_error("cat := 0 dog := (cat + cat)");
-    assert_no_error("cat := 0 dog := (cat + cat)");
+    assert_no_error("cat := 0; cat = 0");
+    assert_no_error("cat := 0; cat := 0");
+    assert_no_error("cat := 0; dog := cat");
+    assert_no_error("cat := 0; dog := (cat + cat)");
+    assert_no_error("cat := 0; dog := (cat + cat)");
 }
 
 #[test]
@@ -59,10 +56,10 @@ fn test_compare() {
 #[test]
 fn test_operations() {
     fn assert_no_error_bool(string: &str) {
-        assert_no_error(&format!("a := 0 != 0 b := {string}"))
+        assert_no_error(&format!("a := false; b := {string}"))
     }
     fn assert_no_error_int(string: &str) {
-        assert_no_error(&format!("a := 0 b := {string}"))
+        assert_no_error(&format!("a := 0; b := {string}"))
     }
 
     assert_no_error_int("-a");
@@ -91,7 +88,7 @@ fn test_functions() {
     assert_has_error("a :: () { x := a }");
     assert_has_error("a :: () { } a :: () {}");
 
-    assert_no_error("a :: () { a := 0 x := a }");
+    assert_no_error("a :: () { a := 0; x := a }");
 }
 
 #[test]
@@ -101,46 +98,48 @@ fn test_function_with_while() {
     assert_has_error("a :: ()  {      while 0 != 0 { x := 0 } e := x }");
     assert_has_error("a :: (b: i32) { while b != 0 { x := 0 } e := x }");
 
-    let text = string_to_chars("a :: (b: i32) -> i32 { c := b while c != 0 { c = b } return c }");
-    let result = parse(&text);
-    let Ok((statements, object_factory)) = result else {
+    let text = "a :: (b: i32) -> i32 { c := b; while c != 0 { c = b } return c }";
+    let result = parse(text);
+    let Ok((mut statements, object_factory)) = result else {
         let err = result.err().unwrap();
         panic!("parsing error: {err}");
     };
     assert_eq!(statements.len(), 1);
-    let LinkedStatement::Function { object: function_object, args, returns, body } = &statements[0] else { panic!() };
+    let LinkedStatement::Function { object: function_object, args, returns, body } = statements.pop().unwrap() else { panic!() };
 
     assert!(matches!(returns, ObjType::Number), "{returns:?}");
 
-    let function_type = object_factory.get_type(*function_object);
+    let function_type = object_factory.get_type(function_object);
     assert!(matches!(function_type, ObjType::Function { .. }));
     let ObjType::Function { arguments, returns } = function_type else { unreachable!() };
     assert_eq!(arguments, &vec![ObjType::Number]);
     assert_eq!(returns.as_ref(), &ObjType::Number);
 
     assert_eq!(args.len(), 1);
-    let arg = &args[0];
+    let arg = args[0];
     assert_eq!(body.len(), 3);
+    
+    let mut body_iter = body.into_iter();
 
-    let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = &body[0] else { panic!() };
-    let LinkedExpression::Variable(value1) = &value1.expr else { panic!() };
+    let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = body_iter.next().unwrap() else { panic!() };
+    let LinkedExpression::Variable(value1) = value1.expr else { panic!() };
 
-    let LinkedStatement::While { condition, body: while_body } = &body[1] else { panic!() };
-    let LinkedExpression::Operation(left, right, op) = &condition.expr else { panic!() };
+    let LinkedStatement::While { condition, body: mut while_body } = body_iter.next().unwrap() else { panic!() };
+    let LinkedExpression::Operation(left, right, op) = condition.expr else { panic!() };
     let LinkedExpression::Variable(condition_var) = left.expr else { panic!() };
     
     let LinkedExpression::NumberLiteral(zero) = right.expr else { panic!() };
-    assert_eq!(zero, string_to_chars("0"));
+    assert_eq!(zero, "0");
 
-    assert_eq!(*op, CompareOperator::NotEqual.into());
+    assert_eq!(op, CompareOperator::NotEqual.into());
 
-    let LinkedStatement::Return(option_return) = &body[2] else { panic!() };
+    let LinkedStatement::Return(option_return) = body_iter.next().unwrap() else { panic!() };
     let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().expr else { panic!() };
-    assert_eq!(c_var.name, &string_to_chars("c"));
+    assert_eq!(object_factory.get_name(c_var), "c");
 
     assert_eq!(while_body.len(), 1);
-    let LinkedStatement::SetVariable { object: var2, value: value2 } = &while_body[0] else { panic!() };
-    let LinkedExpression::Variable(value2) = &value2.expr else { panic!() };
+    let LinkedStatement::SetVariable { object: var2, value: value2 } = while_body.pop().unwrap() else { panic!() };
+    let LinkedExpression::Variable(value2) = value2.expr else { panic!() };
     // arg = b
     // var1 = c
     // value1 = b
@@ -150,7 +149,7 @@ fn test_function_with_while() {
 
     assert_eq!(arg, value1);
     assert_eq!(arg, value2);
-    assert_eq!(var1, &condition_var);
+    assert_eq!(var1, condition_var);
     assert_eq!(var1, var2);
 }
 

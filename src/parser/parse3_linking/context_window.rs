@@ -3,24 +3,23 @@ use super::object::Object;
 use crate::error::CompilationError as CE;
 
 #[derive(Debug, Default)]
-struct ObjectsContext<'text>(HashMap<String, Object<'text>>);
+struct ObjectsContext(HashMap<String, Object>);
 
-impl<'text> ObjectsContext<'text> {
-    fn add(&mut self, object: Object<'text>) {
-        let name_string = object.name.iter().collect::<String>();
-        self.0.insert(name_string, object);
+impl ObjectsContext {
+    fn add(&mut self, name: String, object: Object) {
+        self.0.insert(name, object);
     }
-    fn get(&self, name: &String) -> Option<Object<'text>> {
+    fn get(&self, name: &String) -> Option<Object> {
         self.0.get(name).copied()
     }
 }
 
 #[derive(Debug)]
-pub struct ObjectContextWindow<'text> {
-    contexts: Vec<ObjectsContext<'text>>,
+pub struct ObjectContextWindow {
+    contexts: Vec<ObjectsContext>,
 }
 
-impl<'text> ObjectContextWindow<'text> {
+impl ObjectContextWindow {
     pub fn new() -> Self {
         ObjectContextWindow { contexts: vec![ObjectsContext::default()] }
     }
@@ -31,18 +30,17 @@ impl<'text> ObjectContextWindow<'text> {
         assert!(!self.contexts.is_empty(), "No more objects to step out!");
         self.contexts.pop();
     }
-    pub fn get(&self, name: &[char]) -> Option<Object<'text>> {
-        let name = name.iter().collect::<String>();
+    pub fn get(&self, name: &String) -> Option<Object> {
         self.contexts.iter().rev()
-            .find_map(|obj_con|obj_con.get(&name))
+            .find_map(|obj_con|obj_con.get(name))
     }
-    pub fn get_or_error(&self, name: &[char]) -> Result<Object<'text>, CE> {
+    pub fn get_or_error(&self, name: &String) -> Result<Object, CE> {
         match self.get(name) {
             Some(obj) => Ok(obj),
-            None => Err(CE::LinkingError { name: name.iter().collect::<String>(), context: format!("{self:?}") })
+            None => Err(CE::LinkingError { name: name.clone(), context: format!("{self:?}") })
         }
     }
-    pub fn add(&mut self, object: Object<'text>) {
-        self.contexts.last_mut().unwrap().add(object);
+    pub fn add(&mut self, name: String, object: Object) {
+        self.contexts.last_mut().unwrap().add(name, object);
     }
 }

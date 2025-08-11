@@ -3,27 +3,30 @@ use crate::parser::{BracketType, PositionInFile, operations::*};
 
 use super::token::*;
 
-pub fn parse_tokens(text: &[char]) -> Result<Vec<TokenWithPos>, CE> {
-    let (token, _) = parse_inside_brackets(text, 0, None)?;
+use std::str::Chars;
+
+pub fn parse_tokens(text: &str) -> Result<Vec<TokenWithPos>, CE> {
+    let (token, _) = parse_inside_brackets(&mut text.chars(), 0, None)?;
     let Token::Bracket(vec, _) = token.token else { unreachable!() };
     Ok(vec)
 }
 
 fn parse_inside_brackets(
-    text: &[char],
+    text: &mut Chars,
     start_index: usize,
     open_bracket_type: Option<BracketType>,
 ) -> Result<(TokenWithPos, usize), CE> {
     let mut result_tokens = Vec::new();
 
+    let mut buffer = String::new();
     let mut start_buffer_index = start_index;
     let mut index = start_index;
-    while index < text.len() {
-        let char = text[index];
+    while let Some(char) = text.next() {
         if let Some(bracket_type) = is_open_bracket(char) {
             // open bracket
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(&text[start_buffer_index..index], start_buffer_index);
+                let mut tokens = split_text_without_brackets(buffer, start_buffer_index);
+                buffer = String::new();
                 result_tokens.append(&mut tokens);
             }
 
@@ -49,18 +52,19 @@ fn parse_inside_brackets(
             }
 
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(&text[start_buffer_index..index], start_buffer_index);
+                let mut tokens = split_text_without_brackets(buffer, start_buffer_index);
                 result_tokens.append(&mut tokens);
             }
 
             let result_token = Token::Bracket(result_tokens, open_bracket_type);
             return Ok((TokenWithPos::new(result_token, PositionInFile::new(start_index, index)), index + 1));
         } else {
+            buffer.push(char);
             index += 1;
         }
     }
     if index != start_buffer_index {
-        let mut tokens = split_text_without_brackets(&text[start_buffer_index..index], start_buffer_index);
+        let mut tokens = split_text_without_brackets(buffer, start_buffer_index);
         result_tokens.append(&mut tokens);
     }
 
@@ -93,13 +97,14 @@ fn is_close_bracket(char: char) -> Option<BracketType> {
     }
 }
 
-pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<TokenWithPos> {
-    let mut state = TokenizeState::new(text, offset_index);
+pub fn split_text_without_brackets(text: String, offset_index: usize) -> Vec<TokenWithPos> {
+    let mut iter = text.chars().peekable();
+    let mut state = TokenizeState::new(offset_index);
 
     // let mut line = 1;
     // let mut column = 1;
 
-    while let Some(char) = state.peek_char() {
+    while let Some(char) = iter.next() {
         // split_state.update_place_info(PositionInFile::new(line, column));
         // column += 1;
         match char {
@@ -109,41 +114,64 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 // column = 1;
             }
             '=' => {
-                match state.peek_nth_char(2) {
-                    Some('=') => state.add(2, Some(CompareOperator::Equal.into())), // ==
-                    _ =>         state.add(1, Some(EqualOperation::Equal.into())), // =
+                if iter.peek() == Some(&'=') {
+                    iter.next();
+                    state.add(2, Some(CompareOperator::Equal.into())) // ==
+                } else {
+                    state.add(1, Some(EqualOperation::Equal.into())) // =
                 }
             }
             '!' => {
-                match state.peek_nth_char(2) {
-                    Some('=') => state.add(2, Some(CompareOperator::NotEqual.into())), // !=
-                    _ =>         state.add(1, Some(OneSidedOperation::BoolNot.into())), // !
+                match iter.peek() {
+                    Some('=') => {
+                        iter.next();
+                        state.add(2, Some(CompareOperator::NotEqual.into())) // !=
+                    },
+                    _ => state.add(1, Some(OneSidedOperation::BoolNot.into())), // !
                 }
             }
             '>' => {
-                match state.peek_nth_char(2) {
-                    Some('=') => state.add(2, Some(CompareOperator::GreaterEqual.into())), // >=
-                    _ =>         state.add(1, Some(CompareOperator::Greater.into())), // >
+                match iter.peek() {
+                    Some('=') => {
+                        iter.next();
+                        state.add(2, Some(CompareOperator::GreaterEqual.into())) // >=
+                    }
+                    _ => state.add(1, Some(CompareOperator::Greater.into())), // >
                 }
             }
             '<' => {
-                match state.peek_nth_char(2) {
-                    Some('=') => state.add(2, Some(CompareOperator::LessEqual.into())), // <=
-                    _ =>         state.add(1, Some(CompareOperator::Less.into())), // <
+                match iter.peek() {
+                    Some('=') => {
+                        iter.next();
+                        state.add(2, Some(CompareOperator::LessEqual.into())) // <=
+                    }
+                    _ => state.add(1, Some(CompareOperator::Less.into())), // <
                 }
             }
             ':' => {
-                match state.peek_nth_char(2) {
-                    Some('=') => state.add(2, Some(EqualOperation::ColonEqual.into())), // :=
-                    Some(':') => state.add(2, Some(Token::DoubleColon)), // ::
-                    _ =>         state.add(1, Some(Token::Colon)), // :
+                match iter.peek() {
+                    Some('=') => {
+                        iter.next();
+                        state.add(2, Some(EqualOperation::ColonEqual.into())) // :=
+                    }
+                    Some(':') => {
+                        iter.next();
+                        state.add(2, Some(Token::DoubleColon)) // ::
+                    }
+                    _ => state.add(1, Some(Token::Colon)), // :
                 }
             }
             '-' => {
-                match state.peek_nth_char(2) {
-                    Some('=') => state.add(2, Some(EqualOperation::OperationEqual(NumberOperation::Sub.into()).into())), // -=
-                    Some('>') => state.add(2, Some(Token::Arrow)), // ->
-                    _ =>         state.add(1, Some(NumberOperation::Sub.into())), // -
+                match iter.peek() {
+                    Some('=') => {
+                        iter.next();
+                        state.add(2, Some(EqualOperation::OperationEqual(NumberOperation::Sub.into()).into())) // -=
+                    }
+                    Some('>') => {
+                        iter.next();
+                        state.add(2, Some(Token::Arrow)) // ->
+                    }
+                    _ => state.add(1, Some(NumberOperation::Sub.into())), // -
                 }
             }
             '+' | '*' | '/' | '%' => {
@@ -154,25 +182,38 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                     '%' => NumberOperation::Rem.into(),
                     _ => unreachable!()
                 };
-                match state.peek_nth_char(2) {
-                    Some('=') => state.add(2, Some(EqualOperation::OperationEqual(token).into())), // +=
-                    _ =>         state.add(1, Some(token.into())), // +
+                match iter.peek() {
+                    Some('=') => {
+                        iter.next();
+                        state.add(2, Some(EqualOperation::OperationEqual(token).into())) // +=
+                    }
+                    _ => state.add(1, Some(token.into())), // +
                 }
             }
             '&' => {
-                match state.peek_nth_char(2) {
-                    Some('&') => state.add(2, Some(BoolOperation::And.into())), // &&
-                    _ =>         state.add(1, Some(NumberOperation::BitAnd.into())), // &
+                match iter.peek() {
+                    Some('&') => {
+                        iter.next();
+                        state.add(2, Some(BoolOperation::And.into())) // &&
+                    }
+                    _ => state.add(1, Some(NumberOperation::BitAnd.into())), // &
                 }
             }
             '|' => {
-                match state.peek_nth_char(2) {
-                    Some('|') => state.add(2, Some(BoolOperation::Or.into())), // ||
-                    _ =>         state.add(1, Some(NumberOperation::BitOr.into())), // |
+                match iter.peek() {
+                    Some('|') => {
+                        iter.next();
+                        state.add(2, Some(BoolOperation::Or.into())) // ||
+                    }
+                    _ => state.add(1, Some(NumberOperation::BitOr.into())), // |
                 }
             }
             ',' => {
                 let token = Token::Comma;
+                state.add(1, Some(token));
+            }
+            ';' => {
+                let token = Token::Semicolon;
                 state.add(1, Some(token));
             }
             '{' | '}' | '(' | ')' => {
@@ -182,7 +223,7 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
                 state.add(1, None);
             }
             _ => {
-                state.use_char_in_string();
+                state.use_char_in_string(char);
             }
         }
     }
@@ -191,36 +232,30 @@ pub fn split_text_without_brackets(text: &[char], offset_index: usize) -> Vec<To
 }
 
 /// guarantees that `buffer_start <= buffer_end <= text.len()`
-struct TokenizeState<'text> {
-    text: &'text [char],
-    tokens: Vec<TokenWithPos<'text>>,
+struct TokenizeState {
+    tokens: Vec<TokenWithPos>,
+    buffer: String,
     buffer_start: usize,
     buffer_end: usize,
     offset_index: usize,
 }
-impl<'text> TokenizeState<'text> {
-    fn new(text: &'text [char], offset_index: usize) -> Self {
+impl TokenizeState {
+    fn new(offset_index: usize) -> Self {
         Self {
-            text,
             tokens: Vec::new(),
+            buffer: String::new(),
             buffer_start: 0,
             buffer_end: 0,
             offset_index,
         }
     }
-    fn peek_char(&self) -> Option<char> {
-        self.text.get(self.buffer_end).copied()
-    }
-    /// counting from 1
-    fn peek_nth_char(&self, n: usize) -> Option<char> {
-        self.text.get(self.buffer_end + n - 1).copied()
-    }
 
-    fn use_char_in_string(&mut self) {
+    fn use_char_in_string(&mut self, char: char) {
         self.buffer_end += 1;
-        self.check_indexes();
+        self.buffer.push(char);
     }
-    fn add(&mut self, skip_chars: usize, token: Option<Token<'text>>) {
+    #[inline]
+    fn add(&mut self, skip_chars: usize, token: Option<Token>) {
         self.flush_buffer();
         if let Some(token) = token {
             let place_info = PositionInFile::new(self.offset_index + self.buffer_end, self.offset_index + self.buffer_end + skip_chars);
@@ -228,14 +263,13 @@ impl<'text> TokenizeState<'text> {
         }
         self.buffer_start += skip_chars;
         self.buffer_end += skip_chars;
-        self.check_indexes();
     }
 
     fn flush_buffer(&mut self) {
         if self.buffer_start != self.buffer_end {
-            let first_char = self.text[self.buffer_start];
+            let first_char = self.buffer.chars().next().unwrap();
 
-            let token_text = &self.text[self.buffer_start..self.buffer_end];
+            let token_text = self.buffer.split_off(0);
             let token = if first_char.is_ascii_digit() {
                 Token::NumberLiteral(token_text)
             } else {
@@ -246,8 +280,5 @@ impl<'text> TokenizeState<'text> {
                 .push(TokenWithPos::new(token, place_info));
         }
         self.buffer_start = self.buffer_end;
-    }
-    fn check_indexes(&self) {
-        assert!(self.buffer_end <= self.text.len(), "Unexpected end of string");
     }
 }

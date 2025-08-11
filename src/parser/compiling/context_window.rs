@@ -6,10 +6,10 @@ use crate::parser::parse3_linking::object::Object;
 struct ValueContext<'ctx>(HashMap<u32, AnyValueEnum<'ctx>>);
 
 impl<'ctx> ValueContext<'ctx> {
-    fn add(&mut self, object: &Object, value: AnyValueEnum<'ctx>) {
+    fn add(&mut self, object: Object, value: AnyValueEnum<'ctx>) {
         self.0.insert(object.id, value);
     }
-    fn get(&self, object: &Object) -> Option<&AnyValueEnum<'ctx>> {
+    fn get(&self, object: Object) -> Option<&AnyValueEnum<'ctx>> {
         self.0.get(&object.id)
     }
 }
@@ -30,17 +30,17 @@ impl<'ctx> ValueContextWindow<'ctx> {
         assert!(!self.contexts.is_empty(), "No more objects to step out!");
         self.contexts.pop();
     }
-    fn get(&self, object: &Object) -> Option<&AnyValueEnum<'ctx>> {
+    fn get(&self, object: Object) -> Option<&AnyValueEnum<'ctx>> {
         self.contexts.iter().rev()
             .find_map(|obj_con|obj_con.get(object))
     }
-    pub fn get_pointer_unwrap(&self, object: &Object) -> PointerValue<'ctx> {
+    pub fn get_pointer_unwrap(&self, object: Object) -> PointerValue<'ctx> {
         self.get(object).unwrap().into_pointer_value()
     }
-    pub fn get_function_unwrap(&self, object: &Object) -> FunctionValue<'ctx> {
+    pub fn get_function_unwrap(&self, object: Object) -> FunctionValue<'ctx> {
         self.get(object).unwrap().into_function_value()
     }
-    pub fn add(&mut self, object: &Object, value: AnyValueEnum<'ctx>) {
+    pub fn add(&mut self, object: Object, value: AnyValueEnum<'ctx>) {
         self.contexts.last_mut().unwrap().add(object, value)
     }
 }

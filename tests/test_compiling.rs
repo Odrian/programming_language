@@ -13,8 +13,7 @@ fn get_exit_code(text: &str) -> i32 {
         output: name,
         ..Default::default()
     };
-    let chars = text.chars().collect::<Vec<_>>();
-    programming_language::parser::parse(&chars, config).unwrap();
+    programming_language::parser::parse(text.to_owned(), config).unwrap();
     
     let code = Command::new(&path).status();
     let is_deleted = Command::new("rm").arg(&path).status().unwrap().success();
@@ -43,13 +42,13 @@ fn test_simplest() {
     assert_eq!(3, get_single_expression("1 + 2"));
 
     assert_eq!(7, get_main_return("\
-a := 7
+a := 7;
 return a
 "));
 
     assert_eq!(9, get_main_return("\
-a := 7
-a = 9
+a := 7;
+a = 9;
 return a
 "));
 
@@ -71,7 +70,7 @@ main :: () -> i32 {
 fn test_sum() {
     let program = "\
 sum :: (a: i32, b: i32) -> i32 {
-    c := a + b
+    c := a + b;
     return c
 }
 
@@ -108,14 +107,14 @@ main :: () -> i32 {
 fn test_fibonachi() {
     let program = "\
 fibonachi :: (n: i32) -> i32 {
-    f0 := 0
-    f1 := 1
+    f0 := 0;
+    f1 := 1;
     while n > 0 {
-        f0 = f0 + f1
-        temp := f0
-        f0 = f1
-        f1 = temp
-        n = n - 1
+        f0 = f0 + f1;
+        temp := f0;
+        f0 = f1;
+        f1 = temp;
+        n = n - 1;
     }
     return f0
 }
@@ -179,11 +178,11 @@ main :: () -> i32 {
 fn test_equal_set() {
     let program = "\
 foo :: (n: i32) -> i32 {
-    n /= 2
-    n -= 4
-    n += 1
-    n *= 9
-    n %= 8
+    n /= 2;
+    n -= 4;
+    n += 1;
+    n *= 9;
+    n %= 8;
     return n
 }
 main :: () -> i32 {

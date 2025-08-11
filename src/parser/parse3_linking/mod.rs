@@ -9,6 +9,6 @@ use crate::parser::parse2_syntactic::statement::Statement;
 use linked_statement::LinkedStatement;
 use object::ObjectFactory;
 
-pub fn link_variables<'text>(statement: &Vec<Statement<'text>>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement<'text>>, CE> {
+pub fn link_variables(statement: Vec<Statement>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement>, CE> {
     parser_linked_statement::link_names(statement, object_factory)
 }

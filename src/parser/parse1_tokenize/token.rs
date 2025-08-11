@@ -2,20 +2,21 @@ use crate::parser::{BracketType, PositionInFile};
 use crate::parser::operations::*;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct TokenWithPos<'text> {
-    pub token: Token<'text>,
+pub struct TokenWithPos {
+    pub token: Token,
     pub position: PositionInFile,
 }
-impl<'text> TokenWithPos<'text> {
-    pub fn new(token: Token<'text>, position: PositionInFile) -> Self {
+impl TokenWithPos {
+    pub fn new(token: Token, position: PositionInFile) -> Self {
         Self { token, position }
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Token<'text> {
-    String(&'text [char]),         // any String
-    NumberLiteral(&'text [char]),  // any String starting with a digit
+pub enum Token {
+    String(String),             // any String
+    NumberLiteral(String),      // any String starting with a digit
+    Semicolon,                  // ;
     Comma,                      // ,
     Colon,                      // :
     DoubleColon,                // ::
@@ -25,7 +26,7 @@ pub enum Token<'text> {
     Operation(TwoSidedOperation),
     UnaryOperation(OneSidedOperation),
 
-    Bracket(Vec<TokenWithPos<'text>>, BracketType),
+    Bracket(Vec<TokenWithPos>, BracketType),
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -35,37 +36,37 @@ pub enum EqualOperation {
     OperationEqual(TwoSidedOperation), // _=
 }
 
-impl From<EqualOperation> for Token<'_> {
+impl From<EqualOperation> for Token {
     fn from(value: EqualOperation) -> Self {
         Self::EqualOperation(value)
     }
 }
 
-impl From<OneSidedOperation> for Token<'_> {
+impl From<OneSidedOperation> for Token {
     fn from(value: OneSidedOperation) -> Self {
         Self::UnaryOperation(value)
     }
 }
 
-impl From<TwoSidedOperation> for Token<'_> {
+impl From<TwoSidedOperation> for Token {
     fn from(value: TwoSidedOperation) -> Self {
         Self::Operation(value)
     }
 }
 
-impl From<NumberOperation> for Token<'_> {
+impl From<NumberOperation> for Token {
     fn from(value: NumberOperation) -> Self {
         Self::Operation(TwoSidedOperation::Number(value))
     }
 }
 
-impl From<BoolOperation> for Token<'_> {
+impl From<BoolOperation> for Token {
     fn from(value: BoolOperation) -> Self {
         Self::Operation(TwoSidedOperation::Bool(value))
     }
 }
 
-impl From<CompareOperator> for Token<'_> {
+impl From<CompareOperator> for Token {
     fn from(value: CompareOperator) -> Self {
         Self::Operation(TwoSidedOperation::Compare(value))
     }

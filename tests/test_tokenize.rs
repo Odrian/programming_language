@@ -6,22 +6,18 @@ use programming_language::parser::operations::*;
 fn map_remove_place(vec: Vec<TokenWithPos>) -> Vec<Token> {
     vec.into_iter().map(|x| x.token).collect()
 }
-fn parse(text: &[char]) -> Result<Vec<Token>, CE> {
+fn parse(text: &str) -> Result<Vec<Token>, CE> {
     let tokens = tokenize(text);
     tokens.map(map_remove_place)
 }
-fn string_to_chars(s: &str) -> Vec<char> {
-    s.chars().collect()
-}
 fn assert_has_error(str: &str) {
-    assert_ne!(parse(&string_to_chars(str)).err(), None);
+    assert_ne!(parse(str).err(), None);
 }
 fn assert_no_error(str: &str) {
-    assert_eq!(parse(&string_to_chars(str)).err(), None);
+    assert_eq!(parse(str).err(), None);
 }
 fn assert_result(str: &str, result: Result<Vec<Token>, CE>) {
-    let chars = string_to_chars(str);
-    let actual = parse(&chars);
+    let actual = parse(str);
     assert!(token_equality(&actual, &result), "assertion `left == right` failed\n  left = {0:?}\n right = {1:?}", &actual, &result);
 }
 
@@ -68,20 +64,17 @@ fn text_empty_string() {
 
 #[test]
 fn test_token_colon() {
-    let v_cat = &string_to_chars("cat");
-    let v_dog = &string_to_chars("dog");
-
     assert_result(
         ":::dog::cat: :dog::::",
         Ok(vec![
             Token::DoubleColon,
             Token::Colon,
-            Token::String(v_dog),
+            Token::String("dog".to_owned()),
             Token::DoubleColon,
-            Token::String(v_cat),
+            Token::String("cat".to_owned()),
             Token::Colon,
             Token::Colon,
-            Token::String(v_dog),
+            Token::String("dog".to_owned()),
             Token::DoubleColon,
             Token::DoubleColon,
         ]),
@@ -90,13 +83,11 @@ fn test_token_colon() {
 
 #[test]
 fn test_token_colon_equal() {
-    let v_dog = &string_to_chars("dog");
-
     assert_result(
         ":= dog ::= :==",
         Ok(vec![
             Token::EqualOperation(EqualOperation::ColonEqual),
-            Token::String(v_dog),
+            Token::String("dog".to_owned()),
             Token::DoubleColon,
             Token::EqualOperation(EqualOperation::Equal),
             Token::EqualOperation(EqualOperation::ColonEqual),
@@ -126,7 +117,6 @@ fn test_parse_brackets() {
         ]),
     );
 
-    let v_cat = &"cat".chars().collect::<Vec<_>>();
     assert_result(
         "{:=+cat=cat}",
         Ok(vec![bracket_token(
@@ -134,9 +124,9 @@ fn test_parse_brackets() {
             vec![
                 Token::EqualOperation(EqualOperation::ColonEqual),
                 NumberOperation::Add.into(),
-                Token::String(v_cat),
+                Token::String("cat".to_owned()),
                 Token::EqualOperation(EqualOperation::Equal),
-                Token::String(v_cat),
+                Token::String("cat".to_owned()),
             ],
         )]),
     );
@@ -144,20 +134,16 @@ fn test_parse_brackets() {
 
 #[test]
 fn test_tokens() {
-    let v_cat = string_to_chars("cat");
-    let v_323 = string_to_chars("323");
-    let v_3d = string_to_chars("3d");
-
     assert_result(
         "cat+323,cat=3d{,(,),}",
         Ok(vec![
-            Token::String(&v_cat),
+            Token::String("cat".to_owned()),
             NumberOperation::Add.into(),
-            Token::NumberLiteral(&v_323),
+            Token::NumberLiteral("323".to_owned()),
             Token::Comma,
-            Token::String(&v_cat),
+            Token::String("cat".to_owned()),
             Token::EqualOperation(EqualOperation::Equal),
-            Token::NumberLiteral(&v_3d),
+            Token::NumberLiteral("3d".to_owned()),
             bracket_token(
                 BracketType::Curly,
                 vec![

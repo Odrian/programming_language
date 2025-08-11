@@ -12,28 +12,28 @@ use crate::parser::parse3_linking::linked_statement::*;
 use crate::parser::parse3_linking::object::ObjectFactory;
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(config: &Config, statements: &[LinkedStatement], object_factory: &ObjectFactory) -> Result<(), CE> {
+pub fn parse_to_llvm(config: &Config, statements: Vec<LinkedStatement>, object_factory: &ObjectFactory) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
+
+    if !verify_main_exist(&statements, object_factory) {
+        return Err(CE::NoMainFunction)
+    }
 
     let module = module_generator::parse_module(&context, statements, object_factory)?;
 
     if let Err(err) = module.verify() {
         return Err(CE::LLVMVerifyModuleError { llvm_error: err.to_string() });
     }
-    
-    if !verify_main_exist(statements) {
-        return Err(CE::NoMainFunction)
-    }
 
     create_executable(config, &module)?;
     Ok(())
 }
 
-fn verify_main_exist(statements: &[LinkedStatement]) -> bool {
+fn verify_main_exist(statements: &[LinkedStatement], object_factory: &ObjectFactory) -> bool {
     for statement in statements {
         if let LinkedStatement::Function { object, .. } = statement {
-            if object.name == ['m', 'a', 'i', 'n'] {
+            if object_factory.get_name(*object) == "main" {
                 // TODO: check that main has correct signature
                 return true
             }

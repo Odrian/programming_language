@@ -3,76 +3,76 @@ use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 use super::object::{Object, ObjType};
 
 #[derive(Debug, Clone)]
-pub struct TypedExpression<'text> {
+pub struct TypedExpression {
     pub typee: ObjType,
-    pub expr: LinkedExpression<'text >,
+    pub expr: LinkedExpression,
 }
 
 #[derive(Debug, Clone)]
-pub enum LinkedStatement<'text> {
-    VariableDeclaration { object: Object<'text>, value: TypedExpression<'text> },
-    SetVariable { object: Object<'text>, value: TypedExpression<'text> },
+pub enum LinkedStatement {
+    VariableDeclaration { object: Object, value: TypedExpression },
+    SetVariable { object: Object, value: TypedExpression },
 
-    Expression(TypedExpression<'text>),
-    If { condition: TypedExpression<'text>, body: Vec<Self> },
-    While { condition: TypedExpression<'text>, body: Vec<Self> },
-    Function { object: Object<'text>, args: Vec<Object<'text>>, returns: ObjType, body: Vec<Self> },
-    Return(Option<TypedExpression<'text>>)
+    Expression(TypedExpression),
+    If { condition: TypedExpression, body: Vec<Self> },
+    While { condition: TypedExpression, body: Vec<Self> },
+    Function { object: Object, args: Vec<Object>, returns: ObjType, body: Vec<Self> },
+    Return(Option<TypedExpression>)
 }
 
 #[derive(Debug, Clone)]
-pub enum LinkedExpression<'text> {
-    Operation(Box<TypedExpression<'text>>, Box<TypedExpression<'text>>, TwoSidedOperation),
-    UnaryOperation(Box<TypedExpression<'text>>, OneSidedOperation),
-    NumberLiteral(&'text [char]), // TODO: parse literals on linking step
+pub enum LinkedExpression {
+    Operation(Box<TypedExpression>, Box<TypedExpression>, TwoSidedOperation),
+    UnaryOperation(Box<TypedExpression>, OneSidedOperation),
+    NumberLiteral(String), // TODO: parse literals on linking step
     BoolLiteral(bool),
-    Variable(Object<'text>),
-    RoundBracket(Box<TypedExpression<'text>>),
-    FunctionCall { object: Object<'text>, args: Vec<TypedExpression<'text>> },
+    Variable(Object),
+    RoundBracket(Box<TypedExpression>),
+    FunctionCall { object: Object, args: Vec<TypedExpression> },
 }
 
-impl<'text> TypedExpression<'text> {
-    pub fn new(typee: ObjType, expr: LinkedExpression<'text >) -> Self {
+impl TypedExpression {
+    pub fn new(typee: ObjType, expr: LinkedExpression) -> Self {
         Self { expr, typee }
     }
 }
 
-impl<'text> LinkedStatement<'text> {
-    pub fn new_variable(object: Object<'text>, value: TypedExpression<'text>) -> Self {
+impl LinkedStatement {
+    pub fn new_variable(object: Object, value: TypedExpression) -> Self {
         Self::VariableDeclaration { object, value }
     }
-    pub fn new_set(object: Object<'text>, value: TypedExpression<'text>) -> Self {
+    pub fn new_set(object: Object, value: TypedExpression) -> Self {
         Self::SetVariable { object, value }
     }
-    pub fn new_if(condition: TypedExpression<'text>, body: Vec<Self>) -> Self {
+    pub fn new_if(condition: TypedExpression, body: Vec<Self>) -> Self {
         Self::If { condition, body }
     }
-    pub fn new_while(condition: TypedExpression<'text>, body: Vec<Self>) -> Self {
+    pub fn new_while(condition: TypedExpression, body: Vec<Self>) -> Self {
         Self::While { condition, body }
     }
-    pub fn new_function(name: Object<'text>, args: Vec<Object<'text>>, returns: ObjType, body: Vec<Self>) -> Self {
+    pub fn new_function(name: Object, args: Vec<Object>, returns: ObjType, body: Vec<Self>) -> Self {
         Self::Function { object: name, args, returns, body }
     }
 }
 
-impl<'text> LinkedExpression<'text> {
-    pub fn new_operation(expression1: TypedExpression<'text>, expression2: TypedExpression<'text>, op: TwoSidedOperation) -> Self {
+impl LinkedExpression {
+    pub fn new_operation(expression1: TypedExpression, expression2: TypedExpression, op: TwoSidedOperation) -> Self {
         Self::Operation(Box::new(expression1), Box::new(expression2), op)
     }
-    pub fn new_unary_operation(expression: TypedExpression<'text>, op: OneSidedOperation) -> Self {
+    pub fn new_unary_operation(expression: TypedExpression, op: OneSidedOperation) -> Self {
         Self::UnaryOperation(Box::new(expression), op)
     }
-    pub fn new_round_bracket(expression: TypedExpression<'text>) -> Self {
+    pub fn new_round_bracket(expression: TypedExpression) -> Self {
         Self::RoundBracket(Box::new(expression))
     }
-    pub fn new_function_call(object: Object<'text>, args: Vec<TypedExpression<'text>>) -> Self {
+    pub fn new_function_call(object: Object, args: Vec<TypedExpression>) -> Self {
         Self::FunctionCall { object, args }
     }
 }
 
 // ----- Display implementation -----
 
-impl fmt::Display for LinkedStatement<'_> {
+impl fmt::Display for LinkedStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn statements_to_string_with_tabs(statements: &[LinkedStatement]) -> String {
             let string = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
@@ -111,7 +111,7 @@ impl fmt::Display for LinkedStatement<'_> {
     }
 }
 
-impl fmt::Display for LinkedExpression<'_> {
+impl fmt::Display for LinkedExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Operation(a, b, op) => {
@@ -120,7 +120,7 @@ impl fmt::Display for LinkedExpression<'_> {
             Self::UnaryOperation(ex, op) => {
                 write!(f, "{op}{ex}")
             }
-            Self::NumberLiteral(n) => write!(f, "{}", n.iter().collect::<String>()),
+            Self::NumberLiteral(number) => write!(f, "{number}"),
             Self::BoolLiteral(value) => match value {
                 true => write!(f, "true"),
                 false => write!(f, "false"),
@@ -154,15 +154,14 @@ impl fmt::Display for ObjType {
     }
 }
 
-impl fmt::Display for TypedExpression<'_> {
+impl fmt::Display for TypedExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.expr)
     }
 }
 
-impl fmt::Display for Object<'_> {
+impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = self.name.iter().collect::<String>();
-        write!(f, "{}.{}", name, self.id)
+        write!(f, "${}", self.id)
     }
 }

@@ -4,20 +4,20 @@
 * parse function (done)
 * linking (done)
 * compile with int8 type only (done)
-* add types
+* add types (in progress)
 * add arrays
 
 # Programming language
 
 Variable declaration
 ```
-name : type = value
-name := value
+name : type = value;
+name := value;
 ```
 
 Set variable
 ```
-name = value
+name = value;
 ```
 
 If statement

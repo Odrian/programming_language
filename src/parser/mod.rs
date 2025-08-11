@@ -40,8 +40,8 @@ impl Default for Config {
     }
 }
 
-pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
-    let tokens = parse1_tokenize::tokenize(text)?;
+pub fn parse(text: String, config: Config) -> Result<(), CE> {
+    let tokens = parse1_tokenize::tokenize(&text)?;
     if config.write_tokens_to_file {
         let text = tokens.iter()
             .map(|t| format!("{:#?}", t.token))
@@ -58,7 +58,7 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
         }
     }
 
-    let statements = parse2_syntactic::parse_statements(&tokens)?;
+    let statements = parse2_syntactic::parse_statements(tokens)?;
     if config.write_unlinked_syntactic_tree_to_file {
         let text = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
@@ -74,7 +74,7 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
     }
 
     let mut object_factory = ObjectFactory::default();
-    let linked_statement = parse3_linking::link_variables(&statements, &mut object_factory)?;
+    let linked_statement = parse3_linking::link_variables(statements, &mut object_factory)?;
     if config.write_syntactic_tree_to_file {
         let text = linked_statement.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
@@ -89,7 +89,7 @@ pub fn parse(text: &[char], config: Config) -> Result<(), CE> {
         }
     }
 
-    compiling::parse_to_llvm(&config, &linked_statement, &object_factory)?;
+    compiling::parse_to_llvm(&config, linked_statement, &object_factory)?;
 
     Ok(())
 }

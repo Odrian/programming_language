@@ -8,7 +8,6 @@ fn main() -> Result<(), CE> {
         return Err(CE::WrongArguments("WRONG ARGUMENTS, USE: programming_language <filepath>".to_owned()))
     }
     let file_path = &args[1];
-    let file_text = read_file(file_path)?;
 
     let output = "main".to_owned();
     let create_executable = true;
@@ -25,15 +24,17 @@ fn main() -> Result<(), CE> {
         write_unlinked_syntactic_tree_to_file,
         create_llvm_ir, create_object,
     };
-    parse(&file_text, config)?;
+
+    let file_text = read_file(file_path)?;
+    parse(file_text, config)?;
 
     Ok(())
 }
 
-fn read_file(path: &str) -> Result<Vec<char>, CE> {
+fn read_file(path: &str) -> Result<String, CE> {
     let result = fs::read_to_string(path);
     match result {
-        Ok(text) => Ok(text.chars().collect()),
+        Ok(text) => Ok(text),
         Err(error) => Err(CE::CantReadSourceFile {
             filepath: path.to_owned(),
             io_error: error.to_string(),

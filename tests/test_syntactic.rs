@@ -3,26 +3,23 @@ use programming_language::parser::*;
 use programming_language::parser::operations::*;
 use programming_language::parser::parse2_syntactic::statement::*;
 
-fn parse(text: &[char]) -> Result<Vec<Statement>, CE> {
+fn parse(text: &str) -> Result<Vec<Statement>, CE> {
     let tokens = parse1_tokenize::tokenize(text)?;
-    let statements = parse2_syntactic::parse_statements(&tokens)?;
+    let statements = parse2_syntactic::parse_statements(tokens)?;
     Ok(statements)
 }
-fn string_to_chars(s: &str) -> Vec<char> {
-    s.chars().collect()
-}
 fn assert_has_error(str: &str) {
-    assert_ne!(parse(&string_to_chars(str)).err(), None);
+    assert_ne!(parse(str).err(), None);
 }
 fn assert_no_error(str: &str) {
-    assert_eq!(parse(&string_to_chars(str)).err(), None);
+    assert_eq!(parse(str).err(), None);
 }
 fn assert_result(str: &str, result: Result<Vec<Statement>, CE>) {
-    assert_eq!(parse(&string_to_chars(str)), result);
+    assert_eq!(parse(str), result);
 }
 
-fn add_type<'a, 'b>(typee: Typee<'b>, args: Vec<&'a[char]>) -> Vec<(&'a[char], Typee<'b>)> {
-    args.iter().map(|a| (*a, typee)).collect()
+fn add_type(typee: Typee, args: Vec<String>) -> Vec<(String, Typee)> {
+    args.into_iter().map(|a| (a, typee.clone())).collect()
 }
 
 #[test]
@@ -57,19 +54,19 @@ fn test_set_with_brackets() {
     assert_no_error("cat = ((4 + 4))");
     assert_no_error("cat = 4 + (4 + 4)");
     assert_no_error("cat = (4 + 4) + 4");
-    assert_no_error("cat = cat \n cat = cat");
+    assert_no_error("cat = cat;cat = cat");
+    assert_no_error("cat = cat; \n cat = cat");
 
     assert_has_error("(cat + cat) = cat");
     assert_has_error("(cat + cat) := cat");
     assert_has_error("(4 + 4) = 4");
     assert_has_error("(4 + 4) := 4");
 
-    let v_cat = &string_to_chars("cat");
-    let variable = Expression::Variable(v_cat);
+    let variable = Expression::Variable("cat".to_owned());
     assert_result(
         "cat := cat + (cat + cat)",
         Ok(vec![Statement::new_variable(
-            v_cat,
+            "cat".to_owned(),
             None,
             Expression::new_operation(
                 variable.clone(),
@@ -85,12 +82,12 @@ fn test_set_with_brackets() {
 #[test]
 fn test_minus() {
     assert_no_error("a := 0 - 0");
-    assert_no_error("a := 0 - 0 a = 0 - a");
-    assert_no_error("a := 0 - 0 a = a - 0");
+    assert_no_error("a := 0 - 0; a = 0 - a");
+    assert_no_error("a := 0 - 0; a = a - 0");
 
     assert_no_error("a := -1");
     assert_no_error("a := --1");
-    assert_no_error("a := 0 a = -a");
+    assert_no_error("a := 0; a = -a");
 }
 
 #[test]
@@ -116,32 +113,36 @@ fn test_equal_set() {
 
 #[test]
 fn test_if_while() {
-    let v_cat = &string_to_chars("cat");
-    let variable = Expression::Variable(v_cat);
+    let variable = Expression::Variable("cat".to_owned());
 
-    assert_result("if cat { }",
-                  Ok(vec![Statement::new_if(variable.clone(), vec![], )])
+    assert_result(
+        "if cat { }",
+        Ok(vec![Statement::new_if(variable.clone(), vec![], )])
     );
-    assert_result("if cat { cat := cat }",
-                  Ok(vec![Statement::new_if(variable.clone(),
-                                            vec![Statement::new_variable(v_cat, None, variable.clone())],
-                  )])
+    assert_result(
+        "if cat { cat := cat }",
+        Ok(vec![Statement::new_if(variable.clone(), vec![
+            Statement::new_variable("cat".to_owned(), None, variable.clone())
+        ], )])
     );
-    assert_result("if cat { cat := cat cat := cat }",
-                  Ok(vec![Statement::new_if(variable.clone(),
-                                            vec![
-                                                Statement::new_variable(v_cat, None, variable.clone()),
-                                                Statement::new_variable(v_cat, None, variable.clone())
-                                            ],
-                  )])
+    assert_result(
+        "if cat { cat := cat; cat := cat }",
+        Ok(vec![Statement::new_if(variable.clone(), vec![
+            Statement::new_variable("cat".to_owned(), None, variable.clone()),
+            Statement::new_variable("cat".to_owned(), None, variable.clone())
+        ])])
     );
-    assert_result("while cat { }",
-                  Ok(vec![Statement::new_while(variable.clone(), vec![], )])
+    assert_result(
+        "while cat { }",
+        Ok(vec![
+            Statement::new_while(variable.clone(), vec![])
+        ])
     );
-    assert_result("while cat { cat := cat }",
-                  Ok(vec![Statement::new_while(variable.clone(),
-                                               vec![Statement::new_variable(v_cat, None, variable.clone())],
-                  )])
+    assert_result(
+        "while cat { cat := cat }",
+        Ok(vec![Statement::new_while(variable.clone(), vec![
+            Statement::new_variable("cat".to_owned(), None, variable.clone())
+        ])])
     );
 
     assert_has_error("if cat = cat { cat := cat }");
@@ -186,50 +187,49 @@ fn test_function() {
     assert_has_error("foo :: ()");
     assert_has_error("foo :: () -> i32");
 
-    let name = &string_to_chars("foo");
-    let arg1 = &string_to_chars("arg1");
-    let arg2 = &string_to_chars("arg2");
-    let v_cat = &string_to_chars("cat");
-    let v_dog = &string_to_chars("dog");
-    let v_kitten = &string_to_chars("kitten");
-    let v_owl = &string_to_chars("owl");
+    let name = "foo".to_owned();
+    let arg1 = "arg1".to_owned();
+    let arg2 = "arg2".to_owned();
+    let v_cat = "cat".to_owned();
+    let v_dog = "dog".to_owned();
+    let v_kitten = "kitten".to_owned();
+    let v_owl = "owl".to_owned();
 
-    let number_string = string_to_chars("i32");
-    let number_typee = Typee::String(&number_string);
+    let number_typee = Typee::String("i32".to_owned());
 
     assert_result(
         "foo :: () { }",
-        Ok(vec![Statement::new_function(name, vec![], None, vec![])])
+        Ok(vec![Statement::new_function(name.clone(), vec![], None, vec![])])
     );
     assert_result(
         "foo :: (arg1: i32) { }",
-        Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1]), None, vec![])])
+        Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone()]), None, vec![])])
     );
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { }",
-        Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![])])
+        Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![])])
     );
-    let set_expr = Statement::new_variable(v_cat, None, Expression::Variable(v_dog));
+    let set_expr = Statement::new_variable(v_cat, None, Expression::Variable(v_dog.clone()));
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { cat := dog }",
-        Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![
+        Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
             set_expr.clone(),
         ])])
     );
 
     assert_result(
-        "foo :: (arg1: i32, arg2: i32) { cat := dog cat := dog }",
-            Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![
+        "foo :: (arg1: i32, arg2: i32) { cat := dog; cat := dog }",
+            Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
                 set_expr.clone(),
                 set_expr.clone(),
             ])])
     );
-    let another_set_expr = Statement::new_variable(v_owl, None, Expression::new_operation(
-        Expression::Variable(v_dog), Expression::Variable(v_kitten), NumberOperation::Add.into()
+    let another_set_expr = Statement::new_variable(v_owl.clone(), None, Expression::new_operation(
+        Expression::Variable(v_dog.clone()), Expression::Variable(v_kitten), NumberOperation::Add.into()
     ));
     assert_result(
-        "foo :: (arg1: i32, arg2: i32) { owl := dog + kitten cat := dog owl := dog + kitten }",
-        Ok(vec![Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, vec![
+        "foo :: (arg1: i32, arg2: i32) { owl := dog + kitten; cat := dog; owl := dog + kitten }",
+        Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
             another_set_expr.clone(),
             set_expr.clone(),
             another_set_expr.clone(),
@@ -239,29 +239,28 @@ fn test_function() {
 
 #[test]
 fn test_function_with_while() {
-    let name = &string_to_chars("foo");
-    let arg1 = &string_to_chars("arg1");
-    let arg2 = &string_to_chars("arg2");
-    let v_1 = &string_to_chars("1");
+    let name = "foo".to_owned();
+    let arg1 = "arg1".to_owned();
+    let arg2 = "arg2".to_owned();
+    let v_1 = "1".to_owned();
 
-    let number_string = string_to_chars("i32");
-    let number_typee = Typee::String(&number_string);
+    let number_typee = Typee::String("i32".to_owned());
 
     let set_statement = Statement::new_variable(
-        arg2,
+        arg2.clone(),
         None,
         Expression::new_operation(
-            Expression::Variable(arg2),
-            Expression::NumberLiteral(v_1),
+            Expression::Variable(arg2.clone()),
+            Expression::NumberLiteral(v_1).clone(),
             NumberOperation::Add.into()
         ),
     );
     let while_statement = Statement::new_while(
-        Expression::Variable(arg1),
+        Expression::Variable(arg1.clone()),
         vec![set_statement.clone()]
     );
     let create_function_statement = |body| {
-        Statement::new_function(name, add_type(number_typee, vec![arg1, arg2]), None, body)
+        Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, body)
     };
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { while arg1 { arg2 := arg2 + 1 } }",
@@ -276,14 +275,14 @@ fn test_function_with_while() {
         ])])
     );
     assert_result(
-        "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } }",
+        "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1; while arg1 { arg2 := arg2 + 1 } }",
         Ok(vec![create_function_statement(vec![
             set_statement.clone(),
             while_statement.clone(),
         ])])
     );
     assert_result(
-        "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1 while arg1 { arg2 := arg2 + 1 } arg2 := arg2 + 1 }",
+        "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1; while arg1 { arg2 := arg2 + 1 } arg2 := arg2 + 1 }",
         Ok(vec![create_function_statement(vec![
             set_statement.clone(),
             while_statement.clone(),
@@ -304,25 +303,25 @@ fn test_function_call() {
 
     assert_no_error("a = foo(0) + foo(0) + foo(0) + 0");
 
-    assert_has_error("0 + 0");
-    assert_has_error("foo(0) + foo(0)");
-    assert_has_error("foo(0) + foo(0) + foo(0) + 0");
+    assert_no_error("0 + 0");
+    assert_no_error("foo(0) + foo(0)");
+    assert_no_error("foo(0) + foo(0) + foo(0) + 0");
 
     assert_has_error("foo(cat := cat)");
 
-    let v_foo = &string_to_chars("foo");
-    let v_cat = &string_to_chars("cat");
-    let v_5 = &string_to_chars("5");
+    let v_foo = "foo".to_owned();
+    let v_cat = "cat".to_owned();
+    let v_5 = "5".to_owned();
     assert_result(
         "foo()",
-        Ok(vec![Statement::Expression(Expression::new_function_call(v_foo, vec![]))])
+        Ok(vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![]))])
     );
     assert_result(
         "foo(cat, 5)",
-        Ok(vec![Statement::Expression(Expression::new_function_call(v_foo, vec![
-                      Expression::Variable(v_cat),
-                      Expression::NumberLiteral(v_5),
-                  ]))])
+        Ok(vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![
+            Expression::Variable(v_cat),
+            Expression::NumberLiteral(v_5),
+        ]))])
     );
 }
 
@@ -332,7 +331,7 @@ fn test_function_return() {
     assert_no_error("if 1 { return }");
     assert_no_error("return 0");
     assert_no_error("foo :: () { return 0 }");
-    assert_no_error("foo :: () { a := 0 return a }");
+    assert_no_error("foo :: () { a := 0; return a }");
 
     assert_has_error("return return 0");
     assert_has_error("return foo :: () {}");

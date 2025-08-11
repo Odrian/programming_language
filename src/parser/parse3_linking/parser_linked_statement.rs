@@ -5,17 +5,17 @@ use super::linked_statement::*;
 use super::object::{ObjectFactory, ObjType};
 use super::context_window::ObjectContextWindow;
 
-pub fn link_names<'text>(statement: &Vec<Statement<'text>>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement<'text>>, CE> {
+pub fn link_names(statement: Vec<Statement>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement>, CE> {
     let mut context = LinkingContext::new(object_factory);
     context.link_statements_recursive(statement)
 }
 
-struct LinkingContext<'text, 'factory> {
-    object_context_window: ObjectContextWindow<'text>,
+struct LinkingContext<'factory> {
+    object_context_window: ObjectContextWindow,
     object_factory: &'factory mut ObjectFactory,
     current_function_returns: Option<ObjType>,
 }
-impl<'factory> LinkingContext<'_, 'factory> {
+impl<'factory> LinkingContext<'factory> {
     fn new(object_factory: &'factory mut ObjectFactory) -> Self {
         Self {
             object_context_window: ObjectContextWindow::new(),
@@ -25,8 +25,8 @@ impl<'factory> LinkingContext<'_, 'factory> {
     }
 }
 
-impl<'text> LinkingContext<'text, '_> {
-    fn link_statements_recursive(&mut self, statements: &[Statement<'text>]) -> Result<Vec<LinkedStatement<'text>>, CE> {
+impl LinkingContext<'_> {
+    fn link_statements_recursive(&mut self, statements: Vec<Statement>) -> Result<Vec<LinkedStatement>, CE> {
         let mut result = vec![];
         for statement in statements {
             let linked = match statement {
@@ -44,23 +44,23 @@ impl<'text> LinkingContext<'text, '_> {
                 }
                 Statement::SetVariable { object: name, value } => {
                     let value = self.parse_expression(value)?;
-                    let object = self.object_context_window.get_or_error(name)?;
+                    let object = self.object_context_window.get_or_error(&name)?;
                     LinkedStatement::new_set(object, value)
                 }
                 Statement::EqualSetVariable { object: name, value, op } => {
                     let value = self.parse_expression(value)?;
-                    let object = self.object_context_window.get_or_error(name)?;
+                    let object = self.object_context_window.get_or_error(&name)?;
 
                     let object_type = self.object_factory.get_type(object);
-                    let Some(result_type) = ObjType::from_operation(&value.typee, object_type, op) else {
-                        return Err(CE::IncorrectTwoOper { type1: value.typee, type2: object_type.clone(), op: *op })
+                    let Some(result_type) = ObjType::from_operation(&value.typee, object_type, &op) else {
+                        return Err(CE::IncorrectTwoOper { type1: value.typee, type2: object_type.clone(), op })
                     };
                     assert_eq!(&result_type, object_type, "EqualSet should not change type");
 
                     let object_value = TypedExpression::new(object_type.clone(), LinkedExpression::Variable(object));
                     let result_expression = TypedExpression::new(
                         result_type,
-                        LinkedExpression::new_operation(object_value, value, *op)
+                        LinkedExpression::new_operation(object_value, value, op)
                     );
                     LinkedStatement::new_set(object, result_expression)
                 }
@@ -84,7 +84,7 @@ impl<'text> LinkingContext<'text, '_> {
                     self.object_context_window.step_out();
                     LinkedStatement::new_while(condition, body)
                 }
-                Statement::Function { object: name, args, returns, body } => {
+                Statement::Function { object: function_name, args, returns, body } => {
                     let mut arguments_obj = Vec::with_capacity(args.len());
                     let mut arguments_type = Vec::with_capacity(args.len());
 
@@ -106,10 +106,9 @@ impl<'text> LinkingContext<'text, '_> {
                         arguments: arguments_type,
                         returns: Box::new(return_type.clone()),
                     };
-                    if self.object_context_window.get(name).is_some() {
-                        return Err(CE::FunctionOverloading { function_name: name.iter().collect::<String>()})
+                    if self.object_context_window.get(&function_name).is_some() {
+                        return Err(CE::FunctionOverloading { function_name })
                     }
-                    let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
 
                     self.object_context_window.step_in();
                     self.current_function_returns = Some(return_type.clone());
@@ -118,8 +117,10 @@ impl<'text> LinkingContext<'text, '_> {
                     self.object_context_window.step_out();
 
                     if return_type != ObjType::Unit && !check_is_returns(&body) {
-                        return Err(CE::FunctionMustReturn { function_name: name.iter().collect::<String>() })
+                        return Err(CE::FunctionMustReturn { function_name })
                     }
+
+                    let function_object = self.object_factory.create_object(function_name, func_type, &mut self.object_context_window);
 
                     LinkedStatement::new_function(function_object, arguments_obj, return_type, body)
                 }
@@ -146,27 +147,27 @@ impl<'text> LinkingContext<'text, '_> {
         Ok(result)
     }
 
-    fn parse_expression(&mut self, expression: &Expression<'text>) -> Result<TypedExpression<'text>, CE> {
+    fn parse_expression(&mut self, expression: Expression) -> Result<TypedExpression, CE> {
         let linked: TypedExpression = match expression {
             Expression::Operation(expression1, expression2, op) => {
-                let ex1 = self.parse_expression(expression1)?;
-                let ex2 = self.parse_expression(expression2)?;
-                let Some(result_type) = ObjType::from_operation(&ex1.typee, &ex2.typee, op) else {
-                    return Err(CE::IncorrectTwoOper { type1: ex1.typee, type2: ex2.typee, op: *op })
+                let ex1 = self.parse_expression(*expression1)?;
+                let ex2 = self.parse_expression(*expression2)?;
+                let Some(result_type) = ObjType::from_operation(&ex1.typee, &ex2.typee, &op) else {
+                    return Err(CE::IncorrectTwoOper { type1: ex1.typee, type2: ex2.typee, op })
                 };
                 TypedExpression::new(
                     result_type,
-                    LinkedExpression::new_operation(ex1, ex2, *op)
+                    LinkedExpression::new_operation(ex1, ex2, op)
                 )
             }
             Expression::UnaryOperation(expression, op) => {
-                let ex = self.parse_expression(expression)?;
-                let Some(result_type) = ObjType::from_unary_operation(&ex.typee, op) else {
-                    return Err(CE::IncorrectOneOper { typee: ex.typee, op: *op })
+                let ex = self.parse_expression(*expression)?;
+                let Some(result_type) = ObjType::from_unary_operation(&ex.typee, &op) else {
+                    return Err(CE::IncorrectOneOper { typee: ex.typee, op })
                 };
                 TypedExpression::new(
                     result_type,
-                    LinkedExpression::new_unary_operation(ex, *op)
+                    LinkedExpression::new_unary_operation(ex, op)
                 )
             }
             Expression::NumberLiteral(string) => {
@@ -178,17 +179,17 @@ impl<'text> LinkingContext<'text, '_> {
             Expression::BoolLiteral(value) => {
                 TypedExpression::new(
                     ObjType::Bool,
-                    LinkedExpression::BoolLiteral(*value),
+                    LinkedExpression::BoolLiteral(value),
                 )
             }
             Expression::RoundBracket(ex1) => {
-                let ex1 = self.parse_expression(ex1)?;
+                let ex1 = self.parse_expression(*ex1)?;
                 TypedExpression::new(ex1.typee.clone(), LinkedExpression::new_round_bracket(ex1))
             }
             Expression::Variable(name) => {
-                let object = self.object_context_window.get_or_error(name)?;
+                let object = self.object_context_window.get_or_error(&name)?;
                 if matches!(self.object_factory.get_type(object), ObjType::Function { .. }) {
-                    return Err(CE::LinkingErrorFunctionUsage { name: CE::string_from(name) });
+                    return Err(CE::LinkingErrorFunctionUsage { name });
                 }
                 TypedExpression::new(
                     self.object_factory.get_type(object).clone(),
@@ -196,16 +197,16 @@ impl<'text> LinkingContext<'text, '_> {
                 )
             },
             Expression::FunctionCall { object: name, args: args_values } => {
-                let object = self.object_context_window.get_or_error(name)?;
+                let object = self.object_context_window.get_or_error(&name)?;
                 let ObjType::Function { arguments, returns } = self.object_factory.get_type(object).clone() else {
                     let context = format!("{:?}", self.object_context_window);
-                    return Err(CE::LinkingError { name: CE::string_from(name), context });
+                    return Err(CE::LinkingError { name, context });
                 };
                 if args_values.len() != arguments.len() {
-                    let function_name = object.name.iter().collect::<String>();
+                    let function_name = self.object_factory.get_name(object).clone();
                     return Err(CE::IncorrectArgumentCount { function_name, argument_need: arguments.len(), argument_got: args_values.len() });
                 }
-                let args = args_values.iter().map(|x| self.parse_expression(x)).collect::<Result<Vec<_>, _>>()?;
+                let args = args_values.into_iter().map(|x| self.parse_expression(x)).collect::<Result<Vec<_>, _>>()?;
 
                 TypedExpression::new(
                     returns.as_ref().clone(),
@@ -216,10 +217,9 @@ impl<'text> LinkingContext<'text, '_> {
         Ok(linked)
     }
     
-    fn parse_type(&self, typee: &Typee<'text>) -> Result<ObjType, CE> {
+    fn parse_type(&self, typee: Typee) -> Result<ObjType, CE> {
         match typee {
-            Typee::String(chars) => {
-                let string = chars.iter().collect::<String>();
+            Typee::String(string) => {
                 match string.as_str() {
                     "()" => Ok(ObjType::Unit),
                     "i32" => Ok(ObjType::Number),

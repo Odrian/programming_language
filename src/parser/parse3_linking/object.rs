@@ -2,9 +2,8 @@ use super::context_window::ObjectContextWindow;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[non_exhaustive]
-pub struct Object<'text> {
+pub struct Object {
     pub id: u32,
-    pub name: &'text [char],
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -18,18 +17,23 @@ pub enum ObjType {
 #[derive(Default)]
 pub struct ObjectFactory {
     next_id: u32,
-    array: Vec<ObjType>,
+    array_type: Vec<ObjType>,
+    array_name: Vec<String>,
 }
 
 impl ObjectFactory {
-    pub fn create_object<'text>(&mut self, name: &'text [char], typee: ObjType, context: &mut ObjectContextWindow<'text>) -> Object<'text> {
-        let object = Object { id: self.next_id, name };
+    pub fn create_object(&mut self, name: String, typee: ObjType, context: &mut ObjectContextWindow) -> Object {
+        let object = Object { id: self.next_id };
         self.next_id += 1;
-        self.array.push(typee);
-        context.add(object);
+        self.array_type.push(typee);
+        self.array_name.push(name.clone());
+        context.add(name, object);
         object
     }
     pub fn get_type(&self, object: Object) -> &ObjType {
-        &self.array[object.id as usize]
+        &self.array_type[object.id as usize]
+    }
+    pub fn get_name(&self, object: Object) -> &String {
+        &self.array_name[object.id as usize]
     }
 }
