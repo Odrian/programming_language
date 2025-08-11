@@ -1,26 +1,25 @@
 use std::fmt;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 
-// FIXME: don't need abstraction
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum TStatement<'text, Obj> {
-    VariableDeclaration { object: Obj, typee: Option<Typee<'text>>, value: TExpression<'text, Obj> },
-    SetVariable { object: Obj, value: TExpression<'text, Obj> },
-    Expression(TExpression<'text, Obj>),
-    If { condition: TExpression<'text, Obj>, body: Vec<Self> },
-    While { condition: TExpression<'text, Obj>, body: Vec<Self> },
-    Function { object: Obj, args: Vec<(Obj, Typee<'text>)>, returns: Option<Typee<'text>>, body: Vec<Self> },
-    Return(Option<TExpression<'text, Obj>>)
+pub enum Statement<'text> {
+    VariableDeclaration { object: &'text [char], typee: Option<Typee<'text>>, value: Expression<'text> },
+    SetVariable { object: &'text [char], value: Expression<'text> },
+    Expression(Expression<'text>),
+    If { condition: Expression<'text>, body: Vec<Self> },
+    While { condition: Expression<'text>, body: Vec<Self> },
+    Function { object: &'text [char], args: Vec<(&'text [char], Typee<'text>)>, returns: Option<Typee<'text>>, body: Vec<Self> },
+    Return(Option<Expression<'text>>)
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum TExpression<'text, Obj> {
+pub enum Expression<'text> {
     Operation(Box<Self>, Box<Self>, TwoSidedOperation),
     UnaryOperation(Box<Self>, OneSidedOperation),
     NumberLiteral(&'text [char]),
-    Variable(Obj),
+    Variable(&'text [char]),
     RoundBracket(Box<Self>),
-    FunctionCall { object: Obj, args: Vec<Self> },
+    FunctionCall { object: &'text [char], args: Vec<Self> },
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -28,27 +27,24 @@ pub enum Typee<'text> {
     String(&'text [char])
 }
 
-pub type Statement<'text> = TStatement<'text, &'text [char]>;
-pub type Expression<'text> = TExpression<'text, &'text [char]>;
-
-impl<'text, Obj> TStatement<'text, Obj> {
-    pub fn new_variable(obj: Obj, typee: Option<Typee<'text>>, value: TExpression<'text, Obj>) -> Self {
+impl<'text> Statement<'text> {
+    pub fn new_variable(obj: &'text [char], typee: Option<Typee<'text>>, value: Expression<'text>) -> Self {
         Self::VariableDeclaration { object: obj, typee, value }
     }
-    pub fn new_set(obj: Obj, value: TExpression<'text, Obj>) -> Self {
+    pub fn new_set(obj: &'text [char], value: Expression<'text>) -> Self {
         Self::SetVariable { object: obj, value }
     }
-    pub fn new_if(condition: TExpression<'text, Obj>, body: Vec<Self>) -> Self {
+    pub fn new_if(condition: Expression<'text>, body: Vec<Self>) -> Self {
         Self::If { condition, body }
     }
-    pub fn new_while(condition: TExpression<'text, Obj>, body: Vec<Self>) -> Self {
+    pub fn new_while(condition: Expression<'text>, body: Vec<Self>) -> Self {
         Self::While { condition, body }
     }
-    pub fn new_function(name: Obj, args: Vec<(Obj, Typee<'text>)>, returns: Option<Typee<'text>>, body: Vec<Self>) -> Self {
+    pub fn new_function(name: &'text [char], args: Vec<(&'text [char], Typee<'text>)>, returns: Option<Typee<'text>>, body: Vec<Self>) -> Self {
         Self::Function { object: name, args, returns, body }
     }
 }
-impl<'text, Obj> TExpression<'text, Obj> {
+impl<'text> Expression<'text> {
     pub fn new_operation(expression1: Self, expression2: Self, op: TwoSidedOperation) -> Self {
         Self::Operation(Box::new(expression1), Box::new(expression2), op)
     }
@@ -58,7 +54,7 @@ impl<'text, Obj> TExpression<'text, Obj> {
     pub fn new_round_bracket(expression: Self) -> Self {
         Self::RoundBracket(Box::new(expression))
     }
-    pub fn new_function_call(object: Obj, args: Vec<Self>) -> Self {
+    pub fn new_function_call(object: &'text [char], args: Vec<Self>) -> Self {
         Self::FunctionCall { object, args }
     }
 }
