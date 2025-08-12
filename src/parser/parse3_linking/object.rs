@@ -9,7 +9,7 @@ pub struct Object {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ObjType {
     Unit,
-    Number,
+    Integer(IntObjType),
     Float(FloatObjType),
     Bool,
     Function { arguments: Vec<ObjType>, returns: Box<ObjType> }
@@ -18,6 +18,18 @@ pub enum ObjType {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum FloatObjType {
     F32, F64
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum IntObjType {
+    U8, U16, U32, U64, U128,
+    I8, I16, I32, I64, I128,
+}
+
+impl IntObjType {
+    pub fn is_signed(&self) -> bool {
+        matches!(self, IntObjType::I8 | IntObjType::I16 | IntObjType::I32 | IntObjType::I64 | IntObjType::I128)
+    }
 }
 
 #[derive(Default)]

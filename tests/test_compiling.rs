@@ -196,3 +196,49 @@ main :: () -> i32 {
 fn test_float() {
     // TODO: test floats
 }
+
+// FIXME: uncomment when fixed
+/*
+#[test]
+fn test_max_u128() {
+    let program = "\
+main :: () -> i32 {
+    x := 340282366920938463463374607431768211455_u128;
+    count := 0;
+    while x > 0_u128 {
+        count += 1;
+        x /= 10_u128;
+    }
+    return count;
+}
+";
+    let actual_count = "340282366920938463463374607431768211455".chars().count();
+    assert_eq!(actual_count as i32, get_exit_code(program));
+}
+*/
+#[test]
+fn test_max_u64() {
+    let program = "\
+main :: () -> i32 {
+    x := 18446744073709551615_u64;
+    count := 0;
+    while x > 0_u64 {
+        count += 1;
+        x /= 10_u64;
+    }
+    return count;
+}
+";
+    let actual_count = "18446744073709551615".replace('_', "").chars().count();
+    assert_eq!(actual_count as i32, get_exit_code(program));
+}
+
+#[test]
+fn test_u8() {
+    let program = "\
+main :: () -> u8 {
+    return 257u8
+}
+";
+    assert_eq!(1, get_exit_code(program));
+}

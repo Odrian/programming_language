@@ -1,6 +1,6 @@
 use std::fmt;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
-use super::object::{Object, ObjType, FloatObjType};
+use super::object::{Object, ObjType, FloatObjType, IntObjType};
 
 #[derive(Debug, Clone)]
 pub struct TypedExpression {
@@ -25,7 +25,7 @@ pub enum LinkedExpression {
     Operation(Box<TypedExpression>, Box<TypedExpression>, TwoSidedOperation),
     UnaryOperation(Box<TypedExpression>, OneSidedOperation),
 
-    IntLiteral(String),
+    IntLiteral(String, ObjType),
     /// `ObjType` always `FloatObjType`
     FloatLiteral(String, ObjType),
     BoolLiteral(bool),
@@ -124,8 +124,8 @@ impl fmt::Display for LinkedExpression {
             Self::UnaryOperation(ex, op) => {
                 write!(f, "{op}{ex}")
             }
-            Self::IntLiteral(number) => write!(f, "{number}"),
-            Self::FloatLiteral(number, typee) => write!(f, "{number}{typee}"),
+            Self::IntLiteral(number, typee) => write!(f, "{number}_{typee}"),
+            Self::FloatLiteral(number, typee) => write!(f, "{number}_{typee}"),
             Self::BoolLiteral(value) => match value {
                 true => write!(f, "true"),
                 false => write!(f, "false"),
@@ -142,24 +142,30 @@ impl fmt::Display for LinkedExpression {
 
 impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unit => {
-                write!(f, "()")
-            }
-            Self::Bool => {
-                write!(f, "bool")
-            }
-            Self::Number => {
-                write!(f, "i32")
+        let name = match self {
+            Self::Unit => "()",
+            Self::Bool => "bool",
+            Self::Integer(int) => match int {
+                IntObjType::I8 => "i8",
+                IntObjType::I16 => "i16",
+                IntObjType::I32 => "i32",
+                IntObjType::I64 => "i64",
+                IntObjType::I128 => "i128",
+                IntObjType::U8 => "u8",
+                IntObjType::U16 => "u16",
+                IntObjType::U32 => "u32",
+                IntObjType::U64 => "u64",
+                IntObjType::U128 => "u128",
             }
             Self::Float(float) => match float {
-                FloatObjType::F32 => write!(f, "f32"),
-                FloatObjType::F64 => write!(f, "f64"),
+                FloatObjType::F32 => "f32",
+                FloatObjType::F64 => "f64",
             }
             Self::Function { .. } => {
                 unimplemented!()
             }
-        }
+        };
+        write!(f, "{}", name)
     }
 }
 

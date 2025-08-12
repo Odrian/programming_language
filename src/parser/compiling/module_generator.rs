@@ -6,7 +6,7 @@ use crate::parser::parse3_linking::linked_statement::*;
 use super::context_window::ValueContextWindow;
 
 use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue};
-use inkwell::{builder::Builder, context::Context, module::Module, IntPredicate};
+use inkwell::{builder::Builder, context::Context, module::Module, FloatPredicate, IntPredicate};
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType};
 
 pub fn parse_module<'ctx>(context: &'ctx Context, statements: Vec<LinkedStatement>, object_factory: &ObjectFactory) -> Result<Module<'ctx>, CE> {
@@ -47,7 +47,13 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
         match typee {
             ObjType::Unit => unimplemented!(),
             ObjType::Bool => self.context.bool_type().into(),
-            ObjType::Number => self.context.i32_type().into(),
+            ObjType::Integer(int) => match int {
+                IntObjType::I8 | IntObjType::U8 => self.context.i8_type().into(),
+                IntObjType::I16 | IntObjType::U16 => self.context.i16_type().into(),
+                IntObjType::I32 | IntObjType::U32 => self.context.i32_type().into(),
+                IntObjType::I64 | IntObjType::U64 => self.context.i64_type().into(),
+                IntObjType::I128 | IntObjType::U128 => self.context.i128_type().into(),
+            }
             ObjType::Float(float) => match float {
                 FloatObjType::F32 => self.context.f32_type().into(),
                 FloatObjType::F64 => self.context.f64_type().into(),
@@ -225,11 +231,12 @@ mod function_parsing {
                     let returned_value = returned.try_as_basic_value().unwrap_left();
                     Ok(returned_value)
                 },
-                LinkedExpression::IntLiteral(literal) => {
-                    let int_type = self.context.i32_type();
+                LinkedExpression::IntLiteral(literal, typee) => {
+                    let int_type = self.parse_type(&typee).into_int_type();
 
-                    let value = literal.parse::<i32>().unwrap(); // FIXME: return error
-                    let int_value = int_type.const_int(value as u64, true);
+                    // FIXME: can't parse i128. Create test for i128
+                    let value = literal.parse::<u64>().unwrap(); // FIXME: return error
+                    let int_value = int_type.const_int(value, true);
                     Ok(int_value.into())
                 }
                 LinkedExpression::FloatLiteral(float, float_type) => {
@@ -245,7 +252,7 @@ mod function_parsing {
                 }
                 LinkedExpression::RoundBracket(boxed) => self.parse_expression(*boxed),
                 LinkedExpression::Variable(object) => {
-                    let value_type = self.context.i32_type();
+                    let value_type = self.get_object_type(object);
                     let pointer = self.context_window.get_pointer_unwrap(object);
                     let value = self.builder.build_load(value_type, pointer, "load")?;
                     Ok(value)
@@ -269,15 +276,17 @@ mod function_parsing {
                     let ex2_parsed = self.parse_expression(*ex2)?;
                     match op {
                         TwoSidedOperation::Number(num_op) => match type1 {
-                            ObjType::Number => {
+                            ObjType::Integer(int) => {
                                 let num1 = ex1_parsed.into_int_value();
                                 let num2 = ex2_parsed.into_int_value();
                                 match num_op {
                                     NumberOperation::Add => Ok(self.builder.build_int_add(num1, num2, "add")?.into()),
                                     NumberOperation::Sub => Ok(self.builder.build_int_sub(num1, num2, "sub")?.into()),
                                     NumberOperation::Mul => Ok(self.builder.build_int_mul(num1, num2, "mul")?.into()),
-                                    NumberOperation::Div => Ok(self.builder.build_int_signed_div(num1, num2, "div")?.into()),
-                                    NumberOperation::Rem => Ok(self.builder.build_int_signed_rem(num1, num2, "rem")?.into()),
+                                    NumberOperation::Div if int.is_signed() =>  Ok(self.builder.build_int_signed_div(num1, num2, "div")?.into()),
+                                    NumberOperation::Div =>                     Ok(self.builder.build_int_unsigned_div(num1, num2, "div")?.into()),
+                                    NumberOperation::Rem if int.is_signed() =>  Ok(self.builder.build_int_signed_rem(num1, num2, "rem")?.into()),
+                                    NumberOperation::Rem =>                     Ok(self.builder.build_int_unsigned_rem(num1, num2, "rem")?.into()),
                                     NumberOperation::BitAnd => Ok(self.builder.build_and(num1, num2, "bitand")?.into()),
                                     NumberOperation::BitOr => Ok(self.builder.build_or(num1, num2, "bitor")?.into()),
                                 }
@@ -306,11 +315,23 @@ mod function_parsing {
                             }
                         }
                         TwoSidedOperation::Compare(comp_op) => match type1 {
-                            ObjType::Number | ObjType::Bool | ObjType::Float(_) => {
+                            ObjType::Integer(int) => {
                                 let ex1 = ex1_parsed.into_int_value();
                                 let ex2 = ex2_parsed.into_int_value();
-                                let predicate = comp_op.to_int_compare();
+                                let predicate = comp_op.to_int_compare(int.is_signed());
                                 Ok(self.builder.build_int_compare(predicate, ex1, ex2, "equals")?.into())
+                            }
+                            ObjType::Bool => {
+                                let ex1 = ex1_parsed.into_int_value();
+                                let ex2 = ex2_parsed.into_int_value();
+                                let predicate = comp_op.to_int_compare(true);
+                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "equals")?.into())
+                            }
+                            ObjType::Float(_) => {
+                                let ex1 = ex1_parsed.into_float_value();
+                                let ex2 = ex2_parsed.into_float_value();
+                                let predicate = comp_op.to_float_compare();
+                                Ok(self.builder.build_float_compare(predicate, ex1, ex2, "equals")?.into())
                             }
                             ObjType::Unit | ObjType::Function { .. } => unimplemented!(),
                         }
@@ -321,27 +342,38 @@ mod function_parsing {
     }
 }
 
-
 impl CompareOperator {
-    fn to_int_compare(self) -> IntPredicate {
-        match self {
-            CompareOperator::Equal =>           IntPredicate::EQ,
-            CompareOperator::NotEqual =>        IntPredicate::NE,
-            CompareOperator::Greater =>         IntPredicate::SGT,
-            CompareOperator::GreaterEqual =>    IntPredicate::SGE,
-            CompareOperator::Less =>            IntPredicate::SLT,
-            CompareOperator::LessEqual =>       IntPredicate::SLE,
+    fn to_int_compare(self, signed: bool) -> IntPredicate {
+        if signed {
+            match self {
+                CompareOperator::Equal =>           IntPredicate::EQ,
+                CompareOperator::NotEqual =>        IntPredicate::NE,
+                CompareOperator::Greater =>         IntPredicate::SGT,
+                CompareOperator::GreaterEqual =>    IntPredicate::SGE,
+                CompareOperator::Less =>            IntPredicate::SLT,
+                CompareOperator::LessEqual =>       IntPredicate::SLE,
+            }
+        } else {
+            match self {
+                CompareOperator::Equal =>           IntPredicate::EQ,
+                CompareOperator::NotEqual =>        IntPredicate::NE,
+                CompareOperator::Greater =>         IntPredicate::UGT,
+                CompareOperator::GreaterEqual =>    IntPredicate::UGE,
+                CompareOperator::Less =>            IntPredicate::ULT,
+                CompareOperator::LessEqual =>       IntPredicate::ULE,
+            }
         }
     }
 
-    fn to_uint_compare(self) -> IntPredicate {
+    fn to_float_compare(self) -> FloatPredicate {
         match self {
-            CompareOperator::Equal =>           IntPredicate::EQ,
-            CompareOperator::NotEqual =>        IntPredicate::NE,
-            CompareOperator::Greater =>         IntPredicate::UGT,
-            CompareOperator::GreaterEqual =>    IntPredicate::UGE,
-            CompareOperator::Less =>            IntPredicate::ULT,
-            CompareOperator::LessEqual =>       IntPredicate::ULE,
+            CompareOperator::Equal =>           FloatPredicate::OEQ,
+            CompareOperator::NotEqual =>        FloatPredicate::ONE,
+            CompareOperator::Greater =>         FloatPredicate::OGT,
+            CompareOperator::GreaterEqual =>    FloatPredicate::OGE,
+            CompareOperator::Less =>            FloatPredicate::OLT,
+            CompareOperator::LessEqual =>       FloatPredicate::OLE,
         }
     }
+
 }

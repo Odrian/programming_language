@@ -50,7 +50,7 @@ while expression {
 }
 ```
 
-Each statement in function must end with ';' except last in each scope, for example
+Each statement in function must end with `;` except last in each scope, for example
 ```
 foo :: () {
     a := 0;
@@ -63,21 +63,27 @@ foo :: () {
 ```
 
 ### Operators precedence:  
-=, :=, _=  
-unary -, !  
-==, !=, >, >=, <, <=  
-*, /, %  
-+, -  
-&  
-|  
-&&  
-||  
+`=`, `:=`, `_=`(`_` may be `+-*/`)  
+unary `-`, `!`  
+`==`, `!=`, `>`, `>=`, `<`, `<=`  
+`*`, `/`, `%`  
+`+`, `-`  
+`&`  
+`|`  
+`&&`  
+`||`  
 
 ### types
 
-i32, bool
+`bool`, `f32`, `f64`,  
+`i8`, `i16`, `i32`, `i64`, `i128`,  
+`u8`, `u16`, `u32`, `u64`, `u128`,  
 
 ### literals
 
 bool: true, false  
-i32: any number
+integer: `239i32`, `239u128`, `239` - using `i32` by default
+float: `0.0f32`, `0.0f64`, `0.0` - using `f64` by default  
+
+integer and float may contain any number of `_`  
+(first char must be a digit)

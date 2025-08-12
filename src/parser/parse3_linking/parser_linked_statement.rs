@@ -2,7 +2,7 @@ use crate::error::CompilationError as CE;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse2_syntactic::statement::*;
 use super::linked_statement::*;
-use super::object::{ObjectFactory, ObjType, FloatObjType};
+use super::object::{ObjectFactory, ObjType, FloatObjType, IntObjType};
 use super::context_window::ObjectContextWindow;
 
 pub fn link_names(statement: Vec<Statement>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement>, CE> {
@@ -231,10 +231,23 @@ impl LinkingContext<'_> {
 fn parse_primitive_type(string: &str) -> Option<ObjType> {
     match string {
         "()" => Some(ObjType::Unit),
-        "i32" => Some(ObjType::Number),
+
+        "i8"   => Some(ObjType::Integer(IntObjType::I8)),
+        "i16"  => Some(ObjType::Integer(IntObjType::I16)),
+        "i32"  => Some(ObjType::Integer(IntObjType::I32)),
+        "i64"  => Some(ObjType::Integer(IntObjType::I64)),
+        "i128" => Some(ObjType::Integer(IntObjType::I128)),
+
+        "u8"   => Some(ObjType::Integer(IntObjType::U8)),
+        "u16"  => Some(ObjType::Integer(IntObjType::U16)),
+        "u32"  => Some(ObjType::Integer(IntObjType::U32)),
+        "u64"  => Some(ObjType::Integer(IntObjType::U64)),
+        "u128" => Some(ObjType::Integer(IntObjType::U128)),
+
         "f32" => Some(ObjType::Float(FloatObjType::F32)),
         "f64" => Some(ObjType::Float(FloatObjType::F64)),
         "bool" => Some(ObjType::Bool),
+
         _ => None,
     }
 }
@@ -251,8 +264,8 @@ fn parse_number_literal(mut string: String) -> Result<TypedExpression, CE> {
             Ok(TypedExpression::new(default_float_type.clone(), LinkedExpression::FloatLiteral(string, default_float_type)))
         } else {
             // 123
-            let default_int_type = ObjType::Number;
-            Ok(TypedExpression::new(default_int_type, LinkedExpression::IntLiteral(string)))
+            let default_int_type = ObjType::Integer(IntObjType::I32);
+            Ok(TypedExpression::new(default_int_type.clone(), LinkedExpression::IntLiteral(string, default_int_type)))
         }
     };
 
@@ -263,7 +276,7 @@ fn parse_number_literal(mut string: String) -> Result<TypedExpression, CE> {
     };
 
     match typee {
-        ObjType::Number if !has_dot => Ok(TypedExpression::new(typee, LinkedExpression::IntLiteral(string))),
+        ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(typee.clone(), LinkedExpression::IntLiteral(string, typee))),
         ObjType::Float(_) => Ok(TypedExpression::new(typee.clone(), LinkedExpression::FloatLiteral(string, typee))),
         _ => Err(CE::LiteralParseError)
     }
@@ -300,7 +313,7 @@ impl ObjType {
                 }
             }
             OneSidedOperation::UnaryMinus => {
-                if matches!(typee, ObjType::Number | ObjType::Float(_)) {
+                if matches!(typee, ObjType::Integer(int) if int.is_signed()) || matches!(typee, ObjType::Float(_)) {
                     Some(typee.clone())
                 } else {
                     None
@@ -313,7 +326,7 @@ impl ObjType {
             TwoSidedOperation::Number(op) => {
                 if type1 != type2 {
                     None
-                } else if matches!(type1, ObjType::Number) || matches!(type1, ObjType::Float(_) if op.can_use_on_float()) {
+                } else if matches!(type1, ObjType::Integer(_)) || matches!(type1, ObjType::Float(_) if op.can_use_on_float()) {
                     Some(type1.clone())
                 } else {
                     None

@@ -45,7 +45,21 @@ fn test_literals() {
     assert_no_error("a := 0000000000000.00000000000000000000");
     assert_no_error("a := 0000000000000000000000000000000000");
 
+    assert_no_error("a := 1i8");
+    assert_no_error("a := 1i16");
     assert_no_error("a := 1i32");
+    assert_no_error("a := 1i64");
+    assert_no_error("a := 1i128");
+
+    assert_no_error("a := 1u8");
+    assert_no_error("a := 1u16");
+    assert_no_error("a := 1u32");
+    assert_no_error("a := 1u64");
+    assert_no_error("a := 1u128");
+
+    assert_no_error("a := -1i128");
+    assert_has_error("a := -1u128");
+
     assert_no_error("a := 1f32");
     assert_no_error("a := 1f64");
 
@@ -65,6 +79,11 @@ fn test_compare() {
     assert_no_error("cat := 0 > 0");
     assert_no_error("cat := 0 >= 0");
     assert_no_error("cat := 0 >= 0");
+    assert_no_error("cat := 0i128 >= 0i128");
+    assert_no_error("cat := 0u128 >= 0u128");
+
+    assert_has_error("cat := 0 >= 0i8");
+    assert_has_error("cat := 0 >= 0f32");
 }
 
 #[test]
@@ -128,13 +147,13 @@ fn test_function_with_while() {
     assert_eq!(statements.len(), 1);
     let LinkedStatement::Function { object: function_object, args, returns, body } = statements.pop().unwrap() else { panic!() };
 
-    assert!(matches!(returns, ObjType::Number), "{returns:?}");
+    assert!(matches!(returns, ObjType::Integer(IntObjType::I32)), "{returns:?}");
 
     let function_type = object_factory.get_type(function_object);
     assert!(matches!(function_type, ObjType::Function { .. }));
     let ObjType::Function { arguments, returns } = function_type else { unreachable!() };
-    assert_eq!(arguments, &vec![ObjType::Number]);
-    assert_eq!(returns.as_ref(), &ObjType::Number);
+    assert_eq!(arguments, &vec![ObjType::Integer(IntObjType::I32)]);
+    assert_eq!(returns.as_ref(), &ObjType::Integer(IntObjType::I32));
 
     assert_eq!(args.len(), 1);
     let arg = args[0];
@@ -149,7 +168,7 @@ fn test_function_with_while() {
     let LinkedExpression::Operation(left, right, op) = condition.expr else { panic!() };
     let LinkedExpression::Variable(condition_var) = left.expr else { panic!() };
     
-    let LinkedExpression::IntLiteral(zero) = right.expr else { panic!() };
+    let LinkedExpression::IntLiteral(zero, _) = right.expr else { panic!() };
     assert_eq!(zero, "0");
 
     assert_eq!(op, CompareOperator::NotEqual.into());
