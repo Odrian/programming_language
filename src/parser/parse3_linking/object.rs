@@ -22,13 +22,13 @@ pub enum FloatObjType {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum IntObjType {
-    U8, U16, U32, U64, U128,
-    I8, I16, I32, I64, I128,
+    U8, U16, U32, U64, U128, USize,
+    I8, I16, I32, I64, I128, ISize,
 }
 
 impl IntObjType {
     pub fn is_signed(&self) -> bool {
-        matches!(self, IntObjType::I8 | IntObjType::I16 | IntObjType::I32 | IntObjType::I64 | IntObjType::I128)
+        matches!(self, IntObjType::I8 | IntObjType::I16 | IntObjType::I32 | IntObjType::I64 | IntObjType::I128 | IntObjType::ISize)
     }
 }
 

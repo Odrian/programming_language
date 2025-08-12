@@ -151,11 +151,13 @@ impl fmt::Display for ObjType {
                 IntObjType::I32 => "i32",
                 IntObjType::I64 => "i64",
                 IntObjType::I128 => "i128",
+                IntObjType::ISize => "isize",
                 IntObjType::U8 => "u8",
                 IntObjType::U16 => "u16",
                 IntObjType::U32 => "u32",
                 IntObjType::U64 => "u64",
                 IntObjType::U128 => "u128",
+                IntObjType::USize => "usize",
             }
             Self::Float(float) => match float {
                 FloatObjType::F32 => "f32",

@@ -42,20 +42,24 @@ fn test_literals() {
     assert_no_error("a := false");
     assert_no_error("a := 0");
     assert_no_error("a := 0.0");
-    assert_no_error("a := 0000000000000.00000000000000000000");
-    assert_no_error("a := 0000000000000000000000000000000000");
+    assert_no_error("a := 10000000000000.000000000000000000001");
+    assert_no_error("a := 10000000000000000000000000000000000");
+    assert_no_error("a := 10000000000000.000000000000000000001f32");
+    assert_no_error("a := 10000000000000000000000000000000000usize");
+    assert_no_error("a := 10000000000000000000000000000000000u128");
 
     assert_no_error("a := 1i8");
     assert_no_error("a := 1i16");
     assert_no_error("a := 1i32");
     assert_no_error("a := 1i64");
     assert_no_error("a := 1i128");
+    assert_no_error("a := 1isize");
 
     assert_no_error("a := 1u8");
     assert_no_error("a := 1u16");
     assert_no_error("a := 1u32");
     assert_no_error("a := 1u64");
-    assert_no_error("a := 1u128");
+    assert_no_error("a := 1usize");
 
     assert_no_error("a := -1i128");
     assert_has_error("a := -1u128");

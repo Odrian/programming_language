@@ -20,13 +20,17 @@ pub fn parse_to_llvm(config: &Config, statements: Vec<LinkedStatement>, object_f
         return Err(CE::NoMainFunction)
     }
 
-    let module = module_generator::parse_module(&context, statements, object_factory)?;
+    let target_machine = create_target_machine(config);
+    let target_data = target_machine.get_target_data();
+
+    let module = module_generator::parse_module(&context, &target_data, statements, object_factory)?;
+    module.set_triple(&target_machine.get_triple());
 
     if let Err(err) = module.verify() {
         return Err(CE::LLVMVerifyModuleError { llvm_error: err.to_string() });
     }
 
-    create_executable(config, &module)?;
+    create_executable(config, &target_machine, &module)?;
     Ok(())
 }
 
@@ -42,7 +46,7 @@ fn verify_main_exist(statements: &[LinkedStatement], object_factory: &ObjectFact
     false
 }
 
-fn create_executable(config: &Config, module: &Module) -> Result<(), CE> {
+fn create_executable(config: &Config, tm: &TargetMachine, module: &Module) -> Result<(), CE> {
     let assembly_name = format!("{}.ll", config.output);
     let object_name = format!("{}.o", config.output);
     let executable_name = config.output.clone();
@@ -58,12 +62,10 @@ fn create_executable(config: &Config, module: &Module) -> Result<(), CE> {
         return Ok(())
     }
 
-    let tm = create_target_machine();
-    module.set_triple(&tm.get_triple());
-
     // create object file
-    tm.write_to_file(module, FileType::Object, Path::new(object_name.as_str()))
-        .expect("functions and whole module was verified, shouldn't return error");
+    if let Err(err) = tm.write_to_file(module, FileType::Object, Path::new(object_name.as_str())) {
+        panic!("functions and whole module was verified, but got llvm error: {err}")
+    }
 
     let status_option = if config.create_executable {
         let status = Command::new("cc")
@@ -94,7 +96,7 @@ fn create_executable(config: &Config, module: &Module) -> Result<(), CE> {
     Ok(())
 }
 
-fn create_target_machine() -> TargetMachine {
+fn create_target_machine(_config: &Config) -> TargetMachine {
     let triple = TargetMachine::get_default_triple();
     let target = Target::from_triple(&triple)
         .expect("Failed to get target from default triple");

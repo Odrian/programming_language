@@ -237,12 +237,14 @@ fn parse_primitive_type(string: &str) -> Option<ObjType> {
         "i32"  => Some(ObjType::Integer(IntObjType::I32)),
         "i64"  => Some(ObjType::Integer(IntObjType::I64)),
         "i128" => Some(ObjType::Integer(IntObjType::I128)),
+        "isize" => Some(ObjType::Integer(IntObjType::ISize)),
 
         "u8"   => Some(ObjType::Integer(IntObjType::U8)),
         "u16"  => Some(ObjType::Integer(IntObjType::U16)),
         "u32"  => Some(ObjType::Integer(IntObjType::U32)),
         "u64"  => Some(ObjType::Integer(IntObjType::U64)),
         "u128" => Some(ObjType::Integer(IntObjType::U128)),
+        "usize" => Some(ObjType::Integer(IntObjType::USize)),
 
         "f32" => Some(ObjType::Float(FloatObjType::F32)),
         "f64" => Some(ObjType::Float(FloatObjType::F64)),

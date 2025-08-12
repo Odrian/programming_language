@@ -7,16 +7,21 @@ use super::context_window::ValueContextWindow;
 
 use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue};
 use inkwell::{builder::Builder, context::Context, module::Module, FloatPredicate, IntPredicate};
+use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType};
 
-pub fn parse_module<'ctx>(context: &'ctx Context, statements: Vec<LinkedStatement>, object_factory: &ObjectFactory) -> Result<Module<'ctx>, CE> {
-    let mut code_module_gen = CodeModuleGen::new(context, object_factory, "main_module");
+pub fn parse_module<'ctx>(
+    context: &'ctx Context, target_data: &'ctx TargetData,
+    statements: Vec<LinkedStatement>, object_factory: &ObjectFactory
+) -> Result<Module<'ctx>, CE> {
+    let mut code_module_gen = CodeModuleGen::new(context, target_data, object_factory, "main_module");
     code_module_gen.parse_module(statements)?;
     Ok(code_module_gen.module)
 }
 
 struct CodeModuleGen<'ctx, 'factory> {
     context: &'ctx Context,
+    target_data: &'ctx TargetData,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
     object_factory: &'factory ObjectFactory,
@@ -24,12 +29,13 @@ struct CodeModuleGen<'ctx, 'factory> {
     context_window: ValueContextWindow<'ctx>,
 }
 impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
-    fn new(context: &'ctx Context, object_factory: &'factory ObjectFactory, name: &str) -> Self {
+    fn new(context: &'ctx Context, target_data: &'ctx TargetData, object_factory: &'factory ObjectFactory, name: &str) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
         let context_window = ValueContextWindow::new();
         Self {
             context,
+            target_data,
             module,
             builder,
             object_factory,
@@ -53,6 +59,14 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
                 IntObjType::I32 | IntObjType::U32 => self.context.i32_type().into(),
                 IntObjType::I64 | IntObjType::U64 => self.context.i64_type().into(),
                 IntObjType::I128 | IntObjType::U128 => self.context.i128_type().into(),
+                IntObjType::ISize | IntObjType::USize => {
+                    let pointer_size_bytes = self.target_data.get_pointer_byte_size(None);
+                    match pointer_size_bytes {
+                        4 => self.context.i32_type().into(),
+                        8 => self.context.i64_type().into(),
+                        _ => panic!("unexpected pointer size: {pointer_size_bytes} bytes")
+                    }
+                },
             }
             ObjType::Float(float) => match float {
                 FloatObjType::F32 => self.context.f32_type().into(),
