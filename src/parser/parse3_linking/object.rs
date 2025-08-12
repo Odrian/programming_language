@@ -10,8 +10,14 @@ pub struct Object {
 pub enum ObjType {
     Unit,
     Number,
+    Float(FloatObjType),
     Bool,
     Function { arguments: Vec<ObjType>, returns: Box<ObjType> }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum FloatObjType {
+    F32, F64
 }
 
 #[derive(Default)]

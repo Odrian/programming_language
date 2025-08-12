@@ -1,6 +1,6 @@
 use std::fmt;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
-use super::object::{Object, ObjType};
+use super::object::{Object, ObjType, FloatObjType};
 
 #[derive(Debug, Clone)]
 pub struct TypedExpression {
@@ -24,8 +24,12 @@ pub enum LinkedStatement {
 pub enum LinkedExpression {
     Operation(Box<TypedExpression>, Box<TypedExpression>, TwoSidedOperation),
     UnaryOperation(Box<TypedExpression>, OneSidedOperation),
-    NumberLiteral(String), // TODO: parse literals on linking step
+
+    IntLiteral(String),
+    /// `ObjType` always `FloatObjType`
+    FloatLiteral(String, ObjType),
     BoolLiteral(bool),
+
     Variable(Object),
     RoundBracket(Box<TypedExpression>),
     FunctionCall { object: Object, args: Vec<TypedExpression> },
@@ -120,7 +124,8 @@ impl fmt::Display for LinkedExpression {
             Self::UnaryOperation(ex, op) => {
                 write!(f, "{op}{ex}")
             }
-            Self::NumberLiteral(number) => write!(f, "{number}"),
+            Self::IntLiteral(number) => write!(f, "{number}"),
+            Self::FloatLiteral(number, typee) => write!(f, "{number}{typee}"),
             Self::BoolLiteral(value) => match value {
                 true => write!(f, "true"),
                 false => write!(f, "false"),
@@ -146,6 +151,10 @@ impl fmt::Display for ObjType {
             }
             Self::Number => {
                 write!(f, "i32")
+            }
+            Self::Float(float) => match float {
+                FloatObjType::F32 => write!(f, "f32"),
+                FloatObjType::F64 => write!(f, "f64"),
             }
             Self::Function { .. } => {
                 unimplemented!()

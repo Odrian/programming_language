@@ -40,7 +40,21 @@ fn test_variables() {
 fn test_literals() {
     assert_no_error("a := true");
     assert_no_error("a := false");
+    assert_no_error("a := 0");
     assert_no_error("a := 0.0");
+    assert_no_error("a := 0000000000000.00000000000000000000");
+    assert_no_error("a := 0000000000000000000000000000000000");
+
+    assert_no_error("a := 1i32");
+    assert_no_error("a := 1f32");
+    assert_no_error("a := 1f64");
+
+    assert_no_error("a := 1_000_000_000");
+    assert_no_error("a := 1_000_000_000___.___0");
+    assert_no_error("a := 1___i32");
+    assert_no_error("a := 1___f64");
+
+    assert_has_error("a := 1e5");
 }
 
 #[test]
@@ -59,7 +73,7 @@ fn test_operations() {
         assert_no_error(&format!("a := false; b := {string}"))
     }
     fn assert_no_error_int(string: &str) {
-        assert_no_error(&format!("a := 0; b := {string}"))
+        assert_no_error(&format!("a : i32 = 0; b := {string}"))
     }
 
     assert_no_error_int("-a");
@@ -67,6 +81,13 @@ fn test_operations() {
     assert_no_error_bool("a && a");
     assert_no_error_bool("a || a");
     assert_no_error_bool("a || a && a || a");
+
+    assert_no_error("a := 0.0 + 0.0");
+    assert_no_error("a := 0.0 - 0.0");
+    assert_no_error("a := 0.0 * 0.0");
+    assert_no_error("a := 0.0 / 0.0");
+
+    assert_has_error("a := 0.0 % 0.0");
 }
 
 #[test]
@@ -128,7 +149,7 @@ fn test_function_with_while() {
     let LinkedExpression::Operation(left, right, op) = condition.expr else { panic!() };
     let LinkedExpression::Variable(condition_var) = left.expr else { panic!() };
     
-    let LinkedExpression::NumberLiteral(zero) = right.expr else { panic!() };
+    let LinkedExpression::IntLiteral(zero) = right.expr else { panic!() };
     assert_eq!(zero, "0");
 
     assert_eq!(op, CompareOperator::NotEqual.into());

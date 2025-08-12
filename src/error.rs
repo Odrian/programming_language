@@ -21,6 +21,8 @@ pub enum CompilationError {
         start_bracket_type: BracketType,
         end_bracket_type: BracketType,
     },
+    
+    LiteralParseError, // FIXME
 
     FunctionOverloading { function_name: String },
     IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
@@ -79,6 +81,9 @@ impl fmt::Display for CompilationError {
                 write!(f, "Error: at {end} expected {start_name} bracket, but have {end_name} bracket. Open bracket at {start}")
             }
 
+            Self::LiteralParseError => {
+                write!(f, "Error: incorrect literal")
+            }
             Self::FunctionOverloading { function_name } => {
                 write!(f, "Error: function overloading is not allowed, you overload {function_name}")
             }

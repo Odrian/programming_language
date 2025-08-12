@@ -191,3 +191,8 @@ main :: () -> i32 {
 ";
     assert_eq!(1, get_exit_code(program));
 }
+
+#[test]
+fn test_float() {
+    // TODO: test floats
+}

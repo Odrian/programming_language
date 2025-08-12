@@ -2,7 +2,7 @@ use crate::error::CompilationError as CE;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse2_syntactic::statement::*;
 use super::linked_statement::*;
-use super::object::{ObjectFactory, ObjType};
+use super::object::{ObjectFactory, ObjType, FloatObjType};
 use super::context_window::ObjectContextWindow;
 
 pub fn link_names(statement: Vec<Statement>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement>, CE> {
@@ -171,10 +171,7 @@ impl LinkingContext<'_> {
                 )
             }
             Expression::NumberLiteral(string) => {
-                TypedExpression::new(
-                    ObjType::Number,
-                    LinkedExpression::NumberLiteral(string),
-                )
+                parse_number_literal(string)?
             },
             Expression::BoolLiteral(value) => {
                 TypedExpression::new(
@@ -216,18 +213,59 @@ impl LinkingContext<'_> {
         };
         Ok(linked)
     }
-    
+
     fn parse_type(&self, typee: Typee) -> Result<ObjType, CE> {
         match typee {
             Typee::String(string) => {
-                match string.as_str() {
-                    "()" => Ok(ObjType::Unit),
-                    "i32" => Ok(ObjType::Number),
-                    "bool" => Ok(ObjType::Bool),
-                    _ => Err(CE::LinkingError { name: string, context: format!("{:?}", self.object_context_window) }),
+                let primitive_option = parse_primitive_type(&string);
+                if let Some(typee) = primitive_option {
+                    return Ok(typee)
                 }
+
+                Err(CE::LinkingError { name: string, context: format!("{:?}", self.object_context_window) })
             }
         }
+    }
+}
+
+fn parse_primitive_type(string: &str) -> Option<ObjType> {
+    match string {
+        "()" => Some(ObjType::Unit),
+        "i32" => Some(ObjType::Number),
+        "f32" => Some(ObjType::Float(FloatObjType::F32)),
+        "f64" => Some(ObjType::Float(FloatObjType::F64)),
+        "bool" => Some(ObjType::Bool),
+        _ => None,
+    }
+}
+
+fn parse_number_literal(mut string: String) -> Result<TypedExpression, CE> {
+    string = string.replace('_', ""); 
+
+    let has_dot = string.find('.').is_some();
+
+    let Some(index) = string.find(|c: char| !c.is_ascii_digit() && c != '.') else {
+        return if has_dot {
+            // 12.3
+            let default_float_type = ObjType::Float(FloatObjType::F64);
+            Ok(TypedExpression::new(default_float_type.clone(), LinkedExpression::FloatLiteral(string, default_float_type)))
+        } else {
+            // 123
+            let default_int_type = ObjType::Number;
+            Ok(TypedExpression::new(default_int_type, LinkedExpression::IntLiteral(string)))
+        }
+    };
+
+    let suffix = string.split_off(index);
+    let option_type = parse_primitive_type(&suffix);
+    let Some(typee) = option_type else {
+        return Err(CE::LiteralParseError);
+    };
+
+    match typee {
+        ObjType::Number if !has_dot => Ok(TypedExpression::new(typee, LinkedExpression::IntLiteral(string))),
+        ObjType::Float(_) => Ok(TypedExpression::new(typee.clone(), LinkedExpression::FloatLiteral(string, typee))),
+        _ => Err(CE::LiteralParseError)
     }
 }
 
@@ -262,8 +300,8 @@ impl ObjType {
                 }
             }
             OneSidedOperation::UnaryMinus => {
-                if typee == &ObjType::Number {
-                    Some(ObjType::Number)
+                if matches!(typee, ObjType::Number | ObjType::Float(_)) {
+                    Some(typee.clone())
                 } else {
                     None
                 }
@@ -272,9 +310,11 @@ impl ObjType {
     }
     fn from_operation(type1: &ObjType, type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
         match two_sided_operation {
-            TwoSidedOperation::Number(_) => {
-                if type1 == &ObjType::Number && type2 == &ObjType::Number {
-                    Some(ObjType::Number)
+            TwoSidedOperation::Number(op) => {
+                if type1 != type2 {
+                    None
+                } else if matches!(type1, ObjType::Number) || matches!(type1, ObjType::Float(_) if op.can_use_on_float()) {
+                    Some(type1.clone())
                 } else {
                     None
                 }

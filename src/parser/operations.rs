@@ -40,6 +40,13 @@ pub enum CompareOperator {
     LessEqual,
 }
 
+impl NumberOperation {
+    pub fn can_use_on_float(&self) -> bool {
+        matches!(self, NumberOperation::Add | NumberOperation::Sub | NumberOperation::Mul | NumberOperation::Div)
+    }
+}
+
+
 impl TwoSidedOperation {
     pub fn get_prior(&self) -> u8 {
         match self {

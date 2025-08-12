@@ -1,12 +1,13 @@
 use crate::error::CompilationError as CE;
+
 use crate::parser::operations::*;
+use crate::parser::parse3_linking::object::*;
 use crate::parser::parse3_linking::linked_statement::*;
 use super::context_window::ValueContextWindow;
 
 use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue};
 use inkwell::{builder::Builder, context::Context, module::Module, IntPredicate};
-use inkwell::types::AnyTypeEnum;
-use crate::parser::parse3_linking::object::*;
+use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType};
 
 pub fn parse_module<'ctx>(context: &'ctx Context, statements: Vec<LinkedStatement>, object_factory: &ObjectFactory) -> Result<Module<'ctx>, CE> {
     let mut code_module_gen = CodeModuleGen::new(context, object_factory, "main_module");
@@ -39,15 +40,26 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
     fn get_object_name(&self, object: Object) -> &String {
         self.object_factory.get_name(object)
     }
-    fn get_object_type(&self, object: Object) -> Option<AnyTypeEnum> {
+    fn get_object_type(&self, object: Object) -> BasicTypeEnum<'ctx> {
         self.parse_type(self.object_factory.get_type(object))
     }
-    fn parse_type(&self, typee: &ObjType) -> Option<AnyTypeEnum> {
+    fn parse_type(&self, typee: &ObjType) -> BasicTypeEnum<'ctx> {
         match typee {
-            ObjType::Unit => None,
-            ObjType::Bool => Some(self.context.bool_type().into()),
-            ObjType::Number => Some(self.context.i32_type().into()),
+            ObjType::Unit => unimplemented!(),
+            ObjType::Bool => self.context.bool_type().into(),
+            ObjType::Number => self.context.i32_type().into(),
+            ObjType::Float(float) => match float {
+                FloatObjType::F32 => self.context.f32_type().into(),
+                FloatObjType::F64 => self.context.f64_type().into(),
+            }
             ObjType::Function { .. } => unimplemented!(),
+        }
+    }
+    fn function_from(&self, returns: &ObjType, args: &[BasicMetadataTypeEnum<'ctx>], is_var_args: bool) -> FunctionType<'ctx> {
+        if returns == &ObjType::Unit {
+            self.context.void_type().fn_type(args, is_var_args)
+        } else {
+            self.parse_type(returns).fn_type(args, is_var_args)
         }
     }
 }
@@ -74,12 +86,10 @@ mod module_parsing {
         }
 
         fn create_function(&mut self, statement: LinkedStatement) -> Result<(), CE> {
-            let LinkedStatement::Function { object, args, returns: _, body } = statement else { unreachable!() };
+            let LinkedStatement::Function { object, args, returns, body } = statement else { unreachable!() };
 
-            let i32_type = self.context.i32_type();
-            let argument_count = args.len();
-            let arguments_types = vec![i32_type.into(); argument_count];
-            let fn_type = i32_type.fn_type(&arguments_types, false);
+            let arguments_types: Vec<BasicMetadataTypeEnum> = args.iter().map(|obj| self.get_object_type(*obj).into()).collect();
+            let fn_type = self.function_from(&returns, &arguments_types, false);
 
             let function = self.module.add_function(self.get_object_name(object).as_str(), fn_type, None);
             let entry = self.context.append_basic_block(function, "entry");
@@ -89,8 +99,9 @@ mod module_parsing {
             self.context_window.step_in();
 
             for (index, object) in args.into_iter().enumerate() {
-                let arg_value = function.get_nth_param(index as u32).unwrap().into_int_value();
-                let pointer = self.builder.build_alloca(i32_type, &format!("arg{index}"))?;
+                let arg_value = function.get_nth_param(index as u32).unwrap();
+                let arg_type = self.get_object_type(object);
+                let pointer = self.builder.build_alloca(arg_type, &format!("arg{index}"))?;
                 self.builder.build_store(pointer, arg_value)?;
                 self.context_window.add(object, pointer.into());
             }
@@ -182,7 +193,7 @@ mod function_parsing {
                 }
                 LinkedStatement::VariableDeclaration { object, value } => {
                     let value = self.parse_expression(value)?;
-                    let var_type = self.context.i32_type();
+                    let var_type = self.get_object_type(object);
                     let pointer = self.builder.build_alloca(var_type, self.get_object_name(object))?;
                     self.builder.build_store(pointer, value)?;
                     self.context_window.add(object, pointer.into());
@@ -200,7 +211,7 @@ mod function_parsing {
             Ok(false)
         }
 
-        fn parse_expression(&self, expression: TypedExpression) -> Result<BasicValueEnum<'ctx>, CE> {
+        fn parse_expression(&self, expression: TypedExpression) -> Result<BasicValueEnum, CE> {
             match expression.expr {
                 LinkedExpression::FunctionCall { object, args } => {
                     let args: Vec<_> = args.into_iter().map(|a|
@@ -214,9 +225,19 @@ mod function_parsing {
                     let returned_value = returned.try_as_basic_value().unwrap_left();
                     Ok(returned_value)
                 },
-                LinkedExpression::NumberLiteral(literal) => {
-                    let number = literal.parse::<i32>().unwrap();
-                    Ok(self.context.i32_type().const_int(number as u64, false).into())
+                LinkedExpression::IntLiteral(literal) => {
+                    let int_type = self.context.i32_type();
+
+                    let value = literal.parse::<i32>().unwrap(); // FIXME: return error
+                    let int_value = int_type.const_int(value as u64, true);
+                    Ok(int_value.into())
+                }
+                LinkedExpression::FloatLiteral(float, float_type) => {
+                    let float_type = self.parse_type(&float_type).into_float_type();
+
+                    let value = float.parse::<f64>().unwrap(); // FIXME: return error
+                    let float_value = float_type.const_float(value);
+                    Ok(float_value.into())
                 }
                 LinkedExpression::BoolLiteral(value) => {
                     let number = match value { true => 1, false => 0 };
@@ -247,18 +268,34 @@ mod function_parsing {
                     let ex1_parsed = self.parse_expression(*ex1)?;
                     let ex2_parsed = self.parse_expression(*ex2)?;
                     match op {
-                        TwoSidedOperation::Number(num_op) => {
-                            let num1 = ex1_parsed.into_int_value();
-                            let num2 = ex2_parsed.into_int_value();
-                            match num_op {
-                                NumberOperation::Add => Ok(self.builder.build_int_add(num1, num2, "add")?.into()),
-                                NumberOperation::Sub => Ok(self.builder.build_int_sub(num1, num2, "sub")?.into()),
-                                NumberOperation::Mul => Ok(self.builder.build_int_mul(num1, num2, "mul")?.into()),
-                                NumberOperation::Div => Ok(self.builder.build_int_signed_div(num1, num2, "div")?.into()),
-                                NumberOperation::Rem => Ok(self.builder.build_int_signed_rem(num1, num2, "rem")?.into()),
-                                NumberOperation::BitAnd => Ok(self.builder.build_and(num1, num2, "bitand")?.into()),
-                                NumberOperation::BitOr => Ok(self.builder.build_or(num1, num2, "bitor")?.into()),
+                        TwoSidedOperation::Number(num_op) => match type1 {
+                            ObjType::Number => {
+                                let num1 = ex1_parsed.into_int_value();
+                                let num2 = ex2_parsed.into_int_value();
+                                match num_op {
+                                    NumberOperation::Add => Ok(self.builder.build_int_add(num1, num2, "add")?.into()),
+                                    NumberOperation::Sub => Ok(self.builder.build_int_sub(num1, num2, "sub")?.into()),
+                                    NumberOperation::Mul => Ok(self.builder.build_int_mul(num1, num2, "mul")?.into()),
+                                    NumberOperation::Div => Ok(self.builder.build_int_signed_div(num1, num2, "div")?.into()),
+                                    NumberOperation::Rem => Ok(self.builder.build_int_signed_rem(num1, num2, "rem")?.into()),
+                                    NumberOperation::BitAnd => Ok(self.builder.build_and(num1, num2, "bitand")?.into()),
+                                    NumberOperation::BitOr => Ok(self.builder.build_or(num1, num2, "bitor")?.into()),
+                                }
                             }
+                            ObjType::Float(_) => {
+                                let num1 = ex1_parsed.into_float_value();
+                                let num2 = ex2_parsed.into_float_value();
+                                match num_op {
+                                    NumberOperation::Add => Ok(self.builder.build_float_add(num1, num2, "add")?.into()),
+                                    NumberOperation::Sub => Ok(self.builder.build_float_sub(num1, num2, "sub")?.into()),
+                                    NumberOperation::Mul => Ok(self.builder.build_float_mul(num1, num2, "mul")?.into()),
+                                    NumberOperation::Div => Ok(self.builder.build_float_div(num1, num2, "div")?.into()),
+                                    NumberOperation::Rem => unreachable!(),
+                                    NumberOperation::BitAnd => unreachable!(),
+                                    NumberOperation::BitOr => unreachable!(),
+                                }
+                            }
+                            _ => unreachable!()
                         }
                         TwoSidedOperation::Bool(bool_op) => {
                             let bool1 = ex1_parsed.into_int_value();
@@ -269,7 +306,7 @@ mod function_parsing {
                             }
                         }
                         TwoSidedOperation::Compare(comp_op) => match type1 {
-                            ObjType::Number | ObjType::Bool => {
+                            ObjType::Number | ObjType::Bool | ObjType::Float(_) => {
                                 let ex1 = ex1_parsed.into_int_value();
                                 let ex2 = ex2_parsed.into_int_value();
                                 let predicate = comp_op.to_int_compare();
