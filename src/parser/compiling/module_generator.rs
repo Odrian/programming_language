@@ -52,8 +52,8 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
     fn parse_type(&self, typee: &ObjType) -> BasicTypeEnum<'ctx> {
         match typee {
             ObjType::Unit => unimplemented!(),
-            ObjType::Bool => self.context.bool_type().into(),
             ObjType::Integer(int) => match int {
+                IntObjType::Bool => self.context.bool_type().into(),
                 IntObjType::I8 | IntObjType::U8 => self.context.i8_type().into(),
                 IntObjType::I16 | IntObjType::U16 => self.context.i16_type().into(),
                 IntObjType::I32 | IntObjType::U32 => self.context.i32_type().into(),
@@ -141,6 +141,7 @@ mod module_parsing {
 
 /// parsing statements inside function
 mod function_parsing {
+    use std::cmp::Ordering;
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx, '_> {
@@ -248,7 +249,7 @@ mod function_parsing {
                 LinkedExpression::IntLiteral(literal, typee) => {
                     let int_type = self.parse_type(&typee).into_int_type();
 
-                    // FIXME: can't parse i128. Create test for i128
+                    // FIXME: can't parse i128. Uncomment test for i128
                     let value = literal.parse::<u64>().unwrap(); // FIXME: return error
                     let int_value = int_type.const_int(value, true);
                     Ok(int_value.into())
@@ -333,22 +334,69 @@ mod function_parsing {
                                 let ex1 = ex1_parsed.into_int_value();
                                 let ex2 = ex2_parsed.into_int_value();
                                 let predicate = comp_op.to_int_compare(int.is_signed());
-                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "equals")?.into())
-                            }
-                            ObjType::Bool => {
-                                let ex1 = ex1_parsed.into_int_value();
-                                let ex2 = ex2_parsed.into_int_value();
-                                let predicate = comp_op.to_int_compare(true);
-                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "equals")?.into())
+                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "compare")?.into())
                             }
                             ObjType::Float(_) => {
                                 let ex1 = ex1_parsed.into_float_value();
                                 let ex2 = ex2_parsed.into_float_value();
                                 let predicate = comp_op.to_float_compare();
-                                Ok(self.builder.build_float_compare(predicate, ex1, ex2, "equals")?.into())
+                                Ok(self.builder.build_float_compare(predicate, ex1, ex2, "compare")?.into())
                             }
-                            ObjType::Unit | ObjType::Function { .. } => unimplemented!(),
+                            ObjType::Unit | ObjType::Function { .. } => unreachable!(),
                         }
+                    }
+                }
+                LinkedExpression::As(expression, to_obj_type) => {
+                    let was_obj_type = expression.typee.clone();
+                    let ex = self.parse_expression(*expression)?;
+                    match was_obj_type {
+                        ObjType::Integer(int_type_from) => {
+                            let ex_int = ex.into_int_value();
+                            let from_type = self.parse_type(&was_obj_type).into_int_type();
+                            let to_type = self.parse_type(&to_obj_type).into_int_type();
+
+                            let from_size = from_type.get_bit_width();
+                            let to_size = to_type.get_bit_width();
+
+                            match from_size.cmp(&to_size) {
+                                Ordering::Equal => {
+                                    Ok(ex)
+                                }
+                                Ordering::Less => { // extend
+                                    if int_type_from.is_signed() {
+                                        // example: i8 -> i16, i8 -> u16 (i8 -> i16 -> u16)
+                                        Ok(self.builder.build_int_s_extend(ex_int, to_type, "int_casing")?.into())
+                                    } else {
+                                        // example: u8 -> i16/u16
+                                        Ok(self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into())
+                                    }
+                                }
+                                Ordering::Greater => { // truncation
+                                    Ok(self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into())
+                                }
+                            }
+                        }
+                        ObjType::Float(_) => {
+                            let ex_float = ex.into_float_value();
+
+                            let to_type = self.parse_type(&to_obj_type).into_float_type();
+
+                            let from_size = was_obj_type.get_float_bits_or_panic();
+                            let to_size = to_obj_type.get_float_bits_or_panic();
+
+                            match from_size.cmp(&to_size) {
+                                Ordering::Equal => {
+                                    Ok(ex)
+                                }
+                                Ordering::Less => { // extend
+                                    Ok(self.builder.build_float_ext(ex_float, to_type, "float_casing")?.into())
+                                }
+                                Ordering::Greater => { // truncation
+                                    Ok(self.builder.build_float_trunc(ex_float, to_type, "float_casing")?.into())
+                                }
+                            }
+                        }
+                        ObjType::Unit | ObjType::Function { .. } => unreachable!()
                     }
                 }
             }

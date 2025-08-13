@@ -104,7 +104,7 @@ impl ParsingState {
             },
             Token::Colon => {
                 // name :
-                let typee = parse_type(&mut self.tokens, position)?;
+                let typee = self.parse_type(position)?;
 
                 let Some(TokenWithPos { token, position }) = self.tokens.next() else {
                     return Err(CE::SyntacticsError(position, format!("expected '=' after '{string}' : {typee}")))
@@ -206,6 +206,12 @@ impl ParsingState {
                 let args = parse_function_arguments(vec, position)?;
                 self.parse_expression2(Expression::new_function_call(name, args))
             }
+            Token::String(string) if string == "as" => {
+                let position = self.tokens.next().unwrap().position;
+
+                let typee = self.parse_type(position)?;
+                Ok(Expression::new_as(expression1, typee))
+            }
             Token::Semicolon | Token::Comma | Token::Bracket(_, _) => {
                 Ok(expression1)
             }
@@ -234,7 +240,7 @@ impl ParsingState {
         let mut token_with_pos = token_with_pos;
         let return_type = {
             if token_with_pos.token == Token::Arrow {
-                let return_type = parse_type(&mut self.tokens, token_with_pos.position)?;
+                let return_type = self.parse_type(token_with_pos.position)?;
                 let Some(new_token_with_pos) = self.tokens.next() else {
                     return Err(CE::SyntacticsError(token_with_pos.position, "expected function body".to_owned()));
                 };
@@ -260,25 +266,25 @@ impl ParsingState {
             return Ok(Vec::new())
         }
         let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
-        let mut arg_iter = args.into_iter();
+        let mut state = Self::new(args);
 
-        while let Some(TokenWithPos { token, position }) = arg_iter.next() {
+        while let Some(TokenWithPos { token, position }) = state.tokens.next() {
             let Token::String(arg_i) = token else {
                 return Err(CE::SyntacticsError(position, "expected argument name in function declaration".to_owned()));
             };
 
-            let Some(TokenWithPos { token, position }) = arg_iter.next() else {
+            let Some(TokenWithPos { token, position }) = state.tokens.next() else {
                 return Err(CE::SyntacticsError(position, "expected argument type after name".to_owned()))
             };
             if token != Token::Colon {
                 return Err(CE::SyntacticsError(position, "expected argument type after name".to_owned()))
             }
 
-            let argument_type = parse_type(&mut arg_iter, position)?;
+            let argument_type = state.parse_type(position)?;
 
             arguments.push((arg_i, argument_type));
 
-            let Some(TokenWithPos { token, position }) = arg_iter.next() else {
+            let Some(TokenWithPos { token, position }) = state.tokens.next() else {
                 break;
             };
             if token != Token::Comma {
@@ -288,19 +294,16 @@ impl ParsingState {
 
         Ok(arguments)
     }
-}
 
-fn parse_type<T>(iter: &mut T, position: PositionInFile) -> Result<Typee, CE>
-where
-    T: Iterator<Item = TokenWithPos>
-{
-    let Some(TokenWithPos { token, position }) = iter.next() else {
-        return Err(CE::SyntacticsError(position, "expected type after that".to_owned()));
-    };
+    fn parse_type(&mut self, position: PositionInFile) -> Result<Typee, CE> {
+        let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+            return Err(CE::SyntacticsError(position, "expected type after that".to_owned()));
+        };
 
-    match token {
-        Token::String(string) => Ok(Typee::String(string)),
-        _ => Err(CE::SyntacticsError(position, "expected type".to_owned()))
+        match token {
+            Token::String(string) => Ok(Typee::String(string)),
+            _ => Err(CE::SyntacticsError(position, "expected type".to_owned()))
+        }
     }
 }
 

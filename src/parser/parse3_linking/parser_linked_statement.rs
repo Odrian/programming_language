@@ -170,12 +170,26 @@ impl LinkingContext<'_> {
                     LinkedExpression::new_unary_operation(ex, op)
                 )
             }
+            Expression::As(expression, typee) => {
+                let ex = self.parse_expression(*expression)?;
+                let typee = self.parse_type(typee)?;
+                
+                let can_cast = ObjType::check_can_cast(&ex.typee, &typee);
+                if !can_cast {
+                    return Err(CE::IncorrectAs { what: ex.expr, from: ex.typee, to: typee })
+                }
+
+                TypedExpression::new(
+                    typee.clone(),
+                    LinkedExpression::new_as(ex, typee),
+                )
+            }
             Expression::NumberLiteral(string) => {
                 parse_number_literal(string)?
             },
             Expression::BoolLiteral(value) => {
                 TypedExpression::new(
-                    ObjType::Bool,
+                    ObjType::BOOL,
                     LinkedExpression::BoolLiteral(value),
                 )
             }
@@ -248,7 +262,7 @@ fn parse_primitive_type(string: &str) -> Option<ObjType> {
 
         "f32" => Some(ObjType::Float(FloatObjType::F32)),
         "f64" => Some(ObjType::Float(FloatObjType::F64)),
-        "bool" => Some(ObjType::Bool),
+        "bool" => Some(ObjType::BOOL),
 
         _ => None,
     }
@@ -262,12 +276,10 @@ fn parse_number_literal(mut string: String) -> Result<TypedExpression, CE> {
     let Some(index) = string.find(|c: char| !c.is_ascii_digit() && c != '.') else {
         return if has_dot {
             // 12.3
-            let default_float_type = ObjType::Float(FloatObjType::F64);
-            Ok(TypedExpression::new(default_float_type.clone(), LinkedExpression::FloatLiteral(string, default_float_type)))
+            Ok(TypedExpression::new(ObjType::DEFAULT_FLOAT, LinkedExpression::FloatLiteral(string, ObjType::DEFAULT_FLOAT)))
         } else {
             // 123
-            let default_int_type = ObjType::Integer(IntObjType::I32);
-            Ok(TypedExpression::new(default_int_type.clone(), LinkedExpression::IntLiteral(string, default_int_type)))
+            Ok(TypedExpression::new(ObjType::DEFAULT_INTEGER, LinkedExpression::IntLiteral(string, ObjType::DEFAULT_INTEGER)))
         }
     };
 
@@ -305,11 +317,18 @@ fn check_is_returns(statements: &[LinkedStatement]) -> bool {
 }
 
 impl ObjType {
+    fn check_can_cast(from: &ObjType, other: &ObjType) -> bool {
+        match from {
+            ObjType::Float(_) => matches!(other, ObjType::Float(_)),
+            ObjType::Integer(_) => matches!(other, ObjType::Integer(_)),
+            ObjType::Function { .. } | ObjType::Unit => unreachable!(),
+        }
+    }
     fn from_unary_operation(typee: &ObjType, one_sided_operation: &OneSidedOperation) -> Option<ObjType> {
         match one_sided_operation {
             OneSidedOperation::BoolNot => {
-                if typee == &ObjType::Bool {
-                    Some(ObjType::Bool)
+                if typee == &ObjType::BOOL {
+                    Some(ObjType::BOOL)
                 } else {
                     None
                 }
@@ -335,8 +354,8 @@ impl ObjType {
                 }
             }
             TwoSidedOperation::Bool(_) => {
-                if type1 == &ObjType::Bool && type2 == &ObjType::Bool {
-                    Some(ObjType::Bool)
+                if type1 == &ObjType::BOOL && type2 == &ObjType::BOOL {
+                    Some(ObjType::BOOL)
                 } else {
                     None
                 }
@@ -345,10 +364,10 @@ impl ObjType {
                 if type1 != type2 {
                     None
                 } else if comp_op.is_equal_op() {
-                    Some(ObjType::Bool)
+                    Some(ObjType::BOOL)
                 } else {
                     // FIXME: not all types can be compared
-                    Some(ObjType::Bool)
+                    Some(ObjType::BOOL)
                 }
             }
         }
@@ -357,7 +376,7 @@ impl ObjType {
 
 fn check_condition_type(condition: &TypedExpression) -> Result<(), CE> {
     match condition.typee {
-        ObjType::Bool => Ok(()),
-        _ => Err(CE::IncorrectType { got: condition.typee.clone(), expected: ObjType::Bool }),
+        ObjType::BOOL => Ok(()),
+        _ => Err(CE::IncorrectType { got: condition.typee.clone(), expected: ObjType::BOOL }),
     }
 }

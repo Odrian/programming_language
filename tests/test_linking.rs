@@ -114,6 +114,30 @@ fn test_operations() {
 }
 
 #[test]
+fn test_as() {
+    let int_types = [
+        "bool", "isize", "usize",
+        "i8", "i16", "i32", "i64", "i128",
+        "u8", "u16", "u32", "u64", "u128",
+    ];
+    let float_types = ["f32", "f64"];
+    
+    fn check_numbers(func: &dyn Fn(&str), from: &[&str], to: &[&str]) {
+        for t1 in from {
+            for t2 in to {
+                func(&format!("a: {t1} = 0_{t1}; b: {t2} = a as {t2}"))
+            }
+        }
+    }
+    
+    check_numbers(&assert_no_error, &int_types, &int_types);
+    check_numbers(&assert_no_error, &float_types, &float_types);
+
+    check_numbers(&assert_has_error, &int_types, &float_types);
+    check_numbers(&assert_has_error, &float_types, &int_types);
+}
+
+#[test]
 fn test_functions() {
     assert_no_error("a :: () { }");
     assert_no_error("a :: (arg1: i32) { }");

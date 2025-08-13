@@ -11,8 +11,22 @@ pub enum ObjType {
     Unit,
     Integer(IntObjType),
     Float(FloatObjType),
-    Bool,
     Function { arguments: Vec<ObjType>, returns: Box<ObjType> }
+}
+impl ObjType {
+    pub const BOOL: ObjType = ObjType::Integer(IntObjType::Bool);
+    pub const DEFAULT_INTEGER: ObjType = ObjType::Integer(IntObjType::I32);
+    pub const DEFAULT_FLOAT: ObjType = ObjType::Float(FloatObjType::F64);
+    
+    pub fn get_float_bits_or_panic(&self) -> u8 {
+        let ObjType::Float(float) = self else {
+            panic!();
+        };
+        match float {
+            FloatObjType::F32 => 4,
+            FloatObjType::F64 => 8,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -22,6 +36,7 @@ pub enum FloatObjType {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum IntObjType {
+    Bool,
     U8, U16, U32, U64, U128, USize,
     I8, I16, I32, I64, I128, ISize,
 }

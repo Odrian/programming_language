@@ -2,17 +2,19 @@ use std::fmt;
 use inkwell::builder::BuilderError;
 use crate::parser::{PositionInFile, BracketType};
 use crate::parser::operations::{TwoSidedOperation, OneSidedOperation};
+use crate::parser::parse3_linking::linked_statement::LinkedExpression;
 use crate::parser::parse3_linking::object::ObjType;
 
+// TODO: Box it
 #[derive(Debug, Eq, PartialEq)]
 pub enum CompilationError {
     WrongArguments(String),
+
     CantReadSourceFile { filepath: String, io_error: String },
     CantWriteToFile { filepath: String, what: String, io_error: String },
     CantDeleteObjectFile { filepath: String, io_error: String },
 
     SyntacticsError(PositionInFile, String),
-
     BracketNotOpened(PositionInFile, BracketType),
     BracketNotClosed(PositionInFile, BracketType),
     WrongBracketClosed {
@@ -28,13 +30,16 @@ pub enum CompilationError {
     IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
+
+    UnexpectedGlobalVariable,
     UnexpectedReturn,
+    FunctionMustReturn { function_name: String },
+    NoMainFunction,
+
     IncorrectType { got: ObjType, expected: ObjType },
     IncorrectOneOper { typee: ObjType, op: OneSidedOperation },
     IncorrectTwoOper { type1: ObjType, type2: ObjType, op: TwoSidedOperation },
-    NoMainFunction,
-    UnexpectedGlobalVariable,
-    FunctionMustReturn { function_name: String },
+    IncorrectAs { what: LinkedExpression, from: ObjType, to: ObjType },
 
     LLVMError(BuilderError),
     LLVMVerifyModuleError { llvm_error: String },
@@ -84,6 +89,7 @@ impl fmt::Display for CompilationError {
             Self::LiteralParseError => {
                 write!(f, "Error: incorrect literal")
             }
+
             Self::FunctionOverloading { function_name } => {
                 write!(f, "Error: function overloading is not allowed, you overload {function_name}")
             }
@@ -96,9 +102,20 @@ impl fmt::Display for CompilationError {
             Self::LinkingErrorFunctionUsage { name } => {
                 write!(f, "Linking Error: can't use function {name} as variable value")
             }
+
+            Self::UnexpectedGlobalVariable => {
+                write!(f, "Error: Global variables are not supported")
+            }
             Self::UnexpectedReturn => {
                 write!(f, "Error: unexpected return")
             }
+            Self::FunctionMustReturn { function_name } => {
+                write!(f, "Error: function {function_name} may not return")
+            }
+            Self::NoMainFunction => {
+                write!(f, "Error: No 'main' function")
+            }
+
             Self::IncorrectType { got, expected } => {
                 write!(f, "Error: incorrect type, got {got}, expected {expected}")
             }
@@ -108,14 +125,8 @@ impl fmt::Display for CompilationError {
             Self::IncorrectTwoOper { type1, type2, op } => {
                 write!(f, "Error: can't use '{op}' between '{type1}' and '{type2}'")
             }
-            Self::NoMainFunction => {
-                write!(f, "Error: No 'main' function")
-            }
-            Self::UnexpectedGlobalVariable => {
-                write!(f, "Error: Global variables are not supported")
-            }
-            Self::FunctionMustReturn { function_name } => {
-                write!(f, "Error: function {function_name} may not return")
+            Self::IncorrectAs { what, from, to } => {
+                write!(f, "Error: can't cast {what}, which has type {from} to {to}")
             }
 
             Self::LLVMError(build_error) => {

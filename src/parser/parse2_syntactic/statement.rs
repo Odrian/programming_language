@@ -18,6 +18,7 @@ pub enum Statement {
 pub enum Expression {
     Operation(Box<Self>, Box<Self>, TwoSidedOperation),
     UnaryOperation(Box<Self>, OneSidedOperation),
+    As(Box<Self>, Typee),
 
     NumberLiteral(String),
     BoolLiteral(bool),
@@ -58,6 +59,9 @@ impl Expression {
     }
     pub fn new_unary_operation(expression: Self, op: OneSidedOperation) -> Self {
         Self::UnaryOperation(Box::new(expression), op)
+    }
+    pub fn new_as(expression: Expression, typee: Typee) -> Self {
+        Self::As(Box::new(expression), typee)
     }
     pub fn new_round_bracket(expression: Self) -> Self {
         Self::RoundBracket(Box::new(expression))
@@ -124,6 +128,9 @@ impl fmt::Display for Expression {
             },
             Self::UnaryOperation(ex, op) => {
                 write!(f, "{op}{ex}")
+            }
+            Self::As(expression, typee) => {
+                write!(f, "({expression} as {typee})")
             }
             Self::NumberLiteral(number) => write!(f, "{number}"),
             Self::BoolLiteral(value) => match value {

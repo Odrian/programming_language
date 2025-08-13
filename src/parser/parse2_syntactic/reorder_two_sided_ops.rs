@@ -42,6 +42,9 @@ fn reorder_expression(expression: Expression) -> Expression {
         Expression::UnaryOperation(expression, op) => {
             Expression::new_unary_operation(reorder_expression(*expression), op)
         },
+        Expression::As(boxed, op) => {
+            Expression::new_as(reorder_expression(*boxed), op)
+        }
         Expression::NumberLiteral(string) => Expression::NumberLiteral(string),
         Expression::BoolLiteral(value) => Expression::BoolLiteral(value),
         Expression::RoundBracket(ex1) => {

@@ -172,6 +172,9 @@ fn test_operations() {
 
     assert_no_error("if !a {}");
     assert_no_error("if -a {}");
+
+    assert_no_error("if a as a {}");
+    assert_no_error("a := a as a");
 }
 
 #[test]
