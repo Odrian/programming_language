@@ -237,13 +237,10 @@ main :: () -> i32 {
 }
 
 #[test]
-fn test_u8() {
-    let program = "\
-main :: () -> i32 {
-    return 257u8 as i32
-}
-";
-    assert_eq!(1, get_exit_code(program));
+fn test_literals() {
+    assert_eq!(1, get_exit_code_main_return("257u8 as i32"));
+    assert_eq!(1, get_exit_code_main_return(&format!("('a' as i32 == {}) as i32", 'a' as i32)));
+    assert_eq!(1, get_exit_code_main_return(&format!("({}_u8 as char == 'a') as i32", 'a' as i32)));
 }
 
 // #[test]

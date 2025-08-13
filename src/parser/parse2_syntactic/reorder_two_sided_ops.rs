@@ -47,6 +47,7 @@ fn reorder_expression(expression: Expression) -> Expression {
         }
         Expression::NumberLiteral(string) => Expression::NumberLiteral(string),
         Expression::BoolLiteral(value) => Expression::BoolLiteral(value),
+        Expression::CharLiteral(char) => Expression::CharLiteral(char), 
         Expression::RoundBracket(ex1) => {
             Expression::new_round_bracket(reorder_expression(*ex1))
         }

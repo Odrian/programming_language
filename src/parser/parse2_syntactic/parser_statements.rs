@@ -188,6 +188,14 @@ impl ParsingState {
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 Ok(unary_expression)
             }
+            Token::Quotes(string) => { // '..'
+                let char_value = parse_quotes(string)?;
+                let expression = Expression::CharLiteral(char_value);
+                self.parse_expression2(expression, was_unary)
+            }
+            Token::DoubleQuotes(_string) => { // ".."
+                unimplemented!("string literal")
+            }
             _ => {
                 Err(CE::SyntacticsError(position, "expected expression".to_owned()))
             }
@@ -219,10 +227,15 @@ impl ParsingState {
                 self.parse_expression2(Expression::new_function_call(name, args), was_unary)
             }
             Token::String(string) if string == "as" => { // exp as
+                if was_unary {
+                    return Ok(expression1)
+                }
+
                 let position = self.tokens.next().unwrap().position;
 
                 let typee = self.parse_type(position)?;
-                Ok(Expression::new_as(expression1, typee))
+                let expression = Expression::new_as(expression1, typee);
+                self.parse_expression2(expression, false)
             }
             Token::Semicolon | Token::Comma | Token::Bracket(_, _) => {
                 Ok(expression1)
@@ -336,4 +349,20 @@ fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile)
     }
 
     Ok(args)
+}
+
+fn parse_quotes(string: String) -> Result<u8, CE> {
+    let mut chars = string.chars();
+    let Some(first_char) = chars.next() else {
+        return Err(CE::LiteralParseError { what: format!("'{string}'"), error: "incorrect char literal".to_owned() })
+    };
+
+    if chars.next().is_some() {
+        return Err(CE::LiteralParseError { what: format!("'{string}'"), error: "incorrect char literal".to_owned() })
+    }
+    if !first_char.is_ascii() {
+        return Err(CE::LiteralParseError { what: format!("'{string}'"), error: "incorrect char literal".to_owned() })
+    }
+    let char_value = first_char as u8;
+    Ok(char_value)
 }

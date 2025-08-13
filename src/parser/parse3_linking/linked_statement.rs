@@ -31,6 +31,7 @@ pub enum LinkedExpression {
     /// `ObjType` always `FloatObjType`
     FloatLiteral(String, ObjType),
     BoolLiteral(bool),
+    CharLiteral(u8),
 
     Variable(Object),
     RoundBracket(Box<TypedExpression>),
@@ -138,6 +139,7 @@ impl fmt::Display for LinkedExpression {
                 true => write!(f, "true"),
                 false => write!(f, "false"),
             }
+            Self::CharLiteral(char) => write!(f, "'{}'", *char as char),
             Self::Variable(object) => write!(f, "{object}"),
             Self::RoundBracket(expression) => write!(f, "({expression})"),
             Self::FunctionCall { object, args } => {
@@ -152,6 +154,7 @@ impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
             Self::Unit => "()",
+            Self::Char => "char",
             Self::Integer(int) => match int {
                 IntObjType::Bool => "bool",
                 IntObjType::I8 => "i8",

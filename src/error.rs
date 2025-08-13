@@ -20,8 +20,9 @@ pub enum CompilationError {
         start_bracket_type: BracketType,
         end_bracket_type: BracketType,
     },
-    
-    LiteralParseError { what: String, error: String }, // FIXME
+    QuotesNotClosed(PositionInFile),
+
+    LiteralParseError { what: String, error: String },
 
     FunctionOverloading { function_name: String },
     IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
@@ -80,6 +81,9 @@ impl fmt::Display for CompilationError {
                 let start_name = bracket_type_to_string(start_bracket_type);
                 let end_name = bracket_type_to_string(end_bracket_type);
                 write!(f, "Error: at {end} expected {start_name} bracket, but have {end_name} bracket. Open bracket at {start}")
+            }
+            Self::QuotesNotClosed(position) => {
+                write!(f, "Error: quotes not closed at {position}")
             }
 
             Self::LiteralParseError { what, error } => {

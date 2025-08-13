@@ -9,6 +9,7 @@ pub struct Object {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ObjType {
     Unit,
+    Char,
     Integer(IntObjType),
     Float(FloatObjType),
     Function { arguments: Vec<ObjType>, returns: Box<ObjType> }

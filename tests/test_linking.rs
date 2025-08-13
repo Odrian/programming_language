@@ -73,6 +73,17 @@ fn test_literals() {
     assert_no_error("a := 1___f64");
 
     assert_has_error("a := 1e5");
+
+    assert_no_error("a := 'a'");
+    assert_no_error("a := '/'");
+    assert_no_error("a := '\\'");
+    assert_no_error("a := '\"'");
+
+    assert_has_error("a := '''");
+    assert_has_error("a := '😀'");
+
+    // assert_no_error("a := \"\"");
+    // assert_no_error("a := \"text\"");
 }
 
 #[test]

@@ -21,8 +21,37 @@ fn parse_inside_brackets(
     let mut buffer = String::new();
     let mut start_buffer_index = start_index;
     let mut index = start_index;
+
     while let Some(char) = text.next() {
-        if let Some(bracket_type) = is_open_bracket(char) {
+        if char == '"' || char == '\'' {
+            if index != start_buffer_index {
+                let mut tokens = split_text_without_brackets(buffer, start_buffer_index);
+                buffer = String::new();
+                result_tokens.append(&mut tokens);
+            }
+            start_buffer_index = index;
+
+            let mut inside_quotes = String::new();
+            loop {
+                let Some(next_char) = text.next() else {
+                    return Err(CE::QuotesNotClosed(PositionInFile::new_sized(index, inside_quotes.len())));
+                };
+                if next_char == char {
+                    break;
+                }
+                inside_quotes.push(next_char);
+            }
+
+            let new_index = index + inside_quotes.len() + 2;
+            let token = if char == '"' {
+                Token::DoubleQuotes(inside_quotes)
+            } else {
+                Token::Quotes(inside_quotes)
+            };
+            let position = PositionInFile::new(index, new_index);
+            result_tokens.push(TokenWithPos::new(token, position));
+            index += new_index;
+        } else if let Some(bracket_type) = is_open_bracket(char) {
             // open bracket
             if index != start_buffer_index {
                 let mut tokens = split_text_without_brackets(buffer, start_buffer_index);

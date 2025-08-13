@@ -52,6 +52,7 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
     fn parse_type(&self, typee: &ObjType) -> BasicTypeEnum<'ctx> {
         match typee {
             ObjType::Unit => unimplemented!(),
+            ObjType::Char => self.context.i8_type().into(),
             ObjType::Integer(int) => match int {
                 IntObjType::Bool => self.context.bool_type().into(),
                 IntObjType::I8 | IntObjType::U8 => self.context.i8_type().into(),
@@ -261,9 +262,14 @@ mod function_parsing {
                     let float_value = float_type.const_float(value);
                     Ok(float_value.into())
                 }
-                LinkedExpression::BoolLiteral(value) => {
-                    let number = match value { true => 1, false => 0 };
-                    Ok(self.context.bool_type().const_int(number, false).into())
+                LinkedExpression::BoolLiteral(bool) => {
+                    let number = match bool { true => 1, false => 0 };
+                    let int_value = self.context.bool_type().const_int(number, false);
+                    Ok(int_value.into())
+                }
+                LinkedExpression::CharLiteral(char) => {
+                    let int_value = self.parse_type(&ObjType::Char).into_int_type().const_int(char as u64, false);
+                    Ok(int_value.into())
                 }
                 LinkedExpression::RoundBracket(boxed) => self.parse_expression(*boxed),
                 LinkedExpression::Variable(object) => {
@@ -330,17 +336,23 @@ mod function_parsing {
                             }
                         }
                         TwoSidedOperation::Compare(comp_op) => match type1 {
+                            ObjType::Char => {
+                                let ex1 = ex1_parsed.into_int_value();
+                                let ex2 = ex2_parsed.into_int_value();
+                                let predicate = comp_op.to_int_compare(false);
+                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "compare_char")?.into())
+                            }
                             ObjType::Integer(int) => {
                                 let ex1 = ex1_parsed.into_int_value();
                                 let ex2 = ex2_parsed.into_int_value();
                                 let predicate = comp_op.to_int_compare(int.is_signed());
-                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "compare")?.into())
+                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "compare_int")?.into())
                             }
                             ObjType::Float(_) => {
                                 let ex1 = ex1_parsed.into_float_value();
                                 let ex2 = ex2_parsed.into_float_value();
                                 let predicate = comp_op.to_float_compare();
-                                Ok(self.builder.build_float_compare(predicate, ex1, ex2, "compare")?.into())
+                                Ok(self.builder.build_float_compare(predicate, ex1, ex2, "compare_float")?.into())
                             }
                             ObjType::Unit | ObjType::Function { .. } => unreachable!(),
                         }
@@ -350,6 +362,27 @@ mod function_parsing {
                     let was_obj_type = expression.typee.clone();
                     let ex = self.parse_expression(*expression)?;
                     match was_obj_type {
+                        ObjType::Char => {
+                            let ex_int = ex.into_int_value();
+
+                            let from_type = self.parse_type(&ObjType::Char).into_int_type();
+                            let to_type = self.parse_type(&to_obj_type).into_int_type();
+
+                            let from_size = from_type.get_bit_width();
+                            let to_size = to_type.get_bit_width();
+
+                            match from_size.cmp(&to_size) {
+                                Ordering::Equal => {
+                                    Ok(ex)
+                                }
+                                Ordering::Less => { // extend
+                                    Ok(self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into())
+                                }
+                                Ordering::Greater => { // truncation
+                                    Ok(self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into())
+                                }
+                            }
+                        }
                         ObjType::Integer(int_type_from) => {
                             let ex_int = ex.into_int_value();
                             let from_type = self.parse_type(&was_obj_type).into_int_type();

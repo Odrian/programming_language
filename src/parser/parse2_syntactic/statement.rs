@@ -22,6 +22,7 @@ pub enum Expression {
 
     NumberLiteral(String),
     BoolLiteral(bool),
+    CharLiteral(u8),
 
     Variable(String),
     RoundBracket(Box<Self>),
@@ -137,6 +138,7 @@ impl fmt::Display for Expression {
                 true => write!(f, "true"),
                 false => write!(f, "false"),
             }
+            Self::CharLiteral(char) => write!(f, "'{}'", *char as char),
             Self::Variable(name) => write!(f, "{name}"),
             Self::RoundBracket(expression) => write!(f, "({expression})"),
             Self::FunctionCall { object: name, args } => {

@@ -76,15 +76,24 @@ unary `-`, `!`
 
 ### types
 
-`bool`, `f32`, `f64`,  
+`bool`, `char`,  
 `i8`, `i16`, `i32`, `i64`, `i128`, `isize`,  
 `u8`, `u16`, `u32`, `u64`, `u128`, `usize`,  
+`f32`, `f64`,
 
 ### literals
 
-bool: true, false  
+bool: `true`, `false`  
+char: `'c'`  
 integer: `239i32`, `239u128`, `239` - using `i32` by default
 float: `0.0f32`, `0.0f64`, `0.0` - using `f64` by default  
 
 integer and float may contain any number of `_`  
 (first char must be a digit)
+
+### allowed casts for operator `as`
+* `integer` => `integer`
+* `float` => `float`
+* `bool` => `integer`
+* `char` => `integer`
+* `u8` => `char` (for `integer` => `char` use `as u8 as char`)

@@ -193,6 +193,12 @@ impl LinkingContext<'_> {
                     LinkedExpression::BoolLiteral(value),
                 )
             }
+            Expression::CharLiteral(value) => {
+                TypedExpression::new(
+                    ObjType::Char,
+                    LinkedExpression::CharLiteral(value),
+                )
+            }
             Expression::RoundBracket(ex1) => {
                 let ex1 = self.parse_expression(*ex1)?;
                 TypedExpression::new(ex1.typee.clone(), LinkedExpression::new_round_bracket(ex1))
@@ -246,6 +252,9 @@ fn parse_primitive_type(string: &str) -> Option<ObjType> {
     match string {
         "()" => Some(ObjType::Unit),
 
+        "bool" => Some(ObjType::BOOL),
+        "char" => Some(ObjType::Char),
+
         "i8"   => Some(ObjType::Integer(IntObjType::I8)),
         "i16"  => Some(ObjType::Integer(IntObjType::I16)),
         "i32"  => Some(ObjType::Integer(IntObjType::I32)),
@@ -262,7 +271,6 @@ fn parse_primitive_type(string: &str) -> Option<ObjType> {
 
         "f32" => Some(ObjType::Float(FloatObjType::F32)),
         "f64" => Some(ObjType::Float(FloatObjType::F64)),
-        "bool" => Some(ObjType::BOOL),
 
         _ => None,
     }
@@ -318,7 +326,11 @@ fn check_is_returns(statements: &[LinkedStatement]) -> bool {
 
 impl ObjType {
     fn check_can_cast(from: &ObjType, other: &ObjType) -> bool {
+        if other == &ObjType::Char {
+            return from == &ObjType::Integer(IntObjType::U8)
+        }
         match from {
+            ObjType::Char => matches!(other, ObjType::Integer(_)),
             ObjType::Float(_) => matches!(other, ObjType::Float(_)),
             ObjType::Integer(from) => matches!(other, ObjType::Integer(to) if !to.is_bool() || from.is_bool()),
             ObjType::Function { .. } | ObjType::Unit => unreachable!(),

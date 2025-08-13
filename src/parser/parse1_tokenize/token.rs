@@ -27,6 +27,8 @@ pub enum Token {
     UnaryOperation(OneSidedOperation),
 
     Bracket(Vec<TokenWithPos>, BracketType),
+    Quotes(String),
+    DoubleQuotes(String),
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
