@@ -176,7 +176,7 @@ impl LinkingContext<'_> {
                 
                 let can_cast = ObjType::check_can_cast(&ex.typee, &typee);
                 if !can_cast {
-                    return Err(CE::IncorrectAs { what: ex.expr, from: ex.typee, to: typee })
+                    return Err(CE::IncorrectAs { what: ex.expr.to_string(), from: ex.typee, to: typee })
                 }
 
                 TypedExpression::new(

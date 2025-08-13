@@ -2,10 +2,8 @@ use std::fmt;
 use inkwell::builder::BuilderError;
 use crate::parser::{PositionInFile, BracketType};
 use crate::parser::operations::{TwoSidedOperation, OneSidedOperation};
-use crate::parser::parse3_linking::linked_statement::LinkedExpression;
 use crate::parser::parse3_linking::object::ObjType;
 
-// TODO: Box it
 #[derive(Debug, Eq, PartialEq)]
 pub enum CompilationError {
     WrongArguments(String),
@@ -39,7 +37,7 @@ pub enum CompilationError {
     IncorrectType { got: ObjType, expected: ObjType },
     IncorrectOneOper { typee: ObjType, op: OneSidedOperation },
     IncorrectTwoOper { type1: ObjType, type2: ObjType, op: TwoSidedOperation },
-    IncorrectAs { what: LinkedExpression, from: ObjType, to: ObjType },
+    IncorrectAs { what: String, from: ObjType, to: ObjType },
 
     LLVMError(BuilderError),
     LLVMVerifyModuleError { llvm_error: String },

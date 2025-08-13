@@ -134,6 +134,8 @@ fn test_operation_order() {
     assert_eq!(6, get_single_expression("1 + 2 * 2 + 1"));
     assert_eq!(13, get_single_expression("2 * 2 + 3 * 3"));
     assert_eq!(22, get_single_expression("2 * 2 + 3 * 3 + 1 * 7 + 1 + 1"));
+
+    assert_eq!(256 - 1, get_single_expression("-1 - 1"));
 }
 
 #[test]
