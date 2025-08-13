@@ -171,8 +171,17 @@ impl ParsingState {
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)) => { // -.. 
                 let op = OneSidedOperation::UnaryMinus;
                 let expression = self.parse_expression(position, true)?;
-                let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(unary_expression)
+                
+                // if let Expression::NumberLiteral(string) = &expression {
+                //     if string.chars().next() == Some('-') {
+                //         return Err(CE::LiteralParseError { what: string[1..].to_owned(), error: "double unary minus".to_owned() })
+                //     }
+                //     let expression = Expression::NumberLiteral("-".to_owned() + &string);
+                //     Ok(expression)
+                // } else {
+                    let unary_expression = Expression::new_unary_operation(expression, op);
+                    Ok(unary_expression)
+                // }
             }
             Token::UnaryOperation(op) => { // `unary`..
                 let expression = self.parse_expression(position, true)?;

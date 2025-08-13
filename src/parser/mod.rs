@@ -12,33 +12,10 @@ pub use bracket_type::BracketType;
 pub mod operations;
 
 use crate::error::CompilationError as CE;
-use std::fs;
+use crate::Config;
 use crate::parser::parse3_linking::object::ObjectFactory;
 
-pub struct Config {
-    pub output: String,
-    pub create_executable: bool,
-
-    pub write_tokens_to_file: bool,
-    pub write_unlinked_syntactic_tree_to_file: bool,
-    pub write_syntactic_tree_to_file: bool,
-    pub create_llvm_ir: bool,
-    pub create_object: bool,
-}
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            output: "main".to_owned(),
-            create_executable: true,
-
-            write_tokens_to_file: false,
-            write_unlinked_syntactic_tree_to_file: false,
-            write_syntactic_tree_to_file: false,
-            create_llvm_ir: false,
-            create_object: false,
-        }
-    }
-}
+use std::fs;
 
 pub fn parse(text: String, config: Config) -> Result<(), CE> {
     let tokens = parse1_tokenize::tokenize(&text)?;

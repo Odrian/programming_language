@@ -1,13 +1,15 @@
-use programming_language::parser::{parse, Config};
-use std::{env, fs};
-use programming_language::error::CompilationError as CE;
+use std::env;
+use std::io::Write;
+use std::process::exit;
+use programming_language::{Config, entry_point};
 
-fn main() -> Result<(), CE> {
+fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        return Err(CE::WrongArguments("WRONG ARGUMENTS, USE: programming_language <filepath>".to_owned()))
+        print_error("WRONG ARGUMENTS, USE: programming_language <filepath>".to_owned());
+        exit(1);
     }
-    let file_path = &args[1];
+    let input = args[1].clone();
 
     let output = "main".to_owned();
     let create_executable = true;
@@ -19,25 +21,20 @@ fn main() -> Result<(), CE> {
     let create_object = false;
 
     let config = Config {
-        output, create_executable,
+        input, output,
+        create_executable,
         write_tokens_to_file, write_syntactic_tree_to_file,
         write_unlinked_syntactic_tree_to_file,
         create_llvm_ir, create_object,
     };
 
-    let file_text = read_file(file_path)?;
-    parse(file_text, config)?;
-
-    Ok(())
+    let result = entry_point(config);
+    match result {
+        Ok(()) => println!("compiled"),
+        Err(err) => print_error(err.to_string()),
+    }
 }
 
-fn read_file(path: &str) -> Result<String, CE> {
-    let result = fs::read_to_string(path);
-    match result {
-        Ok(text) => Ok(text),
-        Err(error) => Err(CE::CantReadSourceFile {
-            filepath: path.to_owned(),
-            io_error: error.to_string(),
-        })
-    }
+fn print_error(string: String) {
+    std::io::stderr().write_all(string.as_bytes()).unwrap()
 }

@@ -7,18 +7,16 @@ use std::path::Path;
 use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine}, OptimizationLevel};
 
 use crate::error::CompilationError as CE;
-use crate::parser::Config;
+use crate::Config;
 use crate::parser::parse3_linking::linked_statement::*;
-use crate::parser::parse3_linking::object::ObjectFactory;
+use crate::parser::parse3_linking::object::{IntObjType, ObjType, ObjectFactory};
 
 /// previous steps guarantees that every used variables is valid
 pub fn parse_to_llvm(config: &Config, statements: Vec<LinkedStatement>, object_factory: &ObjectFactory) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
-    if !verify_main_exist(&statements, object_factory) {
-        return Err(CE::NoMainFunction)
-    }
+    verify_main_signature(&statements, object_factory)?;
 
     let target_machine = create_target_machine(config);
     let target_data = target_machine.get_target_data();
@@ -34,16 +32,21 @@ pub fn parse_to_llvm(config: &Config, statements: Vec<LinkedStatement>, object_f
     Ok(())
 }
 
-fn verify_main_exist(statements: &[LinkedStatement], object_factory: &ObjectFactory) -> bool {
+fn verify_main_signature(statements: &[LinkedStatement], object_factory: &ObjectFactory) -> Result<(), CE> {
     for statement in statements {
-        if let LinkedStatement::Function { object, .. } = statement {
+        if let LinkedStatement::Function { object, returns, args, body: _body } = statement {
             if object_factory.get_name(*object) == "main" {
-                // TODO: check that main has correct signature
-                return true
+                if returns != &ObjType::Integer(IntObjType::I32) {
+                    return Err(CE::IncorrectMainSignature)
+                }
+                if args != &vec![] {
+                    return Err(CE::IncorrectMainSignature)
+                }
+                return Ok(())
             }
         }
     }
-    false
+    Err(CE::NoMainFunction)
 }
 
 fn create_executable(config: &Config, tm: &TargetMachine, module: &Module) -> Result<(), CE> {

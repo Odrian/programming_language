@@ -115,8 +115,9 @@ fn test_operations() {
 
 #[test]
 fn test_as() {
+    let bool_type = ["bool"];
     let int_types = [
-        "bool", "isize", "usize",
+        "isize", "usize",
         "i8", "i16", "i32", "i64", "i128",
         "u8", "u16", "u32", "u64", "u128",
     ];
@@ -129,12 +130,20 @@ fn test_as() {
             }
         }
     }
-    
+    fn check_two_sided(func: &dyn Fn(&str), from: &[&str], to: &[&str]) {
+        check_numbers(func, from, to);
+        check_numbers(func, to, from);
+    }
+
     check_numbers(&assert_no_error, &int_types, &int_types);
+    check_numbers(&assert_no_error, &bool_type, &bool_type);
     check_numbers(&assert_no_error, &float_types, &float_types);
 
-    check_numbers(&assert_has_error, &int_types, &float_types);
-    check_numbers(&assert_has_error, &float_types, &int_types);
+    check_numbers(&assert_no_error, &bool_type, &int_types);
+    check_numbers(&assert_has_error, &int_types, &bool_type);
+
+    check_two_sided(&assert_has_error, &float_types, &bool_type);
+    check_two_sided(&assert_has_error, &float_types, &int_types);
 }
 
 #[test]
@@ -175,13 +184,13 @@ fn test_function_with_while() {
     assert_eq!(statements.len(), 1);
     let LinkedStatement::Function { object: function_object, args, returns, body } = statements.pop().unwrap() else { panic!() };
 
-    assert!(matches!(returns, ObjType::Integer(IntObjType::I32)), "{returns:?}");
+    assert!(matches!(returns, ObjType::DEFAULT_INTEGER), "{returns:?}");
 
     let function_type = object_factory.get_type(function_object);
     assert!(matches!(function_type, ObjType::Function { .. }));
     let ObjType::Function { arguments, returns } = function_type else { unreachable!() };
-    assert_eq!(arguments, &vec![ObjType::Integer(IntObjType::I32)]);
-    assert_eq!(returns.as_ref(), &ObjType::Integer(IntObjType::I32));
+    assert_eq!(arguments, &vec![ObjType::DEFAULT_INTEGER]);
+    assert_eq!(returns.as_ref(), &ObjType::DEFAULT_INTEGER);
 
     assert_eq!(args.len(), 1);
     let arg = args[0];

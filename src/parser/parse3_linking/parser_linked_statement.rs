@@ -286,13 +286,13 @@ fn parse_number_literal(mut string: String) -> Result<TypedExpression, CE> {
     let suffix = string.split_off(index);
     let option_type = parse_primitive_type(&suffix);
     let Some(typee) = option_type else {
-        return Err(CE::LiteralParseError);
+        return Err(CE::LiteralParseError { what: string + &suffix, error: format!("unexpected suffix {suffix}") });
     };
 
     match typee {
         ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(typee.clone(), LinkedExpression::IntLiteral(string, typee))),
         ObjType::Float(_) => Ok(TypedExpression::new(typee.clone(), LinkedExpression::FloatLiteral(string, typee))),
-        _ => Err(CE::LiteralParseError)
+        _ => Err(CE::LiteralParseError { what: string + &suffix, error: format!("unexpected suffix {suffix}") }),
     }
 }
 
@@ -320,7 +320,7 @@ impl ObjType {
     fn check_can_cast(from: &ObjType, other: &ObjType) -> bool {
         match from {
             ObjType::Float(_) => matches!(other, ObjType::Float(_)),
-            ObjType::Integer(_) => matches!(other, ObjType::Integer(_)),
+            ObjType::Integer(from) => matches!(other, ObjType::Integer(to) if !to.is_bool() || from.is_bool()),
             ObjType::Function { .. } | ObjType::Unit => unreachable!(),
         }
     }

@@ -45,6 +45,9 @@ impl IntObjType {
     pub fn is_signed(&self) -> bool {
         matches!(self, IntObjType::I8 | IntObjType::I16 | IntObjType::I32 | IntObjType::I64 | IntObjType::I128 | IntObjType::ISize)
     }
+    pub fn is_bool(&self) -> bool {
+        self == &IntObjType::Bool
+    }
 }
 
 #[derive(Default)]

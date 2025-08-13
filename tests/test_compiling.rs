@@ -1,7 +1,7 @@
 use std::default::Default;
 use std::process::Command;
 use std::sync::atomic;
-use programming_language::parser::Config;
+use programming_language::Config;
 
 fn get_exit_code(text: &str) -> i32 {
     static COUNTER: atomic::AtomicU32 = atomic::AtomicU32::new(0);
@@ -10,6 +10,7 @@ fn get_exit_code(text: &str) -> i32 {
     let path = format!("./{name}");
 
     let config = Config {
+        input: "".to_owned(),
         output: name,
         ..Default::default()
     };
@@ -22,7 +23,7 @@ fn get_exit_code(text: &str) -> i32 {
     code.unwrap().code().unwrap()
 }
 
-fn get_main_return(text: &str) -> i32 {
+fn get_exit_code_main(text: &str) -> i32 {
     let program = "\
 main :: () -> i32 {
     ".to_owned() + text + "
@@ -31,22 +32,22 @@ main :: () -> i32 {
     get_exit_code(&program)
 }
 
-fn get_single_expression(text: &str) -> i32 {
-    get_main_return(&format!("return {text}"))
+fn get_exit_code_main_return(text: &str) -> i32 {
+    get_exit_code_main(&format!("return {text}"))
 }
 
 #[test]
 fn test_simplest() {
-    assert_eq!(5, get_single_expression("5"));
+    assert_eq!(5, get_exit_code_main_return("5"));
 
-    assert_eq!(3, get_single_expression("1 + 2"));
+    assert_eq!(3, get_exit_code_main_return("1 + 2"));
 
-    assert_eq!(7, get_main_return("\
+    assert_eq!(7, get_exit_code_main("\
 a := 7;
 return a
 "));
 
-    assert_eq!(9, get_main_return("\
+    assert_eq!(9, get_exit_code_main("\
 a := 7;
 a = 9;
 return a
@@ -62,8 +63,8 @@ main :: () -> i32 {
 }
 "));
 
-    assert_eq!(10, get_single_expression("8|3&6"));
-    assert_eq!(10, get_single_expression("3&6|8"));
+    assert_eq!(10, get_exit_code_main_return("8|3&6"));
+    assert_eq!(10, get_exit_code_main_return("3&6|8"));
 }
 
 #[test]
@@ -129,13 +130,13 @@ main :: () -> i32 {
 
 #[test]
 fn test_operation_order() {
-    assert_eq!(5, get_single_expression("1 + 2 * 2"));
-    assert_eq!(5, get_single_expression("2 * 2 + 1"));
-    assert_eq!(6, get_single_expression("1 + 2 * 2 + 1"));
-    assert_eq!(13, get_single_expression("2 * 2 + 3 * 3"));
-    assert_eq!(22, get_single_expression("2 * 2 + 3 * 3 + 1 * 7 + 1 + 1"));
+    assert_eq!(5, get_exit_code_main_return("1 + 2 * 2"));
+    assert_eq!(5, get_exit_code_main_return("2 * 2 + 1"));
+    assert_eq!(6, get_exit_code_main_return("1 + 2 * 2 + 1"));
+    assert_eq!(13, get_exit_code_main_return("2 * 2 + 3 * 3"));
+    assert_eq!(22, get_exit_code_main_return("2 * 2 + 3 * 3 + 1 * 7 + 1 + 1"));
 
-    assert_eq!(256 - 1, get_single_expression("-1 - 1"));
+    assert_eq!(256 - 1, get_exit_code_main_return("-1 - 1"));
 }
 
 #[test]
@@ -172,8 +173,8 @@ main :: () -> i32 {
 ";
     assert_eq!(3 * 2 + 1, get_exit_code(program));
     
-    assert_eq!(3, get_main_return("if true  { return 3 } return 4"));
-    assert_eq!(4, get_main_return("if false { return 3 } return 4"));
+    assert_eq!(3, get_exit_code_main("if true  { return 3 } return 4"));
+    assert_eq!(4, get_exit_code_main("if false { return 3 } return 4"));
 }
 
 #[test]
@@ -238,9 +239,18 @@ main :: () -> i32 {
 #[test]
 fn test_u8() {
     let program = "\
-main :: () -> u8 {
-    return 257u8
+main :: () -> i32 {
+    return 257u8 as i32
 }
 ";
     assert_eq!(1, get_exit_code(program));
 }
+
+// #[test]
+// fn test_literals() {
+//     get_exit_code_main("\
+// a := 10000000000000000000000000000000000000000000.0000000000000000000000000000000000001_f32;
+// a := 100000000000000000000000000000000000000000000000000000000000000000000000000000001_u8;
+// return 0
+// ");
+// }
