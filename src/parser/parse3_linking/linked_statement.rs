@@ -4,7 +4,7 @@ use super::object::{Object, ObjType, FloatObjType, IntObjType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypedExpression {
-    pub typee: ObjType,
+    pub object_type: ObjType,
     pub expr: LinkedExpression,
 }
 
@@ -39,8 +39,8 @@ pub enum LinkedExpression {
 }
 
 impl TypedExpression {
-    pub fn new(typee: ObjType, expr: LinkedExpression) -> Self {
-        Self { expr, typee }
+    pub fn new(object_type: ObjType, expr: LinkedExpression) -> Self {
+        Self { expr, object_type }
     }
 }
 
@@ -69,8 +69,8 @@ impl LinkedExpression {
     pub fn new_unary_operation(expression: TypedExpression, op: OneSidedOperation) -> Self {
         Self::UnaryOperation(Box::new(expression), op)
     }
-    pub fn new_as(expression: TypedExpression, typee: ObjType) -> Self {
-        Self::As(Box::new(expression), typee)
+    pub fn new_as(expression: TypedExpression, object_type: ObjType) -> Self {
+        Self::As(Box::new(expression), object_type)
     }
     pub fn new_round_bracket(expression: TypedExpression) -> Self {
         Self::RoundBracket(Box::new(expression))
@@ -130,11 +130,11 @@ impl fmt::Display for LinkedExpression {
             Self::UnaryOperation(ex, op) => {
                 write!(f, "{op}{ex}")
             }
-            Self::As(expression, typee) => {
-                write!(f, "({expression} as {typee})")
+            Self::As(expression, object_type) => {
+                write!(f, "({expression} as {object_type})")
             }
-            Self::IntLiteral(number, typee) => write!(f, "{number}_{typee}"),
-            Self::FloatLiteral(number, typee) => write!(f, "{number}_{typee}"),
+            Self::IntLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
+            Self::FloatLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
             Self::BoolLiteral(value) => match value {
                 true => write!(f, "true"),
                 false => write!(f, "false"),

@@ -36,8 +36,8 @@ pub enum CompilationError {
     IncorrectMainSignature,
 
     IncorrectType { got: ObjType, expected: ObjType },
-    IncorrectOneOper { typee: ObjType, op: OneSidedOperation },
-    IncorrectTwoOper { type1: ObjType, type2: ObjType, op: TwoSidedOperation },
+    IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
+    IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
     IncorrectAs { what: String, from: ObjType, to: ObjType },
 
     LLVMError(BuilderError),
@@ -122,11 +122,11 @@ impl fmt::Display for CompilationError {
             Self::IncorrectType { got, expected } => {
                 write!(f, "Error: incorrect type, got {got}, expected {expected}")
             }
-            Self::IncorrectOneOper { typee, op } => {
-                write!(f, "Error: can't use '{op}' to '{typee}'")
+            Self::IncorrectOneOper { object_type, op } => {
+                write!(f, "Error: can't use '{op}' to '{object_type}'")
             }
-            Self::IncorrectTwoOper { type1, type2, op } => {
-                write!(f, "Error: can't use '{op}' between '{type1}' and '{type2}'")
+            Self::IncorrectTwoOper { object_type1, object_type2, op } => {
+                write!(f, "Error: can't use '{op}' between '{object_type1}' and '{object_type2}'")
             }
             Self::IncorrectAs { what, from, to } => {
                 write!(f, "Error: can't cast {what}, which has type {from} to {to}")

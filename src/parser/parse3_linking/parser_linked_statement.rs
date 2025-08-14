@@ -33,13 +33,13 @@ impl LinkingContext<'_> {
                 Statement::VariableDeclaration { object: name, typee, value } => {
                     let typed_expr = self.parse_expression(value)?;
                     if let Some(typee) = typee {
-                        let typee = self.parse_type(typee)?;
-                        if typee != typed_expr.typee {
-                            return Err(CE::IncorrectType { got: typed_expr.typee, expected: typee })
+                        let object_type = self.parse_type(typee)?;
+                        if object_type != typed_expr.object_type {
+                            return Err(CE::IncorrectType { got: typed_expr.object_type, expected: object_type })
                         }
                     }
 
-                    let object = self.object_factory.create_object(name, typed_expr.typee.clone(), &mut self.object_context_window);
+                    let object = self.object_factory.create_object(name, typed_expr.object_type.clone(), &mut self.object_context_window);
                     LinkedStatement::new_variable(object, typed_expr)
                 }
                 Statement::SetVariable { object: name, value } => {
@@ -52,8 +52,8 @@ impl LinkingContext<'_> {
                     let object = self.object_context_window.get_or_error(&name)?;
 
                     let object_type = self.object_factory.get_type(object);
-                    let Some(result_type) = ObjType::from_operation(&value.typee, object_type, &op) else {
-                        return Err(CE::IncorrectTwoOper { type1: value.typee, type2: object_type.clone(), op })
+                    let Some(result_type) = ObjType::from_operation(&value.object_type, object_type, &op) else {
+                        return Err(CE::IncorrectTwoOper { object_type1: value.object_type, object_type2: object_type.clone(), op })
                     };
                     assert_eq!(&result_type, object_type, "EqualSet should not change type");
 
@@ -89,9 +89,9 @@ impl LinkingContext<'_> {
                     let mut arguments_type = Vec::with_capacity(args.len());
 
                     for (name, typee) in args {
-                        let typee = self.parse_type(typee)?;
-                        arguments_type.push(typee.clone());
-                        let object = self.object_factory.create_object(name, typee, &mut self.object_context_window);
+                        let object_type = self.parse_type(typee)?;
+                        arguments_type.push(object_type.clone());
+                        let object = self.object_factory.create_object(name, object_type, &mut self.object_context_window);
                         arguments_obj.push(object);
                     }
 
@@ -130,7 +130,7 @@ impl LinkingContext<'_> {
                         None => None,
                     };
                     let expression_type = match &expression {
-                        Some(expr) => &expr.typee,
+                        Some(expr) => &expr.object_type,
                         None => &ObjType::Unit,
                     };
                     if Some(expression_type) != self.current_function_returns.as_ref() {
@@ -146,14 +146,13 @@ impl LinkingContext<'_> {
         }
         Ok(result)
     }
-
     fn parse_expression(&mut self, expression: Expression) -> Result<TypedExpression, CE> {
         let linked: TypedExpression = match expression {
             Expression::Operation(expression1, expression2, op) => {
                 let ex1 = self.parse_expression(*expression1)?;
                 let ex2 = self.parse_expression(*expression2)?;
-                let Some(result_type) = ObjType::from_operation(&ex1.typee, &ex2.typee, &op) else {
-                    return Err(CE::IncorrectTwoOper { type1: ex1.typee, type2: ex2.typee, op })
+                let Some(result_type) = ObjType::from_operation(&ex1.object_type, &ex2.object_type, &op) else {
+                    return Err(CE::IncorrectTwoOper { object_type1: ex1.object_type, object_type2: ex2.object_type, op })
                 };
                 TypedExpression::new(
                     result_type,
@@ -162,8 +161,8 @@ impl LinkingContext<'_> {
             }
             Expression::UnaryOperation(expression, op) => {
                 let ex = self.parse_expression(*expression)?;
-                let Some(result_type) = ObjType::from_unary_operation(&ex.typee, &op) else {
-                    return Err(CE::IncorrectOneOper { typee: ex.typee, op })
+                let Some(result_type) = ObjType::from_unary_operation(&ex.object_type, &op) else {
+                    return Err(CE::IncorrectOneOper { object_type: ex.object_type, op })
                 };
                 TypedExpression::new(
                     result_type,
@@ -172,16 +171,16 @@ impl LinkingContext<'_> {
             }
             Expression::As(expression, typee) => {
                 let ex = self.parse_expression(*expression)?;
-                let typee = self.parse_type(typee)?;
+                let object_type = self.parse_type(typee)?;
                 
-                let can_cast = ObjType::check_can_cast(&ex.typee, &typee);
+                let can_cast = ObjType::check_can_cast(&ex.object_type, &object_type);
                 if !can_cast {
-                    return Err(CE::IncorrectAs { what: ex.expr.to_string(), from: ex.typee, to: typee })
+                    return Err(CE::IncorrectAs { what: ex.expr.to_string(), from: ex.object_type, to: object_type })
                 }
 
                 TypedExpression::new(
-                    typee.clone(),
-                    LinkedExpression::new_as(ex, typee),
+                    object_type.clone(),
+                    LinkedExpression::new_as(ex, object_type),
                 )
             }
             Expression::NumberLiteral(string) => {
@@ -201,7 +200,7 @@ impl LinkingContext<'_> {
             }
             Expression::RoundBracket(ex1) => {
                 let ex1 = self.parse_expression(*ex1)?;
-                TypedExpression::new(ex1.typee.clone(), LinkedExpression::new_round_bracket(ex1))
+                TypedExpression::new(ex1.object_type.clone(), LinkedExpression::new_round_bracket(ex1))
             }
             Expression::Variable(name) => {
                 let object = self.object_context_window.get_or_error(&name)?;
@@ -238,8 +237,8 @@ impl LinkingContext<'_> {
         match typee {
             Typee::String(string) => {
                 let primitive_option = parse_primitive_type(&string);
-                if let Some(typee) = primitive_option {
-                    return Ok(typee)
+                if let Some(object_type) = primitive_option {
+                    return Ok(object_type)
                 }
 
                 Err(CE::LinkingError { name: string, context: format!("{:?}", self.object_context_window) })
@@ -293,13 +292,13 @@ fn parse_number_literal(mut string: String) -> Result<TypedExpression, CE> {
 
     let suffix = string.split_off(index);
     let option_type = parse_primitive_type(&suffix);
-    let Some(typee) = option_type else {
+    let Some(object_type) = option_type else {
         return Err(CE::LiteralParseError { what: string + &suffix, error: format!("unexpected suffix {suffix}") });
     };
 
-    match typee {
-        ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(typee.clone(), LinkedExpression::IntLiteral(string, typee))),
-        ObjType::Float(_) => Ok(TypedExpression::new(typee.clone(), LinkedExpression::FloatLiteral(string, typee))),
+    match object_type {
+        ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(object_type.clone(), LinkedExpression::IntLiteral(string, object_type))),
+        ObjType::Float(_) => Ok(TypedExpression::new(object_type.clone(), LinkedExpression::FloatLiteral(string, object_type))),
         _ => Err(CE::LiteralParseError { what: string + &suffix, error: format!("unexpected suffix {suffix}") }),
     }
 }
@@ -336,44 +335,44 @@ impl ObjType {
             ObjType::Function { .. } | ObjType::Unit => unreachable!(),
         }
     }
-    fn from_unary_operation(typee: &ObjType, one_sided_operation: &OneSidedOperation) -> Option<ObjType> {
+    fn from_unary_operation(object_type: &ObjType, one_sided_operation: &OneSidedOperation) -> Option<ObjType> {
         match one_sided_operation {
             OneSidedOperation::BoolNot => {
-                if typee == &ObjType::BOOL {
+                if object_type == &ObjType::BOOL {
                     Some(ObjType::BOOL)
                 } else {
                     None
                 }
             }
             OneSidedOperation::UnaryMinus => {
-                if matches!(typee, ObjType::Integer(int) if int.is_signed()) || matches!(typee, ObjType::Float(_)) {
-                    Some(typee.clone())
+                if matches!(object_type, ObjType::Integer(int) if int.is_signed()) || matches!(object_type, ObjType::Float(_)) {
+                    Some(object_type.clone())
                 } else {
                     None
                 }
             }
         }
     }
-    fn from_operation(type1: &ObjType, type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
+    fn from_operation(object_type1: &ObjType, object_type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
         match two_sided_operation {
             TwoSidedOperation::Number(op) => {
-                if type1 != type2 {
+                if object_type1 != object_type2 {
                     None
-                } else if matches!(type1, ObjType::Integer(_)) || matches!(type1, ObjType::Float(_) if op.can_use_on_float()) {
-                    Some(type1.clone())
+                } else if matches!(object_type1, ObjType::Integer(_)) || matches!(object_type1, ObjType::Float(_) if op.can_use_on_float()) {
+                    Some(object_type1.clone())
                 } else {
                     None
                 }
             }
             TwoSidedOperation::Bool(_) => {
-                if type1 == &ObjType::BOOL && type2 == &ObjType::BOOL {
+                if object_type1 == &ObjType::BOOL && object_type2 == &ObjType::BOOL {
                     Some(ObjType::BOOL)
                 } else {
                     None
                 }
             }
             TwoSidedOperation::Compare(comp_op) => {
-                if type1 != type2 {
+                if object_type1 != object_type2 {
                     None
                 } else if comp_op.is_equal_op() {
                     Some(ObjType::BOOL)
@@ -387,8 +386,8 @@ impl ObjType {
 }
 
 fn check_condition_type(condition: &TypedExpression) -> Result<(), CE> {
-    match condition.typee {
+    match condition.object_type {
         ObjType::BOOL => Ok(()),
-        _ => Err(CE::IncorrectType { got: condition.typee.clone(), expected: ObjType::BOOL }),
+        _ => Err(CE::IncorrectType { got: condition.object_type.clone(), expected: ObjType::BOOL }),
     }
 }

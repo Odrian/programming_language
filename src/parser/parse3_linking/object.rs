@@ -59,10 +59,10 @@ pub struct ObjectFactory {
 }
 
 impl ObjectFactory {
-    pub fn create_object(&mut self, name: String, typee: ObjType, context: &mut ObjectContextWindow) -> Object {
+    pub fn create_object(&mut self, name: String, object_type: ObjType, context: &mut ObjectContextWindow) -> Object {
         let object = Object { id: self.next_id };
         self.next_id += 1;
-        self.array_type.push(typee);
+        self.array_type.push(object_type);
         self.array_name.push(name.clone());
         context.add(name, object);
         object

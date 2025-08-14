@@ -49,8 +49,8 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
     fn get_object_type(&self, object: Object) -> BasicTypeEnum<'ctx> {
         self.parse_type(self.object_factory.get_type(object))
     }
-    fn parse_type(&self, typee: &ObjType) -> BasicTypeEnum<'ctx> {
-        match typee {
+    fn parse_type(&self, object_type: &ObjType) -> BasicTypeEnum<'ctx> {
+        match object_type {
             ObjType::Unit => unimplemented!(),
             ObjType::Char => self.context.i8_type().into(),
             ObjType::Integer(int) => match int {
@@ -171,10 +171,10 @@ mod function_parsing {
             match statement {
                 LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
                 LinkedStatement::Expression(expression) => {
-                    self.parse_expression(expression)?;
+                    self.parse_expression(expression.expr)?;
                 }
                 LinkedStatement::If { condition, body } => {
-                    let condition_value = self.parse_expression(condition)?.into_int_value();
+                    let condition_value = self.parse_expression(condition.expr)?.into_int_value();
 
                     let function = self.current_function.unwrap();
                     let then_bb = self.context.append_basic_block(function, "then");
@@ -197,7 +197,7 @@ mod function_parsing {
                     self.builder.build_unconditional_branch(cond_bb)?;
 
                     self.builder.position_at_end(cond_bb);
-                    let condition_value = self.parse_expression(condition)?.into_int_value();
+                    let condition_value = self.parse_expression(condition.expr)?.into_int_value();
                     self.builder.build_conditional_branch(condition_value, body_bb, after_bb)?;
 
                     self.builder.position_at_end(body_bb);
@@ -209,12 +209,12 @@ mod function_parsing {
                     self.builder.position_at_end(after_bb);
                 }
                 LinkedStatement::SetVariable { object, value } => {
-                    let value = self.parse_expression(value)?;
+                    let value = self.parse_expression(value.expr)?;
                     let pointer = self.context_window.get_pointer_unwrap(object);
                     self.builder.build_store(pointer, value)?;
                 }
                 LinkedStatement::VariableDeclaration { object, value } => {
-                    let value = self.parse_expression(value)?;
+                    let value = self.parse_expression(value.expr)?;
                     let var_type = self.get_object_type(object);
                     let pointer = self.builder.build_alloca(var_type, self.get_object_name(object))?;
                     self.builder.build_store(pointer, value)?;
@@ -222,7 +222,7 @@ mod function_parsing {
                 }
                 LinkedStatement::Return(expression) => {
                     if let Some(expression) = expression {
-                        let expression = self.parse_expression(expression)?;
+                        let expression = self.parse_expression(expression.expr)?;
                         self.builder.build_return(Some(&expression))?;
                     } else {
                         self.builder.build_return(None)?;
@@ -233,11 +233,11 @@ mod function_parsing {
             Ok(false)
         }
 
-        fn parse_expression(&self, expression: TypedExpression) -> Result<BasicValueEnum, CE> {
-            match expression.expr {
+        fn parse_expression(&self, expression: LinkedExpression) -> Result<BasicValueEnum, CE> {
+            match expression {
                 LinkedExpression::FunctionCall { object, args } => {
                     let args: Vec<_> = args.into_iter().map(|a|
-                        self.parse_expression(a)
+                        self.parse_expression(a.expr)
                     ).collect::<Result<_, _>>()?;
                     let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.into()).collect(); // will be removed
 
@@ -247,8 +247,8 @@ mod function_parsing {
                     let returned_value = returned.try_as_basic_value().unwrap_left();
                     Ok(returned_value)
                 },
-                LinkedExpression::IntLiteral(literal, typee) => {
-                    let int_type = self.parse_type(&typee).into_int_type();
+                LinkedExpression::IntLiteral(literal, object_type) => {
+                    let int_type = self.parse_type(&object_type).into_int_type();
 
                     // FIXME: can't parse i128. Uncomment test for i128
                     let value = literal.parse::<u64>().unwrap(); // FIXME: return error
@@ -271,7 +271,7 @@ mod function_parsing {
                     let int_value = self.parse_type(&ObjType::Char).into_int_type().const_int(char as u64, false);
                     Ok(int_value.into())
                 }
-                LinkedExpression::RoundBracket(boxed) => self.parse_expression(*boxed),
+                LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed.expr),
                 LinkedExpression::Variable(object) => {
                     let value_type = self.get_object_type(object);
                     let pointer = self.context_window.get_pointer_unwrap(object);
@@ -279,7 +279,7 @@ mod function_parsing {
                     Ok(value)
                 }
                 LinkedExpression::UnaryOperation(boxed, op) => {
-                    let exp_parsed = self.parse_expression(*boxed)?;
+                    let exp_parsed = self.parse_expression(boxed.expr)?;
                     match op {
                         OneSidedOperation::BoolNot => {
                             let num = exp_parsed.into_int_value();
@@ -292,9 +292,11 @@ mod function_parsing {
                     }
                 }
                 LinkedExpression::Operation(ex1, ex2, op) => {
-                    let type1 = ex1.typee.clone();
-                    let ex1_parsed = self.parse_expression(*ex1)?;
-                    let ex2_parsed = self.parse_expression(*ex2)?;
+                    let TypedExpression { expr: linked_expr1, object_type: type1 } = *ex1;
+                    let TypedExpression { expr: linked_expr2, object_type: _type2 } = *ex2;
+
+                    let ex1_parsed = self.parse_expression(linked_expr1)?;
+                    let ex2_parsed = self.parse_expression(linked_expr2)?;
                     match op {
                         TwoSidedOperation::Number(num_op) => match type1 {
                             ObjType::Integer(int) => {
@@ -359,8 +361,9 @@ mod function_parsing {
                     }
                 }
                 LinkedExpression::As(expression, to_obj_type) => {
-                    let was_obj_type = expression.typee.clone();
-                    let ex = self.parse_expression(*expression)?;
+                    let TypedExpression { expr: linked_expr, object_type: was_obj_type } = *expression;
+                    let ex = self.parse_expression(linked_expr)?;
+
                     match was_obj_type {
                         ObjType::Char => {
                             let ex_int = ex.into_int_value();
