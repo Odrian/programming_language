@@ -64,6 +64,48 @@ impl LinkingContext<'_> {
                     );
                     LinkedStatement::new_set(object, result_expression)
                 }
+                Statement::SetDereference { pointer, value } => {
+                    let pointer = self.parse_expression(pointer)?;
+                    let value = self.parse_expression(value)?;
+                    
+                    let ObjType::Reference(pointer_type) = &pointer.object_type else {
+                        return Err(CE::IncorrectDeref { what: pointer.expr.to_string(), from: pointer.object_type})
+                    };
+                    
+                    if pointer_type.as_ref() != &value.object_type {
+                        return Err(CE::IncorrectType { got: value.object_type, expected: *pointer_type.clone()})
+                    }
+
+                    LinkedStatement::new_set_deref(pointer, value)
+                }
+                Statement::EqualSetDereference { pointer, value, op } => {
+                    let pointer = self.parse_expression(pointer)?;
+                    let value = self.parse_expression(value)?;
+
+                    let ObjType::Reference(pointer_type) = &pointer.object_type else {
+                        return Err(CE::IncorrectDeref { what: pointer.expr.to_string(), from: pointer.object_type})
+                    };
+
+                    let Some(result_type) = ObjType::from_operation(&value.object_type, pointer_type.as_ref(), &op) else {
+                        return Err(CE::IncorrectTwoOper { object_type1: value.object_type, object_type2: *pointer_type.clone(), op })
+                    };
+
+                    if pointer_type.as_ref() != &value.object_type {
+                        return Err(CE::IncorrectType { got: value.object_type, expected: *pointer_type.clone()})
+                    }
+                    assert_eq!(result_type, pointer.object_type, "EqualSet should not change type");
+
+                    let pointer_value = TypedExpression::new(
+                        value.object_type.clone(),
+                        LinkedExpression::new_unary_operation(pointer.clone(), OneSidedOperation::Dereference)
+                    );
+
+                    let result_expression = TypedExpression::new(
+                        result_type,
+                        LinkedExpression::new_operation(pointer_value, value, op)
+                    );
+                    LinkedStatement::new_set_deref(pointer, result_expression)
+                }
                 Statement::Expression(expression) => {
                     let expression = self.parse_expression(expression)?;
                     LinkedStatement::Expression(expression)
@@ -243,13 +285,17 @@ impl LinkingContext<'_> {
 
                 Err(CE::LinkingError { name: string, context: format!("{:?}", self.object_context_window) })
             }
+            Typee::Reference(obj_type) => {
+                let obj_type = self.parse_type(*obj_type)?;
+                Ok(ObjType::Reference(Box::new(obj_type)))
+            }
         }
     }
 }
 
 fn parse_primitive_type(string: &str) -> Option<ObjType> {
     match string {
-        "()" => Some(ObjType::Unit),
+        "void" => Some(ObjType::Unit),
 
         "bool" => Some(ObjType::BOOL),
         "char" => Some(ObjType::Char),
@@ -332,6 +378,7 @@ impl ObjType {
             ObjType::Char => matches!(other, ObjType::Integer(_)),
             ObjType::Float(_) => matches!(other, ObjType::Float(_)),
             ObjType::Integer(from) => matches!(other, ObjType::Integer(to) if !to.is_bool() || from.is_bool()),
+            ObjType::Reference(_) => matches!(other, ObjType::Reference(_) | ObjType::Integer(_)),
             ObjType::Function { .. } | ObjType::Unit => unreachable!(),
         }
     }
@@ -347,6 +394,16 @@ impl ObjType {
             OneSidedOperation::UnaryMinus => {
                 if matches!(object_type, ObjType::Integer(int) if int.is_signed()) || matches!(object_type, ObjType::Float(_)) {
                     Some(object_type.clone())
+                } else {
+                    None
+                }
+            }
+            OneSidedOperation::GetReference => {
+                Some(ObjType::Reference(Box::new(object_type.clone())))
+            }
+            OneSidedOperation::Dereference => {
+                if let ObjType::Reference(reference_object_type) = object_type {
+                    Some(*reference_object_type.clone())
                 } else {
                     None
                 }
@@ -372,13 +429,19 @@ impl ObjType {
                 }
             }
             TwoSidedOperation::Compare(comp_op) => {
-                if object_type1 != object_type2 {
-                    None
+                let is_allowed = if object_type1 != object_type2 {
+                    false
                 } else if comp_op.is_equal_op() {
+                    true
+                } else {
+                    // reference can't be compared
+                    !matches!(object_type1, ObjType::Reference(_))
+                };
+
+                if is_allowed {
                     Some(ObjType::BOOL)
                 } else {
-                    // FIXME: not all types can be compared
-                    Some(ObjType::BOOL)
+                    None
                 }
             }
         }

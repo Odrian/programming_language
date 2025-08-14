@@ -13,6 +13,16 @@ pub fn reorder_statements(statements: Vec<Statement>) -> Vec<Statement> {
             Statement::EqualSetVariable { object, value, op } => {
                 Statement::EqualSetVariable { object, value: reorder_expression(value), op }
             }
+            Statement::SetDereference { pointer, value } => {
+                let pointer = reorder_expression(pointer);
+                let value = reorder_expression(value);
+                Statement::SetDereference { pointer, value }
+            }
+            Statement::EqualSetDereference { pointer, value, op } => {
+                let pointer = reorder_expression(pointer);
+                let value = reorder_expression(value);
+                Statement::EqualSetDereference { pointer, value, op }
+            }
             Statement::Expression(expression) => {
                 Statement::Expression(reorder_expression(expression))
             }

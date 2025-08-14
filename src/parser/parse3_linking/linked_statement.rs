@@ -12,6 +12,7 @@ pub struct TypedExpression {
 pub enum LinkedStatement {
     VariableDeclaration { object: Object, value: TypedExpression },
     SetVariable { object: Object, value: TypedExpression },
+    SetDereference { pointer: TypedExpression, value: TypedExpression },
 
     Expression(TypedExpression),
     If { condition: TypedExpression, body: Vec<Self> },
@@ -50,6 +51,9 @@ impl LinkedStatement {
     }
     pub fn new_set(object: Object, value: TypedExpression) -> Self {
         Self::SetVariable { object, value }
+    }
+    pub fn new_set_deref(pointer: TypedExpression, value: TypedExpression) -> Self {
+        Self::SetDereference { pointer: pointer, value }
     }
     pub fn new_if(condition: TypedExpression, body: Vec<Self>) -> Self {
         Self::If { condition, body }
@@ -94,6 +98,9 @@ impl fmt::Display for LinkedStatement {
             }
             Self::SetVariable { object, value } => {
                 write!(f, "{object} = {value}")
+            }
+            Self::SetDereference { pointer, value } => {
+                write!(f, "*{pointer} = {value}")
             }
             Self::Expression(expression) => {
                 write!(f, "{expression}")
@@ -153,7 +160,8 @@ impl fmt::Display for LinkedExpression {
 impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            Self::Unit => "()",
+            Self::Reference(object_type) => &format!("*{object_type}"),
+            Self::Unit => "void",
             Self::Char => "char",
             Self::Integer(int) => match int {
                 IntObjType::Bool => "bool",

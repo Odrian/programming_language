@@ -12,6 +12,7 @@ pub enum ObjType {
     Char,
     Integer(IntObjType),
     Float(FloatObjType),
+    Reference(Box<ObjType>),
     Function { arguments: Vec<ObjType>, returns: Box<ObjType> }
 }
 impl ObjType {
@@ -27,6 +28,12 @@ impl ObjType {
             FloatObjType::F32 => 4,
             FloatObjType::F64 => 8,
         }
+    }
+    pub fn unwrap_ref(&self) -> &ObjType {
+        let ObjType::Reference(obj_type) = self else {
+            panic!()
+        };
+        obj_type.as_ref()
     }
 }
 

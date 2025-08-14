@@ -6,6 +6,8 @@ pub enum Statement {
     VariableDeclaration { object: String, typee: Option<Typee>, value: Expression },
     SetVariable { object: String, value: Expression },
     EqualSetVariable { object: String, value: Expression, op: TwoSidedOperation },
+    SetDereference { pointer: Expression, value: Expression },
+    EqualSetDereference { pointer: Expression, value: Expression, op: TwoSidedOperation },
 
     Expression(Expression),
     If { condition: Expression, body: Vec<Self> },
@@ -31,7 +33,8 @@ pub enum Expression {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Typee {
-    String(String)
+    String(String),
+    Reference(Box<Typee>),
 }
 
 impl Statement {
@@ -43,6 +46,12 @@ impl Statement {
     }
     pub fn new_equal_set(object: String, value: Expression, op: TwoSidedOperation) -> Self {
         Self::EqualSetVariable { object, value, op }
+    }
+    pub fn new_set_deref(pointer: Expression, value: Expression) -> Self {
+        Self::SetDereference { pointer, value }
+    }
+    pub fn new_equal_set_deref(pointer: Expression, value: Expression, op: TwoSidedOperation) -> Self {
+        Self::EqualSetDereference { pointer, value, op }
     }
     pub fn new_if(condition: Expression, body: Vec<Self>) -> Self {
         Self::If { condition, body }
@@ -92,6 +101,12 @@ impl fmt::Display for Statement {
             }
             Self::EqualSetVariable { object: name, value, op } => {
                 write!(f, "{name} {op}= {value}")
+            }
+            Self::SetDereference { pointer, value } => {
+                write!(f, "*{pointer} = {value}")
+            }
+            Self::EqualSetDereference { pointer, value, op } => {
+                write!(f, "*{pointer} {op}= {value}")
             }
             Self::Expression(expression) => {
                 write!(f, "{expression}")
@@ -152,7 +167,8 @@ impl fmt::Display for Expression {
 impl fmt::Display for Typee {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::String(string) => write!(f, "{string}")
+            Self::String(string) => write!(f, "{string}"),
+            Self::Reference(typee) => write!(f, "*{typee}"),
         }
     }
 }

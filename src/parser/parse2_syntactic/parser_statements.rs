@@ -84,6 +84,29 @@ impl ParsingState {
                     }
                 }
             }
+            Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
+                let position = self.tokens.next().unwrap().position;
+
+                let left_expression = self.parse_expression(position, true)?;
+                let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+                    return Err(CE::SyntacticsError(position, "unused dereference".to_owned()));
+                };
+                let Token::EqualOperation(equal_op) = token else {
+                    return Err(CE::SyntacticsError(position, "expected =/_= after *(..)".to_owned()));
+                };
+                let value = self.parse_expression(position, false)?;
+                match equal_op {
+                    EqualOperation::Equal => {
+                        Ok(Statement::new_set_deref(left_expression, value))
+                    },
+                    EqualOperation::OperationEqual(op) => {
+                        Ok(Statement::new_equal_set_deref(left_expression, value, op))
+                    },
+                    EqualOperation::ColonEqual => {
+                        Err(CE::SyntacticsError(position, "'*name := ..' is ".to_owned()))
+                    },
+                }
+            }
             Token::Semicolon => unreachable!(),
             _ => {
                 // next token exists, position is used only if next is None
@@ -172,21 +195,27 @@ impl ParsingState {
                 let op = OneSidedOperation::UnaryMinus;
                 let expression = self.parse_expression(position, true)?;
                 
-                // if let Expression::NumberLiteral(string) = &expression {
-                //     if string.chars().next() == Some('-') {
-                //         return Err(CE::LiteralParseError { what: string[1..].to_owned(), error: "double unary minus".to_owned() })
-                //     }
-                //     let expression = Expression::NumberLiteral("-".to_owned() + &string);
-                //     Ok(expression)
-                // } else {
-                    let unary_expression = Expression::new_unary_operation(expression, op);
-                    Ok(unary_expression)
-                // }
+                let unary_expression = Expression::new_unary_operation(expression, op);
+                Ok(self.parse_expression2(unary_expression, false)?)
+            }
+            Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
+                let op = OneSidedOperation::Dereference;
+                let expression = self.parse_expression(position, true)?;
+
+                let unary_expression = Expression::new_unary_operation(expression, op);
+                Ok(self.parse_expression2(unary_expression, false)?)
+            }
+            Token::Operation(TwoSidedOperation::Number(NumberOperation::BitAnd)) => { // &..
+                let op = OneSidedOperation::GetReference;
+                let expression = self.parse_expression(position, true)?;
+
+                let unary_expression = Expression::new_unary_operation(expression, op);
+                Ok(self.parse_expression2(unary_expression, false)?)
             }
             Token::UnaryOperation(op) => { // `unary`..
                 let expression = self.parse_expression(position, true)?;
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(unary_expression)
+                Ok(self.parse_expression2(unary_expression, false)?)
             }
             Token::Quotes(string) => { // '..'
                 let char_value = parse_quotes(string)?;
@@ -237,7 +266,7 @@ impl ParsingState {
                 let expression = Expression::new_as(expression1, typee);
                 self.parse_expression2(expression, false)
             }
-            Token::Semicolon | Token::Comma | Token::Bracket(_, _) => {
+            Token::Semicolon | Token::Comma | Token::Bracket(_, _) | Token::EqualOperation(_) => {
                 Ok(expression1)
             }
             _ => {
@@ -327,6 +356,10 @@ impl ParsingState {
 
         match token {
             Token::String(string) => Ok(Typee::String(string)),
+            Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => {
+                let typee = self.parse_type(position)?;
+                Ok(Typee::Reference(Box::new(typee)))
+            }
             _ => Err(CE::SyntacticsError(position, "expected type".to_owned()))
         }
     }

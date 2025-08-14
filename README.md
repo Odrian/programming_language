@@ -1,5 +1,5 @@
 # TODO
-* add pointers
+* add pointers (in progress)
 * add arrays
 * import another files
 * add print/read function
@@ -62,7 +62,7 @@ foo :: () {
 
 ### Operators precedence:  
 `=`, `:=`, `_=`(`_` may be `+-*/`)  
-unary `-`, `!`  
+unary `-`, `!`, `*`, `&`  
 `as`  
 `==`, `!=`, `>`, `>=`, `<`, `<=`  
 `*`, `/`, `%`  
@@ -74,7 +74,7 @@ unary `-`, `!`
 
 ### types
 
-`bool`, `char`,  
+`void`, `bool`, `char`,  
 `i8`, `i16`, `i32`, `i64`, `i128`, `isize`,  
 `u8`, `u16`, `u32`, `u64`, `u128`, `usize`,  
 `f32`, `f64`,
@@ -95,3 +95,10 @@ integer and float may contain any number of `_`
 * `bool` => `integer`
 * `char` => `integer`
 * `u8` => `char` (for `integer` => `char` use `as u8 as char`)
+* `*T` => `*U`
+* `*T` => `integer`
+
+### references
+`&variable` returns pointer to variable  
+`&value` will allocate memory for value and return pointer to it
+`*pointer_value = value` 

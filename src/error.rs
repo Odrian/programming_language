@@ -39,6 +39,7 @@ pub enum CompilationError {
     IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
     IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
     IncorrectAs { what: String, from: ObjType, to: ObjType },
+    IncorrectDeref { what: String, from: ObjType },
 
     LLVMError(BuilderError),
     LLVMVerifyModuleError { llvm_error: String },
@@ -130,6 +131,9 @@ impl fmt::Display for CompilationError {
             }
             Self::IncorrectAs { what, from, to } => {
                 write!(f, "Error: can't cast {what}, which has type {from} to {to}")
+            }
+            Self::IncorrectDeref { what, from } => {
+                write!(f, "Error: can't deref {what}, which has type {from}")
             }
 
             Self::LLVMError(build_error) => {

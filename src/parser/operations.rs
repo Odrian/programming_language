@@ -4,6 +4,8 @@ use std::fmt;
 pub enum OneSidedOperation {
     BoolNot,
     UnaryMinus,
+    GetReference,
+    Dereference,
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -96,8 +98,10 @@ impl From<CompareOperator> for TwoSidedOperation {
 impl fmt::Display for OneSidedOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let op_char = match self {
-            Self::BoolNot =>        "!",
-            Self::UnaryMinus => "-"
+            Self::BoolNot => "!",
+            Self::UnaryMinus => "-",
+            Self::GetReference => "&",
+            Self::Dereference => "*",
         };
         write!(f, "{op_char}")
     }

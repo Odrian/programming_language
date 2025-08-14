@@ -5,8 +5,9 @@ use crate::parser::parse3_linking::object::*;
 use crate::parser::parse3_linking::linked_statement::*;
 use super::context_window::ValueContextWindow;
 
-use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue};
-use inkwell::{builder::Builder, context::Context, module::Module, FloatPredicate, IntPredicate};
+use std::cmp::Ordering;
+use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue};
+use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType};
 
@@ -52,6 +53,7 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
     fn parse_type(&self, object_type: &ObjType) -> BasicTypeEnum<'ctx> {
         match object_type {
             ObjType::Unit => unimplemented!(),
+            ObjType::Reference(_) => self.context.ptr_type(AddressSpace::default()).into(),
             ObjType::Char => self.context.i8_type().into(),
             ObjType::Integer(int) => match int {
                 IntObjType::Bool => self.context.bool_type().into(),
@@ -142,7 +144,6 @@ mod module_parsing {
 
 /// parsing statements inside function
 mod function_parsing {
-    use std::cmp::Ordering;
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx, '_> {
@@ -213,6 +214,11 @@ mod function_parsing {
                     let pointer = self.context_window.get_pointer_unwrap(object);
                     self.builder.build_store(pointer, value)?;
                 }
+                LinkedStatement::SetDereference { pointer, value } => {
+                    let ptr_value = self.parse_expression(pointer.expr)?.into_pointer_value();
+                    let value = self.parse_expression(value.expr)?;
+                    self.builder.build_store(ptr_value, value)?;
+                }
                 LinkedStatement::VariableDeclaration { object, value } => {
                     let value = self.parse_expression(value.expr)?;
                     let var_type = self.get_object_type(object);
@@ -232,20 +238,22 @@ mod function_parsing {
             }
             Ok(false)
         }
+        
+        fn get_pointer(&self, expression: &LinkedExpression) -> Result<Option<PointerValue>, CE> {
+            match expression {
+                LinkedExpression::RoundBracket(exp) => self.get_pointer(&exp.expr),
+                LinkedExpression::Variable(object) => {
+                    let pointer = self.context_window.get_pointer_unwrap(*object);
+                    Ok(Some(pointer))
+                }
+                _ => Ok(None)
+            }
+        }
 
         fn parse_expression(&self, expression: LinkedExpression) -> Result<BasicValueEnum, CE> {
             match expression {
                 LinkedExpression::FunctionCall { object, args } => {
-                    let args: Vec<_> = args.into_iter().map(|a|
-                        self.parse_expression(a.expr)
-                    ).collect::<Result<_, _>>()?;
-                    let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.into()).collect(); // will be removed
-
-                    let function = self.context_window.get_function_unwrap(object);
-                    let returned = self.builder.build_call(function, &args, "function call")?;
-                    // now all functions return i32
-                    let returned_value = returned.try_as_basic_value().unwrap_left();
-                    Ok(returned_value)
+                    Ok(self.call_function(object, args)?.unwrap())
                 },
                 LinkedExpression::IntLiteral(literal, object_type) => {
                     let int_type = self.parse_type(&object_type).into_int_type();
@@ -259,17 +267,17 @@ mod function_parsing {
                     let float_type = self.parse_type(&float_type).into_float_type();
 
                     let value = float.parse::<f64>().unwrap(); // FIXME: return error
-                    let float_value = float_type.const_float(value);
-                    Ok(float_value.into())
+                    Ok(float_type.const_float(value).into())
                 }
                 LinkedExpression::BoolLiteral(bool) => {
+                    let int_type = self.context.bool_type();
+
                     let number = match bool { true => 1, false => 0 };
-                    let int_value = self.context.bool_type().const_int(number, false);
-                    Ok(int_value.into())
+                    Ok(int_type.const_int(number, false).into())
                 }
                 LinkedExpression::CharLiteral(char) => {
-                    let int_value = self.parse_type(&ObjType::Char).into_int_type().const_int(char as u64, false);
-                    Ok(int_value.into())
+                    let int_type = self.parse_type(&ObjType::Char).into_int_type();
+                    Ok(int_type.const_int(char as u64, false).into())
                 }
                 LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed.expr),
                 LinkedExpression::Variable(object) => {
@@ -279,15 +287,34 @@ mod function_parsing {
                     Ok(value)
                 }
                 LinkedExpression::UnaryOperation(boxed, op) => {
-                    let exp_parsed = self.parse_expression(boxed.expr)?;
+                    let TypedExpression { expr: linked_expr, object_type } = *boxed;
                     match op {
                         OneSidedOperation::BoolNot => {
-                            let num = exp_parsed.into_int_value();
-                            Ok(self.builder.build_not(num, "not")?.into())
+                            let exp_parsed = self.parse_expression(linked_expr)?;
+                            let int_value = exp_parsed.into_int_value();
+                            Ok(self.builder.build_not(int_value, "not")?.into())
                         }
                         OneSidedOperation::UnaryMinus => {
-                            let num = exp_parsed.into_int_value();
-                            Ok(self.builder.build_int_neg(num, "neg")?.into())
+                            let exp_parsed = self.parse_expression(linked_expr)?;
+                            let int_value = exp_parsed.into_int_value();
+                            Ok(self.builder.build_int_neg(int_value, "neg")?.into())
+                        }
+                        OneSidedOperation::GetReference => {
+                            if let Some(ptr_value) = self.get_pointer(&linked_expr)? {
+                                Ok(ptr_value.into())
+                            } else {
+                                let exp_parsed = self.parse_expression(linked_expr)?;
+                                let exp_type = self.parse_type(&object_type);
+                                let ptr_value = self.builder.build_alloca(exp_type, "alloca")?;
+                                self.builder.build_store(ptr_value, exp_parsed)?;
+                                Ok(ptr_value.into())
+                            }
+                        }
+                        OneSidedOperation::Dereference => {
+                            let exp_parsed = self.parse_expression(linked_expr)?;
+                            let ptr_value = exp_parsed.into_pointer_value();
+                            let ptr_type = self.parse_type(object_type.unwrap_ref());
+                            Ok(self.builder.build_load(ptr_type, ptr_value, "deref")?)
                         }
                     }
                 }
@@ -338,6 +365,13 @@ mod function_parsing {
                             }
                         }
                         TwoSidedOperation::Compare(comp_op) => match type1 {
+                            ObjType::Reference(_) => {
+                                let ex1 = ex1_parsed.into_pointer_value();
+                                let ex2 = ex2_parsed.into_pointer_value();
+                                let predicate = comp_op.to_int_compare(false);
+
+                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "ptr_compare")?.into())
+                            }
                             ObjType::Char => {
                                 let ex1 = ex1_parsed.into_int_value();
                                 let ex2 = ex2_parsed.into_int_value();
@@ -432,10 +466,34 @@ mod function_parsing {
                                 }
                             }
                         }
+                        ObjType::Reference(_) => {
+                            match &to_obj_type {
+                                ObjType::Reference(_) => Ok(ex),
+                                ObjType::Integer(_) => {
+                                    let ex_ptr = ex.into_pointer_value();
+
+                                    let to_type = self.parse_type(&to_obj_type).into_int_type();
+
+                                    Ok(self.builder.build_ptr_to_int(ex_ptr, to_type, "asd")?.into())
+                                }
+                                _ => unreachable!()
+                            }
+                        }
                         ObjType::Unit | ObjType::Function { .. } => unreachable!()
                     }
                 }
             }
+        }
+        fn call_function(&self, object: Object, args: Vec<TypedExpression>) -> Result<Option<BasicValueEnum>, CE> {
+            let args: Vec<_> = args.into_iter().map(|a|
+                self.parse_expression(a.expr)
+            ).collect::<Result<_, _>>()?;
+            let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.into()).collect(); // will be removed
+
+            let function = self.context_window.get_function_unwrap(object);
+            let returned = self.builder.build_call(function, &args, "function call")?;
+
+            Ok(returned.try_as_basic_value().left())
         }
     }
 }

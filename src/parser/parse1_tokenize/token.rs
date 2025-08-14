@@ -31,6 +31,7 @@ pub enum Token {
     DoubleQuotes(String),
 }
 
+/// `TwoSidedOperation` must not change type
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum EqualOperation {
     Equal,                      // =
