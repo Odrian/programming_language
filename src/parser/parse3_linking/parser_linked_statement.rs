@@ -38,6 +38,9 @@ impl LinkingContext<'_> {
                             return Err(CE::IncorrectType { got: typed_expr.object_type, expected: object_type })
                         }
                     }
+                    if typed_expr.object_type.is_void() {
+                        return Err(CE::UnexpectedVoidUse)
+                    }
 
                     let object = self.object_factory.create_object(name, typed_expr.object_type.clone(), &mut self.object_context_window);
                     LinkedStatement::new_variable(object, typed_expr)
@@ -45,6 +48,9 @@ impl LinkingContext<'_> {
                 Statement::SetVariable { object: name, value } => {
                     let value = self.parse_expression(value)?;
                     let object = self.object_context_window.get_or_error(&name)?;
+                    if self.object_factory.get_type(object) != &value.object_type {
+                        return Err(CE::IncorrectType { got: value.object_type.clone(), expected: self.object_factory.get_type(object).clone() })
+                    }
                     LinkedStatement::new_set(object, value)
                 }
                 Statement::EqualSetVariable { object: name, value, op } => {
@@ -132,6 +138,9 @@ impl LinkingContext<'_> {
 
                     for (name, typee) in args {
                         let object_type = self.parse_type(typee)?;
+                        if object_type.is_void() {
+                            return Err(CE::UnexpectedVoidUse)
+                        }
                         arguments_type.push(object_type.clone());
                         let object = self.object_factory.create_object(name, object_type, &mut self.object_context_window);
                         arguments_obj.push(object);
@@ -140,7 +149,7 @@ impl LinkingContext<'_> {
                     let return_type = {
                         match returns {
                             Some(typee) => self.parse_type(typee)?,
-                            None => ObjType::Unit,
+                            None => ObjType::Void,
                         }
                     };
 
@@ -158,7 +167,7 @@ impl LinkingContext<'_> {
                     self.current_function_returns = None;
                     self.object_context_window.step_out();
 
-                    if return_type != ObjType::Unit && !check_is_returns(&body) {
+                    if return_type != ObjType::Void && !check_is_returns(&body) {
                         return Err(CE::FunctionMustReturn { function_name })
                     }
 
@@ -173,7 +182,7 @@ impl LinkingContext<'_> {
                     };
                     let expression_type = match &expression {
                         Some(expr) => &expr.object_type,
-                        None => &ObjType::Unit,
+                        None => &ObjType::Void,
                     };
                     if Some(expression_type) != self.current_function_returns.as_ref() {
                         return match &self.current_function_returns {
@@ -266,6 +275,12 @@ impl LinkingContext<'_> {
                 }
                 let args = args_values.into_iter().map(|x| self.parse_expression(x)).collect::<Result<Vec<_>, _>>()?;
 
+                for index in 0..args.len() {
+                    if args[index].object_type != arguments[index] {
+                        return Err(CE::IncorrectType { got: args[index].object_type.clone(), expected: arguments[index].clone() })
+                    }
+                }
+
                 TypedExpression::new(
                     returns.as_ref().clone(),
                     LinkedExpression::new_function_call(object, args)
@@ -295,7 +310,7 @@ impl LinkingContext<'_> {
 
 fn parse_primitive_type(string: &str) -> Option<ObjType> {
     match string {
-        "void" => Some(ObjType::Unit),
+        "void" => Some(ObjType::Void),
 
         "bool" => Some(ObjType::BOOL),
         "char" => Some(ObjType::Char),
@@ -379,7 +394,7 @@ impl ObjType {
             ObjType::Float(_) => matches!(other, ObjType::Float(_)),
             ObjType::Integer(from) => matches!(other, ObjType::Integer(to) if !to.is_bool() || from.is_bool()),
             ObjType::Reference(_) => matches!(other, ObjType::Reference(_) | ObjType::Integer(_)),
-            ObjType::Function { .. } | ObjType::Unit => unreachable!(),
+            ObjType::Function { .. } | ObjType::Void => unreachable!(),
         }
     }
     fn from_unary_operation(object_type: &ObjType, one_sided_operation: &OneSidedOperation) -> Option<ObjType> {

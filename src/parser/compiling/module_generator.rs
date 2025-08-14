@@ -52,7 +52,7 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
     }
     fn parse_type(&self, object_type: &ObjType) -> BasicTypeEnum<'ctx> {
         match object_type {
-            ObjType::Unit => unimplemented!(),
+            ObjType::Void => unimplemented!(),
             ObjType::Reference(_) => self.context.ptr_type(AddressSpace::default()).into(),
             ObjType::Char => self.context.i8_type().into(),
             ObjType::Integer(int) => match int {
@@ -79,7 +79,7 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
         }
     }
     fn function_from(&self, returns: &ObjType, args: &[BasicMetadataTypeEnum<'ctx>], is_var_args: bool) -> FunctionType<'ctx> {
-        if returns == &ObjType::Unit {
+        if returns == &ObjType::Void {
             self.context.void_type().fn_type(args, is_var_args)
         } else {
             self.parse_type(returns).fn_type(args, is_var_args)
@@ -172,10 +172,15 @@ mod function_parsing {
             match statement {
                 LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
                 LinkedStatement::Expression(expression) => {
-                    self.parse_expression(expression.expr)?;
+                    if expression.object_type.is_void() {
+                        let LinkedExpression::FunctionCall { object, args } = expression.expr else { unreachable!() };
+                        self.call_function(object, args)?;
+                    } else {
+                        self.parse_expression(expression.expr)?;
+                    }
                 }
                 LinkedStatement::If { condition, body } => {
-                    let condition_value = self.parse_expression(condition.expr)?.into_int_value();
+                    let condition_value = self.parse_expression(condition.expr)?.unwrap().into_int_value();
 
                     let function = self.current_function.unwrap();
                     let then_bb = self.context.append_basic_block(function, "then");
@@ -198,7 +203,7 @@ mod function_parsing {
                     self.builder.build_unconditional_branch(cond_bb)?;
 
                     self.builder.position_at_end(cond_bb);
-                    let condition_value = self.parse_expression(condition.expr)?.into_int_value();
+                    let condition_value = self.parse_expression(condition.expr)?.unwrap().into_int_value();
                     self.builder.build_conditional_branch(condition_value, body_bb, after_bb)?;
 
                     self.builder.position_at_end(body_bb);
@@ -210,17 +215,17 @@ mod function_parsing {
                     self.builder.position_at_end(after_bb);
                 }
                 LinkedStatement::SetVariable { object, value } => {
-                    let value = self.parse_expression(value.expr)?;
+                    let value = self.parse_expression(value.expr)?.unwrap();
                     let pointer = self.context_window.get_pointer_unwrap(object);
                     self.builder.build_store(pointer, value)?;
                 }
                 LinkedStatement::SetDereference { pointer, value } => {
-                    let ptr_value = self.parse_expression(pointer.expr)?.into_pointer_value();
-                    let value = self.parse_expression(value.expr)?;
+                    let ptr_value = self.parse_expression(pointer.expr)?.unwrap().into_pointer_value();
+                    let value = self.parse_expression(value.expr)?.unwrap();
                     self.builder.build_store(ptr_value, value)?;
                 }
                 LinkedStatement::VariableDeclaration { object, value } => {
-                    let value = self.parse_expression(value.expr)?;
+                    let value = self.parse_expression(value.expr)?.unwrap();
                     let var_type = self.get_object_type(object);
                     let pointer = self.builder.build_alloca(var_type, self.get_object_name(object))?;
                     self.builder.build_store(pointer, value)?;
@@ -228,7 +233,7 @@ mod function_parsing {
                 }
                 LinkedStatement::Return(expression) => {
                     if let Some(expression) = expression {
-                        let expression = self.parse_expression(expression.expr)?;
+                        let expression = self.parse_expression(expression.expr)?.unwrap();
                         self.builder.build_return(Some(&expression))?;
                     } else {
                         self.builder.build_return(None)?;
@@ -250,10 +255,10 @@ mod function_parsing {
             }
         }
 
-        fn parse_expression(&self, expression: LinkedExpression) -> Result<BasicValueEnum, CE> {
+        fn parse_expression(&self, expression: LinkedExpression) -> Result<Option<BasicValueEnum>, CE> {
             match expression {
                 LinkedExpression::FunctionCall { object, args } => {
-                    Ok(self.call_function(object, args)?.unwrap())
+                    Ok(Some(self.call_function(object, args)?.unwrap()))
                 },
                 LinkedExpression::IntLiteral(literal, object_type) => {
                     let int_type = self.parse_type(&object_type).into_int_type();
@@ -261,94 +266,95 @@ mod function_parsing {
                     // FIXME: can't parse i128. Uncomment test for i128
                     let value = literal.parse::<u64>().unwrap(); // FIXME: return error
                     let int_value = int_type.const_int(value, true);
-                    Ok(int_value.into())
+                    Ok(Some(int_value.into()))
                 }
                 LinkedExpression::FloatLiteral(float, float_type) => {
                     let float_type = self.parse_type(&float_type).into_float_type();
 
                     let value = float.parse::<f64>().unwrap(); // FIXME: return error
-                    Ok(float_type.const_float(value).into())
+                    Ok(Some(float_type.const_float(value).into()))
                 }
                 LinkedExpression::BoolLiteral(bool) => {
                     let int_type = self.context.bool_type();
 
                     let number = match bool { true => 1, false => 0 };
-                    Ok(int_type.const_int(number, false).into())
+                    Ok(Some(int_type.const_int(number, false).into()))
                 }
                 LinkedExpression::CharLiteral(char) => {
                     let int_type = self.parse_type(&ObjType::Char).into_int_type();
-                    Ok(int_type.const_int(char as u64, false).into())
+                    Ok(Some(int_type.const_int(char as u64, false).into()))
                 }
                 LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed.expr),
                 LinkedExpression::Variable(object) => {
                     let value_type = self.get_object_type(object);
                     let pointer = self.context_window.get_pointer_unwrap(object);
                     let value = self.builder.build_load(value_type, pointer, "load")?;
-                    Ok(value)
+                    Ok(Some(value))
                 }
                 LinkedExpression::UnaryOperation(boxed, op) => {
                     let TypedExpression { expr: linked_expr, object_type } = *boxed;
-                    match op {
+                    let result = match op {
                         OneSidedOperation::BoolNot => {
-                            let exp_parsed = self.parse_expression(linked_expr)?;
+                            let exp_parsed = self.parse_expression(linked_expr)?.unwrap();
                             let int_value = exp_parsed.into_int_value();
-                            Ok(self.builder.build_not(int_value, "not")?.into())
+                            self.builder.build_not(int_value, "not")?.into()
                         }
                         OneSidedOperation::UnaryMinus => {
-                            let exp_parsed = self.parse_expression(linked_expr)?;
+                            let exp_parsed = self.parse_expression(linked_expr)?.unwrap();
                             let int_value = exp_parsed.into_int_value();
-                            Ok(self.builder.build_int_neg(int_value, "neg")?.into())
+                            self.builder.build_int_neg(int_value, "neg")?.into()
                         }
                         OneSidedOperation::GetReference => {
                             if let Some(ptr_value) = self.get_pointer(&linked_expr)? {
-                                Ok(ptr_value.into())
+                                ptr_value.into()
                             } else {
-                                let exp_parsed = self.parse_expression(linked_expr)?;
+                                let exp_parsed = self.parse_expression(linked_expr)?.unwrap();
                                 let exp_type = self.parse_type(&object_type);
                                 let ptr_value = self.builder.build_alloca(exp_type, "alloca")?;
                                 self.builder.build_store(ptr_value, exp_parsed)?;
-                                Ok(ptr_value.into())
+                                ptr_value.into()
                             }
                         }
                         OneSidedOperation::Dereference => {
-                            let exp_parsed = self.parse_expression(linked_expr)?;
+                            let exp_parsed = self.parse_expression(linked_expr)?.unwrap();
                             let ptr_value = exp_parsed.into_pointer_value();
                             let ptr_type = self.parse_type(object_type.unwrap_ref());
-                            Ok(self.builder.build_load(ptr_type, ptr_value, "deref")?)
+                            self.builder.build_load(ptr_type, ptr_value, "deref")?
                         }
-                    }
+                    };
+                    Ok(Some(result))
                 }
                 LinkedExpression::Operation(ex1, ex2, op) => {
                     let TypedExpression { expr: linked_expr1, object_type: type1 } = *ex1;
                     let TypedExpression { expr: linked_expr2, object_type: _type2 } = *ex2;
 
-                    let ex1_parsed = self.parse_expression(linked_expr1)?;
-                    let ex2_parsed = self.parse_expression(linked_expr2)?;
-                    match op {
+                    let ex1_parsed = self.parse_expression(linked_expr1)?.unwrap();
+                    let ex2_parsed = self.parse_expression(linked_expr2)?.unwrap();
+                    let result = match op {
                         TwoSidedOperation::Number(num_op) => match type1 {
                             ObjType::Integer(int) => {
                                 let num1 = ex1_parsed.into_int_value();
                                 let num2 = ex2_parsed.into_int_value();
                                 match num_op {
-                                    NumberOperation::Add => Ok(self.builder.build_int_add(num1, num2, "add")?.into()),
-                                    NumberOperation::Sub => Ok(self.builder.build_int_sub(num1, num2, "sub")?.into()),
-                                    NumberOperation::Mul => Ok(self.builder.build_int_mul(num1, num2, "mul")?.into()),
-                                    NumberOperation::Div if int.is_signed() =>  Ok(self.builder.build_int_signed_div(num1, num2, "div")?.into()),
-                                    NumberOperation::Div =>                     Ok(self.builder.build_int_unsigned_div(num1, num2, "div")?.into()),
-                                    NumberOperation::Rem if int.is_signed() =>  Ok(self.builder.build_int_signed_rem(num1, num2, "rem")?.into()),
-                                    NumberOperation::Rem =>                     Ok(self.builder.build_int_unsigned_rem(num1, num2, "rem")?.into()),
-                                    NumberOperation::BitAnd => Ok(self.builder.build_and(num1, num2, "bitand")?.into()),
-                                    NumberOperation::BitOr => Ok(self.builder.build_or(num1, num2, "bitor")?.into()),
+                                    NumberOperation::Add => self.builder.build_int_add(num1, num2, "add")?.into(),
+                                    NumberOperation::Sub => self.builder.build_int_sub(num1, num2, "sub")?.into(),
+                                    NumberOperation::Mul => self.builder.build_int_mul(num1, num2, "mul")?.into(),
+                                    NumberOperation::Div if int.is_signed() =>  self.builder.build_int_signed_div(num1, num2, "div")?.into(),
+                                    NumberOperation::Div =>                     self.builder.build_int_unsigned_div(num1, num2, "div")?.into(),
+                                    NumberOperation::Rem if int.is_signed() =>  self.builder.build_int_signed_rem(num1, num2, "rem")?.into(),
+                                    NumberOperation::Rem =>                     self.builder.build_int_unsigned_rem(num1, num2, "rem")?.into(),
+                                    NumberOperation::BitAnd => self.builder.build_and(num1, num2, "bitand")?.into(),
+                                    NumberOperation::BitOr => self.builder.build_or(num1, num2, "bitor")?.into(),
                                 }
                             }
                             ObjType::Float(_) => {
                                 let num1 = ex1_parsed.into_float_value();
                                 let num2 = ex2_parsed.into_float_value();
                                 match num_op {
-                                    NumberOperation::Add => Ok(self.builder.build_float_add(num1, num2, "add")?.into()),
-                                    NumberOperation::Sub => Ok(self.builder.build_float_sub(num1, num2, "sub")?.into()),
-                                    NumberOperation::Mul => Ok(self.builder.build_float_mul(num1, num2, "mul")?.into()),
-                                    NumberOperation::Div => Ok(self.builder.build_float_div(num1, num2, "div")?.into()),
+                                    NumberOperation::Add => self.builder.build_float_add(num1, num2, "add")?.into(),
+                                    NumberOperation::Sub => self.builder.build_float_sub(num1, num2, "sub")?.into(),
+                                    NumberOperation::Mul => self.builder.build_float_mul(num1, num2, "mul")?.into(),
+                                    NumberOperation::Div => self.builder.build_float_div(num1, num2, "div")?.into(),
                                     NumberOperation::Rem => unreachable!(),
                                     NumberOperation::BitAnd => unreachable!(),
                                     NumberOperation::BitOr => unreachable!(),
@@ -360,8 +366,8 @@ mod function_parsing {
                             let bool1 = ex1_parsed.into_int_value();
                             let bool2 = ex2_parsed.into_int_value();
                             match bool_op {
-                                BoolOperation::Or => Ok(self.builder.build_or(bool1, bool2, "or")?.into()),
-                                BoolOperation::And => Ok(self.builder.build_and(bool1, bool2, "and")?.into()),
+                                BoolOperation::Or => self.builder.build_or(bool1, bool2, "or")?.into(),
+                                BoolOperation::And => self.builder.build_and(bool1, bool2, "and")?.into(),
                             }
                         }
                         TwoSidedOperation::Compare(comp_op) => match type1 {
@@ -370,35 +376,36 @@ mod function_parsing {
                                 let ex2 = ex2_parsed.into_pointer_value();
                                 let predicate = comp_op.to_int_compare(false);
 
-                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "ptr_compare")?.into())
+                                self.builder.build_int_compare(predicate, ex1, ex2, "ptr_compare")?.into()
                             }
                             ObjType::Char => {
                                 let ex1 = ex1_parsed.into_int_value();
                                 let ex2 = ex2_parsed.into_int_value();
                                 let predicate = comp_op.to_int_compare(false);
-                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "compare_char")?.into())
+                                self.builder.build_int_compare(predicate, ex1, ex2, "compare_char")?.into()
                             }
                             ObjType::Integer(int) => {
                                 let ex1 = ex1_parsed.into_int_value();
                                 let ex2 = ex2_parsed.into_int_value();
                                 let predicate = comp_op.to_int_compare(int.is_signed());
-                                Ok(self.builder.build_int_compare(predicate, ex1, ex2, "compare_int")?.into())
+                                self.builder.build_int_compare(predicate, ex1, ex2, "compare_int")?.into()
                             }
                             ObjType::Float(_) => {
                                 let ex1 = ex1_parsed.into_float_value();
                                 let ex2 = ex2_parsed.into_float_value();
                                 let predicate = comp_op.to_float_compare();
-                                Ok(self.builder.build_float_compare(predicate, ex1, ex2, "compare_float")?.into())
+                                self.builder.build_float_compare(predicate, ex1, ex2, "compare_float")?.into()
                             }
-                            ObjType::Unit | ObjType::Function { .. } => unreachable!(),
+                            ObjType::Void | ObjType::Function { .. } => unreachable!(),
                         }
-                    }
+                    };
+                    Ok(Some(result))
                 }
                 LinkedExpression::As(expression, to_obj_type) => {
                     let TypedExpression { expr: linked_expr, object_type: was_obj_type } = *expression;
-                    let ex = self.parse_expression(linked_expr)?;
+                    let ex = self.parse_expression(linked_expr)?.unwrap();
 
-                    match was_obj_type {
+                    let result = match was_obj_type {
                         ObjType::Char => {
                             let ex_int = ex.into_int_value();
 
@@ -410,13 +417,13 @@ mod function_parsing {
 
                             match from_size.cmp(&to_size) {
                                 Ordering::Equal => {
-                                    Ok(ex)
+                                    ex
                                 }
                                 Ordering::Less => { // extend
-                                    Ok(self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into())
+                                    self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
                                 }
                                 Ordering::Greater => { // truncation
-                                    Ok(self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into())
+                                    self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
                                 }
                             }
                         }
@@ -430,19 +437,19 @@ mod function_parsing {
 
                             match from_size.cmp(&to_size) {
                                 Ordering::Equal => {
-                                    Ok(ex)
+                                    ex
                                 }
                                 Ordering::Less => { // extend
                                     if int_type_from.is_signed() {
                                         // example: i8 -> i16, i8 -> u16 (i8 -> i16 -> u16)
-                                        Ok(self.builder.build_int_s_extend(ex_int, to_type, "int_casing")?.into())
+                                        self.builder.build_int_s_extend(ex_int, to_type, "int_casing")?.into()
                                     } else {
                                         // example: u8 -> i16/u16
-                                        Ok(self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into())
+                                        self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
                                     }
                                 }
                                 Ordering::Greater => { // truncation
-                                    Ok(self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into())
+                                    self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
                                 }
                             }
                         }
@@ -456,31 +463,32 @@ mod function_parsing {
 
                             match from_size.cmp(&to_size) {
                                 Ordering::Equal => {
-                                    Ok(ex)
+                                    ex
                                 }
                                 Ordering::Less => { // extend
-                                    Ok(self.builder.build_float_ext(ex_float, to_type, "float_casing")?.into())
+                                    self.builder.build_float_ext(ex_float, to_type, "float_casing")?.into()
                                 }
                                 Ordering::Greater => { // truncation
-                                    Ok(self.builder.build_float_trunc(ex_float, to_type, "float_casing")?.into())
+                                    self.builder.build_float_trunc(ex_float, to_type, "float_casing")?.into()
                                 }
                             }
                         }
                         ObjType::Reference(_) => {
                             match &to_obj_type {
-                                ObjType::Reference(_) => Ok(ex),
+                                ObjType::Reference(_) => ex,
                                 ObjType::Integer(_) => {
                                     let ex_ptr = ex.into_pointer_value();
 
                                     let to_type = self.parse_type(&to_obj_type).into_int_type();
 
-                                    Ok(self.builder.build_ptr_to_int(ex_ptr, to_type, "asd")?.into())
+                                    self.builder.build_ptr_to_int(ex_ptr, to_type, "asd")?.into()
                                 }
                                 _ => unreachable!()
                             }
                         }
-                        ObjType::Unit | ObjType::Function { .. } => unreachable!()
-                    }
+                        ObjType::Void | ObjType::Function { .. } => unreachable!()
+                    };
+                    Ok(Some(result))
                 }
             }
         }
@@ -488,7 +496,7 @@ mod function_parsing {
             let args: Vec<_> = args.into_iter().map(|a|
                 self.parse_expression(a.expr)
             ).collect::<Result<_, _>>()?;
-            let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.into()).collect(); // will be removed
+            let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.unwrap().into()).collect(); // will be removed
 
             let function = self.context_window.get_function_unwrap(object);
             let returned = self.builder.build_call(function, &args, "function call")?;

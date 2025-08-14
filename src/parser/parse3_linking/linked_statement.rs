@@ -161,7 +161,7 @@ impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
             Self::Reference(object_type) => &format!("*{object_type}"),
-            Self::Unit => "void",
+            Self::Void => "void",
             Self::Char => "char",
             Self::Integer(int) => match int {
                 IntObjType::Bool => "bool",

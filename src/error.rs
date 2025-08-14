@@ -40,6 +40,7 @@ pub enum CompilationError {
     IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
     IncorrectAs { what: String, from: ObjType, to: ObjType },
     IncorrectDeref { what: String, from: ObjType },
+    UnexpectedVoidUse,
 
     LLVMError(BuilderError),
     LLVMVerifyModuleError { llvm_error: String },
@@ -134,6 +135,9 @@ impl fmt::Display for CompilationError {
             }
             Self::IncorrectDeref { what, from } => {
                 write!(f, "Error: can't deref {what}, which has type {from}")
+            }
+            Self::UnexpectedVoidUse => {
+                write!(f, "Error: `void` can't be used as actual type")
             }
 
             Self::LLVMError(build_error) => {

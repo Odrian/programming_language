@@ -8,7 +8,7 @@ pub struct Object {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ObjType {
-    Unit,
+    Void,
     Char,
     Integer(IntObjType),
     Float(FloatObjType),
@@ -19,7 +19,10 @@ impl ObjType {
     pub const BOOL: ObjType = ObjType::Integer(IntObjType::Bool);
     pub const DEFAULT_INTEGER: ObjType = ObjType::Integer(IntObjType::I32);
     pub const DEFAULT_FLOAT: ObjType = ObjType::Float(FloatObjType::F64);
-    
+
+    pub fn is_void(&self) -> bool {
+        self == &ObjType::Void
+    }
     pub fn get_float_bits_or_panic(&self) -> u8 {
         let ObjType::Float(float) = self else {
             panic!();

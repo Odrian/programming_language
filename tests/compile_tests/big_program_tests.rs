@@ -17,6 +17,14 @@ a = 9;
 return a
 "));
 
+    assert_has_error("\
+main :: () -> i32 {
+    x := 0;
+    x = 0.0;
+    return 0
+}
+");
+
     assert_eq!(12, get_exit_code("\
 foo :: () -> i32 {
     return 12
