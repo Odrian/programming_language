@@ -1,11 +1,9 @@
 # TODO
-* add types (in progress)
 * add pointers
 * add arrays
 * import another files
 * add print/read function
 * add structs
-* add enums
 
 
 * add vararg
