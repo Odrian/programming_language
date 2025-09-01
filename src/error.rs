@@ -7,10 +7,16 @@ use inkwell::builder::BuilderError;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CompilationError {
+    // IO
     CantReadSourceFile { filepath: String, io_error: String },
     CantWriteToFile { filepath: String, what: String, io_error: String },
     CantDeleteObjectFile { filepath: String, io_error: String },
 
+    // tokenize step
+    QuotesNotClosed(PositionInFile),
+    UnexpectedChar(char),
+
+    // syntactic step
     SyntacticsError(PositionInFile, String),
     BracketNotOpened(PositionInFile, BracketType),
     BracketNotClosed(PositionInFile, BracketType),
@@ -20,7 +26,6 @@ pub enum CompilationError {
         start_bracket_type: BracketType,
         end_bracket_type: BracketType,
     },
-    QuotesNotClosed(PositionInFile),
 
     LiteralParseError { what: String, error: String },
 
@@ -68,6 +73,13 @@ impl fmt::Display for CompilationError {
                 write!(f, "Error: '{io_error}' while deleting object file {filepath}. Error: {io_error}")
             }
 
+            Self::QuotesNotClosed(position) => {
+                write!(f, "Error: quotes not closed at {position}")
+            }
+            Self::UnexpectedChar(char) => {
+                write!(f, "Error: unexpected char '{char}'")
+            }
+
             Self::SyntacticsError(place_info, description) => {
                 write!(f, "Error: {description} at {place_info}")
             }
@@ -83,9 +95,6 @@ impl fmt::Display for CompilationError {
                 let start_name = bracket_type_to_string(start_bracket_type);
                 let end_name = bracket_type_to_string(end_bracket_type);
                 write!(f, "Error: at {end} expected {start_name} bracket, but have {end_name} bracket. Open bracket at {start}")
-            }
-            Self::QuotesNotClosed(position) => {
-                write!(f, "Error: quotes not closed at {position}")
             }
 
             Self::LiteralParseError { what, error } => {

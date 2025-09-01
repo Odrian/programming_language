@@ -132,7 +132,7 @@ mod module_parsing {
             self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
-                return Err(CE::LLVMVerifyFunctionError { name: self.get_object_name(object).clone() });
+                return Err(CE::LLVMVerifyFunctionError { name: self.object_factory.get_name(object).clone() });
             }
             self.current_function = None;
 
@@ -227,7 +227,7 @@ mod function_parsing {
                 LinkedStatement::VariableDeclaration { object, value } => {
                     let value = self.parse_expression(value.expr)?.unwrap();
                     let var_type = self.get_object_type(object);
-                    let pointer = self.builder.build_alloca(var_type, self.get_object_name(object))?;
+                    let pointer = self.builder.build_alloca(var_type, self.get_object_name(object).as_str())?;
                     self.builder.build_store(pointer, value)?;
                     self.context_window.add(object, pointer.into());
                 }

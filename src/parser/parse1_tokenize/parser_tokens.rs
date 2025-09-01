@@ -23,13 +23,12 @@ fn parse_inside_brackets(
     let mut index = start_index;
 
     while let Some(char) = text.next() {
-        if char == '"' || char == '\'' {
+        if char == '"' || char == '\'' || char == '`' {
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(buffer, start_buffer_index);
+                let mut tokens = split_text_without_brackets(buffer, start_buffer_index)?;
                 buffer = String::new();
                 result_tokens.append(&mut tokens);
             }
-            start_buffer_index = index;
 
             let mut inside_quotes = String::new();
             loop {
@@ -43,18 +42,20 @@ fn parse_inside_brackets(
             }
 
             let new_index = index + inside_quotes.len() + 2;
-            let token = if char == '"' {
-                Token::DoubleQuotes(inside_quotes)
-            } else {
-                Token::Quotes(inside_quotes)
+            let token = match char {
+                '\'' => Token::Quotes(inside_quotes),
+                '"' => Token::DoubleQuotes(inside_quotes),
+                '`' => Token::String(inside_quotes),
+                _ => unreachable!()
             };
             let position = PositionInFile::new(index, new_index);
             result_tokens.push(TokenWithPos::new(token, position));
             index += new_index;
+            start_buffer_index = index;
         } else if let Some(bracket_type) = is_open_bracket(char) {
             // open bracket
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(buffer, start_buffer_index);
+                let mut tokens = split_text_without_brackets(buffer, start_buffer_index)?;
                 buffer = String::new();
                 result_tokens.append(&mut tokens);
             }
@@ -81,7 +82,7 @@ fn parse_inside_brackets(
             }
 
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(buffer, start_buffer_index);
+                let mut tokens = split_text_without_brackets(buffer, start_buffer_index)?;
                 result_tokens.append(&mut tokens);
             }
 
@@ -93,7 +94,7 @@ fn parse_inside_brackets(
         }
     }
     if index != start_buffer_index {
-        let mut tokens = split_text_without_brackets(buffer, start_buffer_index);
+        let mut tokens = split_text_without_brackets(buffer, start_buffer_index)?;
         result_tokens.append(&mut tokens);
     }
 
@@ -126,22 +127,12 @@ fn is_close_bracket(char: char) -> Option<BracketType> {
     }
 }
 
-pub fn split_text_without_brackets(text: String, offset_index: usize) -> Vec<TokenWithPos> {
+pub fn split_text_without_brackets(text: String, offset_index: usize) -> Result<Vec<TokenWithPos>, CE> {
     let mut iter = text.chars().peekable();
     let mut state = TokenizeState::new(offset_index);
 
-    // let mut line = 1;
-    // let mut column = 1;
-
     while let Some(char) = iter.next() {
-        // split_state.update_place_info(PositionInFile::new(line, column));
-        // column += 1;
         match char {
-            '\n' => {
-                state.add(1, None);
-                // line += 1;
-                // column = 1;
-            }
             '=' => {
                 if iter.peek() == Some(&'=') {
                     iter.next();
@@ -251,19 +242,26 @@ pub fn split_text_without_brackets(text: String, offset_index: usize) -> Vec<Tok
             _ if char.is_ascii_whitespace() => {
                 state.add(1, None);
             }
-            _ => {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
                 state.use_char_in_string(char);
+            }
+            '.' if state.is_buffer_number => {
+                state.use_char_in_string(char);
+            }
+            _ => {
+                return Err(CE::UnexpectedChar(char))
             }
         }
     }
     state.flush_buffer();
-    state.tokens
+    Ok(state.tokens)
 }
 
 /// guarantees that `buffer_start <= buffer_end <= text.len()`
 struct TokenizeState {
     tokens: Vec<TokenWithPos>,
     buffer: String,
+    is_buffer_number: bool,
     buffer_start: usize,
     buffer_end: usize,
     offset_index: usize,
@@ -273,6 +271,7 @@ impl TokenizeState {
         Self {
             tokens: Vec::new(),
             buffer: String::new(),
+            is_buffer_number: false,
             buffer_start: 0,
             buffer_end: 0,
             offset_index,
@@ -280,6 +279,9 @@ impl TokenizeState {
     }
 
     fn use_char_in_string(&mut self, char: char) {
+        if self.buffer.is_empty() {
+            self.is_buffer_number = char.is_ascii_digit()
+        }
         self.buffer_end += 1;
         self.buffer.push(char);
     }
@@ -308,6 +310,7 @@ impl TokenizeState {
             self.tokens
                 .push(TokenWithPos::new(token, place_info));
         }
+        self.is_buffer_number = false;
         self.buffer_start = self.buffer_end;
     }
 }

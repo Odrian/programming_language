@@ -60,6 +60,12 @@ foo :: () {
 }
 ```
 
+Names may contain only `A..Z`, `a..z`, `0..9` and `_`. Using ` you can use any chars you want
+```
+`if` := 0;
+`a > b` := 0;
+```
+
 ### Operators precedence:  
 `=`, `:=`, `_=`(`_` may be `+-*/`)  
 unary `-`, `!`, `*`, `&`  
@@ -82,7 +88,7 @@ unary `-`, `!`, `*`, `&`
 ### literals
 
 bool: `true`, `false`  
-char: `'c'`  
+char: `'c'` (only ascii chars allowed)  
 integer: `239i32`, `239u128`, `239` - using `i32` by default
 float: `0.0f32`, `0.0f64`, `0.0` - using `f64` by default  
 

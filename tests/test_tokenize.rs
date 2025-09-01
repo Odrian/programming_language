@@ -155,3 +155,13 @@ fn test_tokens() {
         ]),
     );
 }
+
+#[test]
+fn test_correct_names() {
+    assert_has_error("?");
+    assert_has_error("@");
+
+    assert_no_error("name");
+    assert_no_error("_name");
+    assert_no_error("_");
+}
