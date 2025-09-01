@@ -427,31 +427,41 @@ mod function_parsing {
                                 }
                             }
                         }
-                        ObjType::Integer(int_type_from) => {
-                            let ex_int = ex.into_int_value();
-                            let from_type = self.parse_type(&was_obj_type).into_int_type();
-                            let to_type = self.parse_type(&to_obj_type).into_int_type();
+                        ObjType::Integer(int_type_from) => match to_obj_type {
+                            ObjType::Integer(_) | ObjType::Char => {
+                                let ex_int = ex.into_int_value();
 
-                            let from_size = from_type.get_bit_width();
-                            let to_size = to_type.get_bit_width();
+                                let from_type = self.parse_type(&was_obj_type).into_int_type();
+                                let to_type = self.parse_type(&to_obj_type).into_int_type();
 
-                            match from_size.cmp(&to_size) {
-                                Ordering::Equal => {
-                                    ex
-                                }
-                                Ordering::Less => { // extend
-                                    if int_type_from.is_signed() {
-                                        // example: i8 -> i16, i8 -> u16 (i8 -> i16 -> u16)
-                                        self.builder.build_int_s_extend(ex_int, to_type, "int_casing")?.into()
-                                    } else {
-                                        // example: u8 -> i16/u16
-                                        self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
+                                let from_size = from_type.get_bit_width();
+                                let to_size = to_type.get_bit_width();
+
+                                match from_size.cmp(&to_size) {
+                                    Ordering::Equal => {
+                                        ex
+                                    }
+                                    Ordering::Less => { // extend
+                                        if int_type_from.is_signed() {
+                                            // example: i8 -> i16, i8 -> u16 (i8 -> i16 -> u16)
+                                            self.builder.build_int_s_extend(ex_int, to_type, "int_casing")?.into()
+                                        } else {
+                                            // example: u8 -> i16/u16
+                                            self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
+                                        }
+                                    }
+                                    Ordering::Greater => { // truncation
+                                        self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
                                     }
                                 }
-                                Ordering::Greater => { // truncation
-                                    self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
-                                }
                             }
+                            ObjType::Reference(reference_type) => {
+                                let ex_int = ex.into_int_value();
+                                let pointer_type = self.parse_type(&ObjType::Reference(reference_type)).into_pointer_type();
+
+                                self.builder.build_int_to_ptr(ex_int, pointer_type, "int_to_ptr")?.into()
+                            }
+                            _ => unreachable!()
                         }
                         ObjType::Float(_) => {
                             let ex_float = ex.into_float_value();
@@ -539,5 +549,4 @@ impl CompareOperator {
             CompareOperator::LessEqual =>       FloatPredicate::OLE,
         }
     }
-
 }

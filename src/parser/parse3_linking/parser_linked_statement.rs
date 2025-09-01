@@ -392,7 +392,10 @@ impl ObjType {
         match from {
             ObjType::Char => matches!(other, ObjType::Integer(_)),
             ObjType::Float(_) => matches!(other, ObjType::Float(_)),
-            ObjType::Integer(from) => matches!(other, ObjType::Integer(to) if !to.is_bool() || from.is_bool()),
+            ObjType::Integer(from) => {
+                matches!(other, ObjType::Reference(_)) ||
+                matches!(other, ObjType::Integer(to) if !to.is_bool() || from.is_bool())
+            },
             ObjType::Reference(_) => matches!(other, ObjType::Reference(_) | ObjType::Integer(_)),
             ObjType::Function { .. } | ObjType::Void => unreachable!(),
         }

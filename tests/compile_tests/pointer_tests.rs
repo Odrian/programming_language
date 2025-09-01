@@ -39,3 +39,15 @@ main :: () -> i32 {
 }
 "));
 }
+
+#[test]
+fn test_int_casts() {
+    assert_eq!(35, get_exit_code("\
+main :: () -> i32 {
+    x := &(256_u16 * 7_u16 + 5_u16);
+    y1 := x as *u8;
+    y2 := (y1 as usize + 1_usize) as *u8;
+    return (*y1 * *y2) as i32
+}
+"))
+}

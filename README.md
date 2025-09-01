@@ -103,8 +103,9 @@ integer and float may contain any number of `_`
 * `u8` => `char` (for `integer` => `char` use `as u8 as char`)
 * `*T` => `*U`
 * `*T` => `integer`
+* `integer` => `*T`
 
 ### references
 `&variable` returns pointer to variable  
-`&value` will allocate memory for value and return pointer to it
+`&value` will allocate memory for value and return pointer to it  
 `*pointer_value = value` 
