@@ -28,7 +28,7 @@ impl<'factory> LinkingContext<'factory> {
 impl LinkingContext<'_> {
     fn link_global_statements(&mut self, statements: Vec<Statement>) -> Result<Vec<GlobalLinkedStatement>, CE> {
         let mut result = vec![];
-        
+
         for statement in statements {
             let global_statement = match statement {
                 Statement::Function { object: function_name, args, returns, body } => {
@@ -62,12 +62,16 @@ impl LinkingContext<'_> {
 
                     self.object_context_window.step_in();
                     self.current_function_returns = Some(return_type.clone());
-                    let body = self.link_statements_recursive(body)?;
+                    let mut body = self.link_statements_recursive(body)?;
                     self.current_function_returns = None;
                     self.object_context_window.step_out();
 
-                    if return_type != ObjType::Void && !check_is_returns(&body) {
-                        return Err(CE::FunctionMustReturn { function_name })
+                    if !check_is_returns(&body) {
+                        if return_type == ObjType::Void {
+                            body.push(LinkedStatement::Return(None))
+                        } else {
+                            return Err(CE::FunctionMustReturn { function_name })
+                        }
                     }
 
                     let function_object = self.object_factory.create_object(function_name, func_type, &mut self.object_context_window);

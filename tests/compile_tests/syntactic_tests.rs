@@ -15,7 +15,8 @@ fn test_operation_order() {
 #[test]
 fn test_function_signatures() {
     assert_no_error("main :: () -> i32 { return 0 }");
-    assert_no_error("main :: () -> i32 { return 0 } foo :: () -> void {}");
+    assert_no_error("foo :: () -> void { return; } main :: () -> i32 { foo(); return 0 }");
+    assert_no_error("foo :: () -> void {         } main :: () -> i32 { foo(); return 0 }");
 
     assert_has_error("");
     assert_has_error("foo :: () -> i32 { return 0 }");

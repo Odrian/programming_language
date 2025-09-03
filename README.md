@@ -12,7 +12,7 @@
 
 Function declaration
 ```
-foo :: (argument : i32) {
+foo :: (argument : i32) -> void {
     return;
 }
 
@@ -20,6 +20,7 @@ bar :: (argument : i32) -> i32 {
     return 0;
 }
 ```
+`-> void` is redundant, `return;` at the end of function is redundant
 
 You can call functions with ```name(arg1, ...)```, redundant comma allowed.
 

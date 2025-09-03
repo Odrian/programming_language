@@ -146,14 +146,8 @@ mod function_parsing {
     impl<'ctx> CodeModuleGen<'ctx, '_> {
         pub fn parse_function_body(&mut self, body: Vec<LinkedStatement>) -> Result<(), CE> {
             let is_returned = self.parse_statements(body)?;
-            if !is_returned {
-                self.builder.build_return(None)?;
-            }
+            assert!(is_returned);
 
-            // TODO: don't require 'return' nothing and 'return 0' in 'main'
-            // let i32_type = self.code_module_gen.context.i32_type();
-            // let zero = i32_type.const_int(0, false);
-            // self.code_module_gen.builder.build_return(Some(&zero))?;
             Ok(())
         }
         fn parse_statements(&mut self, statements: Vec<LinkedStatement>) -> Result<bool, CE> {
