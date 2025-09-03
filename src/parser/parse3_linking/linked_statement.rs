@@ -9,6 +9,11 @@ pub struct TypedExpression {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub enum GlobalLinkedStatement {
+    Function { object: Object, args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement> },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedStatement {
     VariableDeclaration { object: Object, value: TypedExpression },
     SetVariable { object: Object, value: TypedExpression },
@@ -17,8 +22,7 @@ pub enum LinkedStatement {
     Expression(TypedExpression),
     If { condition: TypedExpression, body: Vec<Self> },
     While { condition: TypedExpression, body: Vec<Self> },
-    Function { object: Object, args: Vec<Object>, returns: ObjType, body: Vec<Self> },
-    Return(Option<TypedExpression>)
+    Return(Option<TypedExpression>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -45,6 +49,12 @@ impl TypedExpression {
     }
 }
 
+impl GlobalLinkedStatement {
+    pub fn new_function(name: Object, args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement>) -> Self {
+        Self::Function { object: name, args, returns, body }
+    }
+}
+
 impl LinkedStatement {
     pub fn new_variable(object: Object, value: TypedExpression) -> Self {
         Self::VariableDeclaration { object, value }
@@ -53,16 +63,13 @@ impl LinkedStatement {
         Self::SetVariable { object, value }
     }
     pub fn new_set_deref(pointer: TypedExpression, value: TypedExpression) -> Self {
-        Self::SetDereference { pointer: pointer, value }
+        Self::SetDereference { pointer, value }
     }
     pub fn new_if(condition: TypedExpression, body: Vec<Self>) -> Self {
         Self::If { condition, body }
     }
     pub fn new_while(condition: TypedExpression, body: Vec<Self>) -> Self {
         Self::While { condition, body }
-    }
-    pub fn new_function(name: Object, args: Vec<Object>, returns: ObjType, body: Vec<Self>) -> Self {
-        Self::Function { object: name, args, returns, body }
     }
 }
 
@@ -86,12 +93,25 @@ impl LinkedExpression {
 
 // ----- Display implementation -----
 
+fn to_string_with_tabs<T: ToString>(statements: &[T]) -> String {
+    let string = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
+    "    ".to_owned() + string.replace('\n', "\n    ").as_str()
+}
+
+impl fmt::Display for GlobalLinkedStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Function { object, args, returns, body } => {
+                let inside = to_string_with_tabs(body);
+                let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
+                write!(f, "{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
+            }
+        }
+    }
+}
+
 impl fmt::Display for LinkedStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn statements_to_string_with_tabs(statements: &[LinkedStatement]) -> String {
-            let string = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
-            "    ".to_owned() + string.replace('\n', "\n    ").as_str()
-        }
         match self {
             Self::VariableDeclaration { object, value } => {
                 write!(f, "{object} := {value}")
@@ -106,17 +126,12 @@ impl fmt::Display for LinkedStatement {
                 write!(f, "{expression}")
             }
             Self::If { condition, body } => {
-                let inside = statements_to_string_with_tabs(body);
+                let inside = to_string_with_tabs(body);
                 write!(f, "if {condition} {{\n{inside}\n}}")
             }
             Self::While { condition, body } => {
-                let inside = statements_to_string_with_tabs(body);
+                let inside = to_string_with_tabs(body);
                 write!(f, "while {condition} {{\n{inside}\n}}")
-            }
-            Self::Function { object, args, returns, body } => {
-                let inside = statements_to_string_with_tabs(body);
-                let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
-                write!(f, "{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
             Self::Return(exp) => {
                 match exp {

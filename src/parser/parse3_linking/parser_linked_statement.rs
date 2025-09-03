@@ -5,9 +5,9 @@ use super::linked_statement::*;
 use super::object::{ObjectFactory, ObjType, FloatObjType, IntObjType};
 use super::context_window::ObjectContextWindow;
 
-pub fn link_names(statement: Vec<Statement>, object_factory: &mut ObjectFactory) -> Result<Vec<LinkedStatement>, CE> {
+pub fn link_names(statement: Vec<Statement>, object_factory: &mut ObjectFactory) -> Result<Vec<GlobalLinkedStatement>, CE> {
     let mut context = LinkingContext::new(object_factory);
-    context.link_statements_recursive(statement)
+    context.link_global_statements(statement)
 }
 
 struct LinkingContext<'factory> {
@@ -26,6 +26,61 @@ impl<'factory> LinkingContext<'factory> {
 }
 
 impl LinkingContext<'_> {
+    fn link_global_statements(&mut self, statements: Vec<Statement>) -> Result<Vec<GlobalLinkedStatement>, CE> {
+        let mut result = vec![];
+        
+        for statement in statements {
+            let global_statement = match statement {
+                Statement::Function { object: function_name, args, returns, body } => {
+                    let mut arguments_obj = Vec::with_capacity(args.len());
+                    let mut arguments_type = Vec::with_capacity(args.len());
+
+                    for (name, typee) in args {
+                        let object_type = self.parse_type(typee)?;
+                        if object_type.is_void() {
+                            return Err(CE::UnexpectedVoidUse)
+                        }
+                        arguments_type.push(object_type.clone());
+                        let object = self.object_factory.create_object(name, object_type, &mut self.object_context_window);
+                        arguments_obj.push(object);
+                    }
+
+                    let return_type = {
+                        match returns {
+                            Some(typee) => self.parse_type(typee)?,
+                            None => ObjType::Void,
+                        }
+                    };
+
+                    let func_type = ObjType::Function {
+                        arguments: arguments_type,
+                        returns: Box::new(return_type.clone()),
+                    };
+                    if self.object_context_window.get(&function_name).is_some() {
+                        return Err(CE::FunctionOverloading { function_name })
+                    }
+
+                    self.object_context_window.step_in();
+                    self.current_function_returns = Some(return_type.clone());
+                    let body = self.link_statements_recursive(body)?;
+                    self.current_function_returns = None;
+                    self.object_context_window.step_out();
+
+                    if return_type != ObjType::Void && !check_is_returns(&body) {
+                        return Err(CE::FunctionMustReturn { function_name })
+                    }
+
+                    let function_object = self.object_factory.create_object(function_name, func_type, &mut self.object_context_window);
+
+                    GlobalLinkedStatement::new_function(function_object, arguments_obj, return_type, body)
+                }
+                _ => return Err(CE::UnexpectedGlobalStatement)
+            };
+            result.push(global_statement);
+        }
+
+        Ok(result)
+    }
     fn link_statements_recursive(&mut self, statements: Vec<Statement>) -> Result<Vec<LinkedStatement>, CE> {
         let mut result = vec![];
         for statement in statements {
@@ -132,49 +187,6 @@ impl LinkingContext<'_> {
                     self.object_context_window.step_out();
                     LinkedStatement::new_while(condition, body)
                 }
-                Statement::Function { object: function_name, args, returns, body } => {
-                    let mut arguments_obj = Vec::with_capacity(args.len());
-                    let mut arguments_type = Vec::with_capacity(args.len());
-
-                    for (name, typee) in args {
-                        let object_type = self.parse_type(typee)?;
-                        if object_type.is_void() {
-                            return Err(CE::UnexpectedVoidUse)
-                        }
-                        arguments_type.push(object_type.clone());
-                        let object = self.object_factory.create_object(name, object_type, &mut self.object_context_window);
-                        arguments_obj.push(object);
-                    }
-
-                    let return_type = {
-                        match returns {
-                            Some(typee) => self.parse_type(typee)?,
-                            None => ObjType::Void,
-                        }
-                    };
-
-                    let func_type = ObjType::Function {
-                        arguments: arguments_type,
-                        returns: Box::new(return_type.clone()),
-                    };
-                    if self.object_context_window.get(&function_name).is_some() {
-                        return Err(CE::FunctionOverloading { function_name })
-                    }
-
-                    self.object_context_window.step_in();
-                    self.current_function_returns = Some(return_type.clone());
-                    let body = self.link_statements_recursive(body)?;
-                    self.current_function_returns = None;
-                    self.object_context_window.step_out();
-
-                    if return_type != ObjType::Void && !check_is_returns(&body) {
-                        return Err(CE::FunctionMustReturn { function_name })
-                    }
-
-                    let function_object = self.object_factory.create_object(function_name, func_type, &mut self.object_context_window);
-
-                    LinkedStatement::new_function(function_object, arguments_obj, return_type, body)
-                }
                 Statement::Return(option_expression) => {
                     let expression = match option_expression {
                         Some(expression) => Some(self.parse_expression(expression)?),
@@ -192,6 +204,7 @@ impl LinkingContext<'_> {
                     }
                     LinkedStatement::Return(expression)
                 }
+                Statement::Function { .. } => return Err(CE::LocalFunctionNotSupported)
             };
             result.push(linked);
         }

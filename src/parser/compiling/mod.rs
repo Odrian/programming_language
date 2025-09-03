@@ -12,7 +12,7 @@ use crate::parser::parse3_linking::linked_statement::*;
 use crate::parser::parse3_linking::object::{IntObjType, ObjType, ObjectFactory};
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(config: &Config, statements: Vec<LinkedStatement>, object_factory: &ObjectFactory) -> Result<(), CE> {
+pub fn parse_to_llvm(config: &Config, statements: Vec<GlobalLinkedStatement>, object_factory: &ObjectFactory) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
@@ -32,9 +32,9 @@ pub fn parse_to_llvm(config: &Config, statements: Vec<LinkedStatement>, object_f
     Ok(())
 }
 
-fn verify_main_signature(statements: &[LinkedStatement], object_factory: &ObjectFactory) -> Result<(), CE> {
+fn verify_main_signature(statements: &[GlobalLinkedStatement], object_factory: &ObjectFactory) -> Result<(), CE> {
     for statement in statements {
-        if let LinkedStatement::Function { object, returns, args, body: _body } = statement {
+        if let GlobalLinkedStatement::Function { object, returns, args, body: _body } = statement {
             if object_factory.get_name(*object) == "main" {
                 if returns != &ObjType::Integer(IntObjType::I32) {
                     return Err(CE::IncorrectMainSignature)

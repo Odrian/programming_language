@@ -34,7 +34,8 @@ pub enum CompilationError {
     LinkingError { name: String, context: String },
     LinkingErrorFunctionUsage { name: String },
 
-    UnexpectedGlobalVariable,
+    UnexpectedGlobalStatement,
+    LocalFunctionNotSupported,
     UnexpectedReturn,
     FunctionMustReturn { function_name: String },
     NoMainFunction,
@@ -114,8 +115,11 @@ impl fmt::Display for CompilationError {
                 write!(f, "Linking Error: can't use function {name} as variable value")
             }
 
-            Self::UnexpectedGlobalVariable => {
-                write!(f, "Error: Global variables are not supported")
+            Self::UnexpectedGlobalStatement => {
+                write!(f, "Error: unexpected global statement")
+            }
+            Self::LocalFunctionNotSupported => {
+                write!(f, "Error: local functions not supported")
             }
             Self::UnexpectedReturn => {
                 write!(f, "Error: unexpected return")

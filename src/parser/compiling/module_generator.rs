@@ -13,7 +13,7 @@ use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionTy
 
 pub fn parse_module<'ctx>(
     context: &'ctx Context, target_data: &'ctx TargetData,
-    statements: Vec<LinkedStatement>, object_factory: &ObjectFactory
+    statements: Vec<GlobalLinkedStatement>, object_factory: &ObjectFactory
 ) -> Result<Module<'ctx>, CE> {
     let mut code_module_gen = CodeModuleGen::new(context, target_data, object_factory, "main_module");
     code_module_gen.parse_module(statements)?;
@@ -92,15 +92,12 @@ mod module_parsing {
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx, '_> {
-        pub fn parse_module(&mut self, statements: Vec<LinkedStatement>) -> Result<(), CE> {
+        pub fn parse_module(&mut self, statements: Vec<GlobalLinkedStatement>) -> Result<(), CE> {
             self.context_window.step_in();
             for statement in statements {
                 match statement {
-                    LinkedStatement::Function { .. } => {
+                    GlobalLinkedStatement::Function { .. } => {
                         self.create_function(statement)?;
-                    }
-                    _ => {
-                        return Err(CE::UnexpectedGlobalVariable)
                     }
                 }
             }
@@ -108,8 +105,8 @@ mod module_parsing {
             Ok(())
         }
 
-        fn create_function(&mut self, statement: LinkedStatement) -> Result<(), CE> {
-            let LinkedStatement::Function { object, args, returns, body } = statement else { unreachable!() };
+        fn create_function(&mut self, statement: GlobalLinkedStatement) -> Result<(), CE> {
+            let GlobalLinkedStatement::Function { object, args, returns, body } = statement else { unreachable!() };
 
             let arguments_types: Vec<BasicMetadataTypeEnum> = args.iter().map(|obj| self.get_object_type(*obj).into()).collect();
             let fn_type = self.function_from(&returns, &arguments_types, false);
@@ -170,7 +167,6 @@ mod function_parsing {
 
         fn parse_statement(&mut self, statement: LinkedStatement) -> Result<bool, CE> {
             match statement {
-                LinkedStatement::Function { .. } => unimplemented!("local functions are not supported"),
                 LinkedStatement::Expression(expression) => {
                     if expression.object_type.is_void() {
                         let LinkedExpression::FunctionCall { object, args } = expression.expr else { unreachable!() };

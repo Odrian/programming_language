@@ -4,18 +4,27 @@ use programming_language::parser::parse3_linking::linked_statement::*;
 use programming_language::parser::parse3_linking::object::*;
 use programming_language::parser::operations::*;
 
-fn parse(text: &str) -> Result<(Vec<LinkedStatement>, ObjectFactory), CE> {
-    let tokens = parse1_tokenize::tokenize(text)?;
+fn parse(text: &str) -> Result<(Vec<GlobalLinkedStatement>, ObjectFactory), CE> {
+    let tokens = parse1_tokenize::tokenize(&text)?;
     let statements = parse2_syntactic::parse_statements(tokens)?;
     let mut object_factory = ObjectFactory::default();
     let linked_statements = parse3_linking::link_variables(statements, &mut object_factory)?;
     Ok((linked_statements, object_factory))
 }
-fn assert_has_error(str: &str) {
+fn assert_has_error_global(str: &str) {
     assert_ne!(parse(str).err(), None);
 }
-fn assert_no_error(str: &str) {
+fn assert_no_error_global(str: &str) {
     assert_eq!(parse(str).err(), None);
+}
+
+fn assert_has_error(str: &str) {
+    let actual_text = format!("main :: () -> i32 {{ {str}; return 0; }}");
+    assert_has_error_global(&actual_text);
+}
+fn assert_no_error(str: &str) {
+    let actual_text = format!("main :: () -> i32 {{ {str}; return 0; }}");
+    assert_no_error_global(&actual_text)
 }
 
 #[test]
@@ -159,32 +168,32 @@ fn test_as() {
 
 #[test]
 fn test_functions() {
-    assert_no_error("a :: () { }");
-    assert_no_error("a :: (arg1: i32) { }");
-    assert_no_error("a :: (arg1: i32) { x := arg1 }");
-    assert_no_error("a :: (arg1: i32, arg2: i32) { x := arg1 + arg2 }");
+    assert_no_error_global("a :: () { }");
+    assert_no_error_global("a :: (arg1: i32) { }");
+    assert_no_error_global("a :: (arg1: i32) { x := arg1 }");
+    assert_no_error_global("a :: (arg1: i32, arg2: i32) { x := arg1 + arg2 }");
 
-    assert_no_error("a :: () -> i32 { return 0 }");
-    assert_no_error("a :: () { return }");
+    assert_no_error_global("a :: () -> i32 { return 0 }");
+    assert_no_error_global("a :: () { return }");
 
-    assert_has_error("a :: () -> i32 { return }");
-    assert_has_error("a :: () { return 0 }");
+    assert_has_error_global("a :: () -> i32 { return }");
+    assert_has_error_global("a :: () { return 0 }");
 
-    assert_has_error("a :: (arg1) {  }");
-    assert_has_error("a :: (arg1: i32) { x = arg1 }");
-    assert_has_error("a :: () { a = x }");
-    assert_has_error("a :: () { x := a }");
-    assert_has_error("a :: () { } a :: () {}");
+    assert_has_error_global("a :: (arg1) {  }");
+    assert_has_error_global("a :: (arg1: i32) { x = arg1 }");
+    assert_has_error_global("a :: () { a = x }");
+    assert_has_error_global("a :: () { x := a }");
+    assert_has_error_global("a :: () { } a :: () {}");
 
-    assert_no_error("a :: () { a := 0; x := a }");
+    assert_no_error_global("a :: () { a := 0; x := a }");
 }
 
 #[test]
 fn test_function_with_while() {
-    assert_has_error("a :: ()  {         if 0 != 0 { x := 0 } e := x }");
-    assert_has_error("a :: (b: i32) {    if b != 0 { x := 0 } e := x }");
-    assert_has_error("a :: ()  {      while 0 != 0 { x := 0 } e := x }");
-    assert_has_error("a :: (b: i32) { while b != 0 { x := 0 } e := x }");
+    assert_has_error_global("a :: ()  {         if 0 != 0 { x := 0 } e := x }");
+    assert_has_error_global("a :: (b: i32) {    if b != 0 { x := 0 } e := x }");
+    assert_has_error_global("a :: ()  {      while 0 != 0 { x := 0 } e := x }");
+    assert_has_error_global("a :: (b: i32) { while b != 0 { x := 0 } e := x }");
 
     let text = "a :: (b: i32) -> i32 { c := b; while c != 0 { c = b } return c }";
     let result = parse(text);
@@ -193,7 +202,7 @@ fn test_function_with_while() {
         panic!("parsing error: {err}");
     };
     assert_eq!(statements.len(), 1);
-    let LinkedStatement::Function { object: function_object, args, returns, body } = statements.pop().unwrap() else { panic!() };
+    let GlobalLinkedStatement::Function { object: function_object, args, returns, body } = statements.pop().unwrap() else { panic!() };
 
     assert!(matches!(returns, ObjType::DEFAULT_INTEGER), "{returns:?}");
 
@@ -243,21 +252,23 @@ fn test_function_with_while() {
 
 #[test]
 fn test_function_call() {
-    assert_no_error("a :: () {} a()");
-    assert_no_error("a :: () {} b :: () { a() }");
-    assert_no_error("a :: (a1: i32) {} a(0 + 0)");
-    assert_no_error("a :: (a1: i32) {} a(0)");
-    assert_no_error("a :: (a1: i32, a2: i32) {} a(0, 0)");
-    assert_no_error("a :: (a1: i32, a2: i32, a3: i32) {} a(0, 0, 0)");
+    fn cover(global: &str, local: &str) -> String {
+        format!("{global} xxx :: () {{ {local} }}")
+    }
+    assert_no_error_global(&cover("a :: () {}", "a()"));
+    assert_no_error_global(&cover("a :: (a1: i32) {}", "a(0 + 0)"));
+    assert_no_error_global(&cover("a :: (a1: i32) {}", "a(0)"));
+    assert_no_error_global(&cover("a :: (a1: i32, a2: i32) {}", "a(0, 0)"));
+    assert_no_error_global(&cover("a :: (a1: i32, a2: i32, a3: i32) {}", "a(0, 0, 0)"));
 
-    assert_has_error("a :: (0) {}");
-    assert_has_error("a :: (0: i32) {}");
-    assert_has_error("b :: () { a() }    a :: () {}");
+    assert_has_error_global("a :: (0) {}");
+    assert_has_error_global("a :: (0: i32) {}");
+    assert_has_error_global("b :: () { a() }    a :: () {}");
 
-    assert_has_error("a :: () {} a(0)");
-    assert_has_error("a :: (ar1: i32) {} a()");
-    assert_has_error("a :: (ar1: i32) {} a(0, 0)");
-    assert_has_error("a :: (ar1: i32, ar2: i32) {} a()");
-    assert_has_error("a :: (ar1: i32, ar2: i32) {} a(0)");
-    assert_has_error("a :: (ar1: i32, ar2: i32) {} a(0, 0, 0)");
+    assert_has_error_global(&cover("a :: () {}", "a(0)"));
+    assert_has_error_global(&cover("a :: (ar1: i32) {}", "a()"));
+    assert_has_error_global(&cover("a :: (ar1: i32) {}", "a(0, 0)"));
+    assert_has_error_global(&cover("a :: (ar1: i32, ar2: i32) {}", "a()"));
+    assert_has_error_global(&cover("a :: (ar1: i32, ar2: i32) {}", "a(0)"));
+    assert_has_error_global(&cover("a :: (ar1: i32, ar2: i32) {}", "a(0, 0, 0)"));
 }
