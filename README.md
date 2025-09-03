@@ -1,9 +1,7 @@
 # TODO
-* add pointers (in progress)
-* add arrays
-* import another files
-* add print/read function
 * add structs
+* add export
+* import another files
 
 
 * add vararg
@@ -12,7 +10,7 @@
 
 # Programming language
 
-File can contain any number of functions. Each function must return at any scenario.
+Function declaration
 ```
 foo :: (argument : i32) {
     return;
@@ -23,7 +21,14 @@ bar :: (argument : i32) -> i32 {
 }
 ```
 
-you can call functions with ```name(arg1, ...)```, redundant comma allowed.
+You can call functions with ```name(arg1, ...)```, redundant comma allowed.
+
+You must declare main function with () -> i32 signature
+```
+main :: () -> i32 {
+    return 0;
+}
+```
 
 You can define variable as follows. Type annotation is sugar, type always can be determinate by value type
 ```
@@ -31,14 +36,14 @@ name : type = value;
 name := value;
 ```
 
-Each variable and argument is mutable
+Each variable and function argument is mutable
 ```
 name = value;
 name += value;
 name %= value;
 ```
 
-if and while condition is bool expression:
+If and while condition must be a bool expression:
 ```
 if expression {
     ...
@@ -48,23 +53,44 @@ while expression {
 }
 ```
 
-Each statement in function must end with `;` except last in each scope, for example
-```
-foo :: () {
-    a := 0;
-    if a > 0 {
-        b := 0;
-        b := 0
-    }
-    return a
-}
-```
-
 Names may contain only `A..Z`, `a..z`, `0..9` and `_`. Using ` you can use any chars you want
 ```
 `if` := 0;
 `a > b` := 0;
 ```
+
+### Pointers
+`&variable` returns pointer to variable  
+`&value` will allocate memory in stack for value and return pointer to it  
+`*pointer_value = value`
+
+Remember that this will return dangling pointer
+```
+foo :: () -> *i32 {
+    return &5;
+}
+```
+
+### Code example
+```
+swap :: (a: *i32, b: *i32) {
+    temp := *a;
+    *a = *b;
+    *b = temp;
+}
+
+fibonachi :: (n: i32) -> i32 {
+    f0 := 0;
+    f1 := 1;
+    while n > 0 {
+        f0 += f1;
+        swap(&f0, &f1);
+        n -= 1;
+    }
+    return f0;
+}
+```
+
 
 ### Operators precedence:  
 `=`, `:=`, `_=`(`_` may be `+-*/`)  
@@ -78,24 +104,27 @@ unary `-`, `!`, `*`, `&`
 `&&`  
 `||`  
 
-### types
+### Types
 
 `void`, `bool`, `char`,  
 `i8`, `i16`, `i32`, `i64`, `i128`, `isize`,  
 `u8`, `u16`, `u32`, `u64`, `u128`, `usize`,  
-`f32`, `f64`,
+`f32`, `f64`,  
+`*T`, where T is type
 
-### literals
+`isize`/`usize` is 32 bit at 32bit target, 64 bit at 64bit target
+
+### Literals
 
 bool: `true`, `false`  
 char: `'c'` (only ascii chars allowed)  
-integer: `239i32`, `239u128`, `239` - using `i32` by default
+integer: `239i32`, `239u128`, `239` - using `i32` by default  
 float: `0.0f32`, `0.0f64`, `0.0` - using `f64` by default  
 
-integer and float may contain any number of `_`  
-(first char must be a digit)
+Integer and float may contain any number of `_` (first char must be a digit)  
+`17_i128`, `50_000_000_000_i64`
 
-### allowed casts for operator `as`
+### Allowed casts for operator `as`
 * `integer` => `integer`
 * `float` => `float`
 * `bool` => `integer`
@@ -104,8 +133,3 @@ integer and float may contain any number of `_`
 * `*T` => `*U`
 * `*T` => `integer`
 * `integer` => `*T`
-
-### references
-`&variable` returns pointer to variable  
-`&value` will allocate memory for value and return pointer to it  
-`*pointer_value = value` 
