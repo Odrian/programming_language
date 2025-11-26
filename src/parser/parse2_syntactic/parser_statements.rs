@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use crate::error::CompilationError as CE;
 use crate::parser::{BracketType, PositionInFile};
 
@@ -5,55 +6,62 @@ use crate::parser::operations::{NumberOperation, OneSidedOperation, TwoSidedOper
 use crate::parser::parse1_tokenize::token::*;
 use super::statement::*;
 
-use std::iter::Peekable;
-use std::vec::IntoIter;
-
 pub fn parse_statements(tokens: Vec<TokenWithPos>) -> Result<Vec<Statement>, CE> {
     ParsingState::new(tokens).parse_statements()
 }
 
 struct ParsingState {
-    tokens: Peekable<IntoIter<TokenWithPos>>,
+    tokens: VecDeque<TokenWithPos>,
 }
 
 impl ParsingState {
     pub fn new(tokens: Vec<TokenWithPos>) -> Self {
-        ParsingState { tokens: tokens.into_iter().peekable() }
+        ParsingState { tokens: tokens.into() }
+    }
+    fn next(&mut self) -> Option<TokenWithPos> {
+        self.tokens.pop_front()
+    }
+    fn peek(&self) -> Option<&TokenWithPos> {
+        self.tokens.front()
     }
     fn at_end(&mut self) -> bool {
-        self.tokens.peek().is_none()
+        self.tokens.is_empty()
     }
     pub fn parse_statements(&mut self) -> Result<Vec<Statement>, CE> {
         let mut statements = Vec::new();
 
         // skip all ';'
-        while self.tokens.peek().map_or_else(|| false, |t| t.token == Token::Semicolon) {
-            self.tokens.next();
+        while self.peek().map_or_else(|| false, |t| t.token == Token::Semicolon) {
+            self.next();
         }
 
         while !self.at_end() {
             statements.push(self.parse_statement()?);
 
             // skip all ';'
-            while self.tokens.peek().map_or_else(|| false, |t| t.token == Token::Semicolon) {
-                self.tokens.next();
+            while self.peek().map_or_else(|| false, |t| t.token == Token::Semicolon) {
+                self.next();
             }
         }
 
         Ok(statements)
     }
+    // fn parse_keywords(&mut self) -> Option<Result<Statement, CE>> {
+    //     let Some(TokenWithPos { token, position: _ }) = self.tokens.peek() else { unreachable!() };
+    //     
+    // }
     fn parse_statement(&mut self) -> Result<Statement, CE> {
-        let Some(TokenWithPos { token, position: _ }) = self.tokens.peek() else { unreachable!() };
+        let Some(TokenWithPos { token, position: _ }) = self.peek() else { unreachable!() };
         match token {
             Token::String(_) => {
-                let Some(TokenWithPos { token, position }) = self.tokens.next() else { unreachable!() };
+                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
                 let Token::String(string) = token else { unreachable!() };
 
                 match string.as_str() {
                     "if" | "while" => {
                         let condition = self.parse_expression(position, false)?;
 
-                        let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+                        let Some(TokenWithPos { token, position }) = self.next() else {
                             return Err(CE::SyntacticsError(position, format!("expected {string} body after that")));
                         };
 
@@ -69,7 +77,7 @@ impl ParsingState {
                         }
                     }
                     "return" => {
-                        let peek_token = self.tokens.peek();
+                        let peek_token = self.peek();
                         if peek_token.is_none() {
                             Ok(Statement::Return(None))
                         } else if let Some(token_with_position) = peek_token && Token::Semicolon == token_with_position.token {
@@ -85,10 +93,10 @@ impl ParsingState {
                 }
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
-                let position = self.tokens.next().unwrap().position;
+                let Some(TokenWithPos { token: _, position }) = self.next() else { unreachable!() };
 
                 let left_expression = self.parse_expression(position, true)?;
-                let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+                let Some(TokenWithPos { token, position }) = self.next() else {
                     return Err(CE::SyntacticsError(position, "unused dereference".to_owned()));
                 };
                 let Token::EqualOperation(equal_op) = token else {
@@ -117,7 +125,7 @@ impl ParsingState {
     }
     /// parse "name .."
     fn parse_statement2(&mut self, string: String, position: PositionInFile) -> Result<Statement, CE> {
-        let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+        let Some(TokenWithPos { token, position }) = self.next() else {
             return Err(CE::SyntacticsError(position, "expected statement, got EOL".to_owned()));
         };
         match token {
@@ -129,7 +137,7 @@ impl ParsingState {
                 // name :
                 let typee = self.parse_type(position)?;
 
-                let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+                let Some(TokenWithPos { token, position }) = self.next() else {
                     return Err(CE::SyntacticsError(position, format!("expected '=' after '{string}' : {typee}")))
                 };
                 if token != Token::EqualOperation(EqualOperation::Equal) {
@@ -166,7 +174,7 @@ impl ParsingState {
     }
 
     fn parse_expression(&mut self, position: PositionInFile, was_unary: bool) -> Result<Expression, CE> {
-        let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+        let Some(TokenWithPos { token, position }) = self.next() else {
             return Err(CE::SyntacticsError(position, "expected expression after that".to_owned()));
         };
         match token {
@@ -186,7 +194,7 @@ impl ParsingState {
                 let mut new_state = ParsingState::new(vec);
                 let expression = new_state.parse_expression(position, false)?;
                 if !new_state.at_end() {
-                    return Err(CE::SyntacticsError(new_state.tokens.next().unwrap().position, "expected ')'".to_owned()))
+                    return Err(CE::SyntacticsError(new_state.next().unwrap().position, "expected ')'".to_owned()))
                 }
                 let expression1 = Expression::new_round_bracket(expression);
                 self.parse_expression2(expression1, was_unary)
@@ -232,7 +240,7 @@ impl ParsingState {
     }
     // parse "expression .."
     fn parse_expression2(&mut self, expression1: Expression, was_unary: bool) -> Result<Expression, CE> {
-        let Some(TokenWithPos { token, position }) = self.tokens.peek() else {
+        let Some(TokenWithPos { token, position }) = self.peek() else {
             return Ok(expression1);
         };
         match token {
@@ -240,13 +248,13 @@ impl ParsingState {
                 if was_unary {
                     return Ok(expression1)
                 }
-                let Some(TokenWithPos { token: Token::Operation(op), position }) = self.tokens.next() else { unreachable!() };
+                let Some(TokenWithPos { token: Token::Operation(op), position }) = self.next() else { unreachable!() };
 
                 let expression2 = self.parse_expression(position, false)?;
                 Ok(Expression::new_operation(expression1, expression2, op))
             }
             Token::Bracket(_, BracketType::Round) => { // exp(..)
-                let Some(TokenWithPos { token, position }) = self.tokens.next() else { unreachable!() };
+                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
                 let Token::Bracket(vec, BracketType::Round) = token else { unreachable!() };
 
                 let Expression::Variable(name) = expression1 else {
@@ -260,7 +268,7 @@ impl ParsingState {
                     return Ok(expression1)
                 }
 
-                let position = self.tokens.next().unwrap().position;
+                let position = self.next().unwrap().position;
 
                 let typee = self.parse_type(position)?;
                 let expression = Expression::new_as(expression1, typee);
@@ -276,7 +284,7 @@ impl ParsingState {
     }
 
     fn parse_function(&mut self, name: String, position: PositionInFile) -> Result<Statement, CE> {
-        let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+        let Some(TokenWithPos { token, position }) = self.next() else {
             return Err(CE::SyntacticsError(position, "expected function declaration".to_owned()));
         };
 
@@ -288,14 +296,14 @@ impl ParsingState {
         let arguments = self.parse_function_declaration_arguments(args)?;
 
         // parse return type
-        let Some(token_with_pos) = self.tokens.next() else {
+        let Some(token_with_pos) = self.next() else {
             return Err(CE::SyntacticsError(position, "expected function body or return type annotation".to_owned()));
         };
         let mut token_with_pos = token_with_pos;
         let return_type = {
             if token_with_pos.token == Token::Arrow {
                 let return_type = self.parse_type(token_with_pos.position)?;
-                let Some(new_token_with_pos) = self.tokens.next() else {
+                let Some(new_token_with_pos) = self.next() else {
                     return Err(CE::SyntacticsError(token_with_pos.position, "expected function body".to_owned()));
                 };
                 token_with_pos = new_token_with_pos;
@@ -322,12 +330,12 @@ impl ParsingState {
         let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
         let mut state = Self::new(args);
 
-        while let Some(TokenWithPos { token, position }) = state.tokens.next() {
+        while let Some(TokenWithPos { token, position }) = state.next() {
             let Token::String(arg_i) = token else {
                 return Err(CE::SyntacticsError(position, "expected argument name in function declaration".to_owned()));
             };
 
-            let Some(TokenWithPos { token, position }) = state.tokens.next() else {
+            let Some(TokenWithPos { token, position }) = state.next() else {
                 return Err(CE::SyntacticsError(position, "expected argument type after name".to_owned()))
             };
             if token != Token::Colon {
@@ -338,7 +346,7 @@ impl ParsingState {
 
             arguments.push((arg_i, argument_type));
 
-            let Some(TokenWithPos { token, position }) = state.tokens.next() else {
+            let Some(TokenWithPos { token, position }) = state.next() else {
                 break;
             };
             if token != Token::Comma {
@@ -350,7 +358,7 @@ impl ParsingState {
     }
 
     fn parse_type(&mut self, position: PositionInFile) -> Result<Typee, CE> {
-        let Some(TokenWithPos { token, position }) = self.tokens.next() else {
+        let Some(TokenWithPos { token, position }) = self.next() else {
             return Err(CE::SyntacticsError(position, "expected type after that".to_owned()));
         };
 
@@ -374,7 +382,7 @@ fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile)
         args.push(expression);
 
         if !state.at_end() {
-            let TokenWithPos { token, position } = state.tokens.next().unwrap();
+            let TokenWithPos { token, position } = state.next().unwrap();
             if token != Token::Comma {
                 return Err(CE::SyntacticsError(position, format!("expected ',' or ')', got {token:?}")));
             }
