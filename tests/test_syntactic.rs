@@ -306,9 +306,9 @@ fn test_function_call() {
 
     assert_no_error("a = foo(0) + foo(0) + foo(0) + 0");
 
-    assert_no_error("0 + 0");
-    assert_no_error("foo(0) + foo(0)");
-    assert_no_error("foo(0) + foo(0) + foo(0) + 0");
+    assert_has_error("0 + 0");
+    assert_has_error("foo(0) + foo(0)");
+    assert_has_error("foo(0) + foo(0) + foo(0) + 0");
 
     assert_has_error("foo(cat := cat)");
 
