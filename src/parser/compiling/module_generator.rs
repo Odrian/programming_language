@@ -501,7 +501,7 @@ mod function_parsing {
             let function = self.context_window.get_function_unwrap(object);
             let returned = self.builder.build_call(function, &args, "function call")?;
 
-            Ok(returned.try_as_basic_value().left())
+            Ok(returned.try_as_basic_value().basic())
         }
     }
 }

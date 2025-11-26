@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  llvm = pkgs.llvmPackages_18;
+  llvm = pkgs.llvmPackages_21;
 in
 pkgs.mkShell {
   buildInputs = [
