@@ -46,15 +46,10 @@ impl ParsingState {
 
         Ok(statements)
     }
-    // fn parse_keywords(&mut self) -> Option<Result<Statement, CE>> {
-    //     let Some(TokenWithPos { token, position: _ }) = self.tokens.peek() else { unreachable!() };
-    //     
-    // }
     fn parse_statement(&mut self) -> Result<Statement, CE> {
-        let Some(TokenWithPos { token, position }) = self.peek() else { unreachable!() };
+        let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
         match token {
             Token::String(_) => {
-                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
                 let Token::String(string) = token else { unreachable!() };
 
                 match string.as_str() {
@@ -68,7 +63,7 @@ impl ParsingState {
                         let Token::Bracket(vec, BracketType::Curly) = token else {
                             return Err(CE::SyntacticsError(position, format!("expected {string} body")))
                         };
-                        let body = parse_statements(vec)?;
+                        let body = ParsingState::new(vec).parse_statements()?;
 
                         if string.as_str() == "if" {
                             Ok(Statement::new_if(condition, body))
@@ -93,8 +88,6 @@ impl ParsingState {
                 }
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
-                let Some(TokenWithPos { token: _, position }) = self.next() else { unreachable!() };
-
                 let left_expression = self.parse_expression_without_ops(position, true)?;
                 let Some(TokenWithPos { token, position }) = self.next() else {
                     return Err(CE::SyntacticsError(position, "unused dereference".to_owned()));
@@ -117,7 +110,7 @@ impl ParsingState {
             }
             Token::Semicolon => unreachable!(),
             _ => {
-                Err(CE::SyntacticsError(position.clone(), format!("unexpected token {:?}", token)))
+                Err(CE::SyntacticsError(position, format!("unexpected token {:?}", token)))
                 // // next token exists, position is used only if next is None
                 // let position = PositionInFile::new(0, 0);
                 // Ok(Statement::Expression(self.parse_expression(position, false)?))
@@ -358,7 +351,7 @@ impl ParsingState {
         let Token::Bracket(body, BracketType::Curly) = token else {
             return Err(CE::SyntacticsError(position, "expected curly brackets after function declaration".to_owned()));
         };
-        let body = parse_statements(body)?;
+        let body = ParsingState::new(body).parse_statements()?;
 
         let statement = Statement::new_function(name, arguments, return_type, body);
         Ok(statement)

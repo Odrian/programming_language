@@ -14,7 +14,7 @@ pub fn run_code(text: &str) -> Result<i32, CE> {
         ..Default::default()
     };
 
-    let result = programming_language::parser::parse(text.to_owned(), config);
+    let result = programming_language::parser::parse("test", text.to_owned(), &config);
     
     match result {
         Ok(()) => {

@@ -17,14 +17,16 @@ use crate::parser::parse3_linking::object::ObjectFactory;
 
 use std::fs;
 
-pub fn parse(text: String, config: Config) -> Result<(), CE> {
+const ARTIFACT_DIR: &str = "artifacts";
+
+pub fn parse(filename: &str, text: String, config: &Config) -> Result<(), CE> {
     let tokens = parse1_tokenize::tokenize(&text)?;
     if config.write_tokens_to_file {
         let text = tokens.iter()
             .map(|t| format!("{:#?}", t.token))
             .collect::<Vec<_>>().join("\n");
 
-        let filepath = format!("{}_tokens.txt", config.output);
+        let filepath = format!("{}/{}_tokens.txt", ARTIFACT_DIR, filename);
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
             return Err(CE::CantWriteToFile {
@@ -39,7 +41,7 @@ pub fn parse(text: String, config: Config) -> Result<(), CE> {
     if config.write_unlinked_syntactic_tree_to_file {
         let text = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
-        let filepath = format!("{}_unlinked_AST.txt", config.output);
+        let filepath = format!("{}/{}_unlinked_AST.txt", ARTIFACT_DIR, filename);
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
             return Err(CE::CantWriteToFile {
@@ -55,7 +57,7 @@ pub fn parse(text: String, config: Config) -> Result<(), CE> {
     if config.write_syntactic_tree_to_file {
         let text = linked_statement.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
 
-        let filepath = format!("{}_AST.txt", config.output);
+        let filepath = format!("{}/{}_AST.txt", ARTIFACT_DIR, filename);
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
             return Err(CE::CantWriteToFile {
