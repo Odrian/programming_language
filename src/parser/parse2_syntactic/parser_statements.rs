@@ -75,13 +75,14 @@ impl ParsingState {
                         let peek_token = self.peek();
                         if peek_token.is_none() {
                             Ok(Statement::Return(None))
-                        } else if let Some(token_with_position) = peek_token && Token::Semicolon == token_with_position.token {
+                        } else if let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = peek_token {
                             Ok(Statement::Return(None))
                         } else {
                             let expression = self.parse_expression(position)?;
                             Ok(Statement::Return(Some(expression)))
                         }
                     }
+                    "use" => self.parse_use(position),
                     _ => {
                         self.parse_statement2(string, position)
                     }
@@ -116,6 +117,91 @@ impl ParsingState {
                 // Ok(Statement::Expression(self.parse_expression(position, false)?))
             }
         }
+    }
+    fn parse_use(&mut self, mut position0: PositionInFile) -> Result<Statement, CE> {
+        let Some(TokenWithPos { token, position }) = self.next() else {
+            return Err(CE::IncorrectUseStatement(position0))
+        };
+        let Token::String(string) = token else {
+            return Err(CE::IncorrectUseStatement(position))
+        };
+
+        let mut from = vec![string];
+        loop {
+            let Some(TokenWithPos { token, position }) = self.next() else {
+                return Err(CE::IncorrectUseStatement(position0))
+            };
+            match token {
+                Token::DoubleColon => {}
+                Token::Semicolon => { // ::x;
+                    let what = vec![(from.pop().unwrap(), None)];
+                    return Ok(Statement::new_use(from, what))
+                }
+                Token::String(as_string) if as_string == "as" => { // ::x as x;
+                    let Some(TokenWithPos { token: Token::String(as_name), position }) = self.next() else {
+                        return Err(CE::IncorrectUseStatement(position))
+                    };
+
+                    let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.next() else {
+                        return Err(CE::IncorrectUseStatement(position))
+                    };
+
+                    let what = vec![(from.pop().unwrap(), Some(as_name))];
+                    return Ok(Statement::new_use(from, what))
+
+                }
+                _ => return Err(CE::IncorrectUseStatement(position))
+            }
+
+            let Some(TokenWithPos { token: Token::String(_), position: _ }) = self.peek() else {
+                break
+            };
+
+            let Some(TokenWithPos { token: Token::String(string), position }) = self.next() else { unreachable!() };
+            from.push(string);
+            position0 = position;
+        }
+
+        // ::{x, .., x as x, ..};
+        let Some(TokenWithPos { token: Token::Bracket(whats, BracketType::Curly), position }) = self.next() else {
+            return Err(CE::IncorrectUseStatement(position0))
+        };
+
+        let mut what = Vec::with_capacity(whats.len());
+        let mut state = ParsingState::new(whats);
+        while !state.at_end() {
+            let Some(TokenWithPos { token: Token::String(name), position }) = state.next() else {
+                return Err(CE::IncorrectUseStatement(position))
+            };
+
+            if state.peek() == None { break }
+            let Some(TokenWithPos { token, position }) = state.next() else {
+                return Err(CE::IncorrectUseStatement(position))
+            };
+            if token == Token::Comma {
+                what.push((name, None));
+                continue
+            }
+            if !matches!(token, Token::String(as_string) if as_string == "as") {
+                return Err(CE::IncorrectUseStatement(position))
+            }
+
+            let Some(TokenWithPos { token: Token::String(as_name), position }) = state.next() else {
+                return Err(CE::IncorrectUseStatement(position))
+            };
+            what.push((name, Some(as_name)));
+
+            if state.at_end() { break }
+            let Some(TokenWithPos { token: Token::Comma, position }) = state.next() else {
+                return Err(CE::IncorrectUseStatement(position))
+            };
+            position0 = position;
+        }
+        let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.next() else {
+            return Err(CE::IncorrectUseStatement(position0))
+        };
+
+        Ok(Statement::new_use(from, what))
     }
     /// parse "name .."
     fn parse_statement2(&mut self, string: String, position: PositionInFile) -> Result<Statement, CE> {

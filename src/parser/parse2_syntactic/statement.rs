@@ -13,7 +13,8 @@ pub enum Statement {
     If { condition: Expression, body: Vec<Self> },
     While { condition: Expression, body: Vec<Self> },
     Function { object: String, args: Vec<(String, Typee)>, returns: Option<Typee>, body: Vec<Self> },
-    Return(Option<Expression>)
+    Return(Option<Expression>),
+    Use { from: Vec<String>, what: Vec<(String, Option<String>)> },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -61,6 +62,9 @@ impl Statement {
     }
     pub fn new_function(name: String, args: Vec<(String, Typee)>, returns: Option<Typee>, body: Vec<Self>) -> Self {
         Self::Function { object: name, args, returns, body }
+    }
+    pub fn new_use(from: Vec<String>, what: Vec<(String, Option<String>)>) -> Self {
+        Self::Use { from, what }
     }
 }
 impl Expression {
@@ -131,6 +135,20 @@ impl fmt::Display for Statement {
                     Some(exp) => write!(f, "return {exp}"),
                     None => write!(f, "return")
                 }
+            }
+            Self::Use { from, what } => {
+                let from = from.join("::");
+                let what = what.iter().map(|(name, as_name)| {
+                    format!("{name}{}", as_name.as_ref().map_or("".to_string(), |s| format!(" as {s}")))
+                }).collect::<Vec<_>>();
+                let what = {
+                    if what.len() == 1 {
+                        what[0].clone()
+                    } else {
+                        format!("{{{}}}", what.join(", "))
+                    }
+                };
+                write!(f, "use {from}::{what}")
             }
         }
     }

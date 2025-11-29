@@ -78,7 +78,7 @@ impl LinkingContext<'_> {
 
                     GlobalLinkedStatement::new_function(function_object, arguments_obj, return_type, body)
                 }
-                _ => return Err(CE::UnexpectedGlobalStatement)
+                _ => return Err(CE::UnexpectedGlobalStatement { statement: statement.to_string() })
             };
             result.push(global_statement);
         }
@@ -208,7 +208,8 @@ impl LinkingContext<'_> {
                     }
                     LinkedStatement::Return(expression)
                 }
-                Statement::Function { .. } => return Err(CE::LocalFunctionNotSupported)
+                Statement::Function { .. } => return Err(CE::LocalFunctionNotSupported),
+                Statement::Use { .. } => unimplemented!(),
             };
             result.push(linked);
         }

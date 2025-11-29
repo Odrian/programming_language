@@ -340,3 +340,25 @@ fn test_function_return() {
     assert_has_error("return foo :: () {}");
     assert_has_error("return ()");
 }
+
+#[test]
+fn test_use() {
+    assert_no_error("use x;");
+    assert_no_error("use x::x;");
+    assert_no_error("use x::x::x;");
+    assert_no_error("use x as x;");
+    assert_no_error("use x::x as x;");
+    assert_no_error("use x::x::x as x;");
+    assert_no_error("use x::x::{x, x as x};");
+    assert_no_error("use x::x::{x, x as x,};");
+    assert_no_error("use x::x::{x as x, x};");
+    assert_no_error("use x::x::{x as x, x,};");
+    assert_no_error("use x::x::{};");
+
+    assert_has_error("use x::x::*;");
+
+    assert_has_error("use ;");
+    assert_has_error("use ::x;");
+    assert_has_error("use x::;");
+    assert_has_error("use x::{x}::x;");
+}
