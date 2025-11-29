@@ -31,17 +31,17 @@ impl LinkingContext<'_> {
 
         for statement in statements {
             let global_statement = match statement {
-                Statement::Function { object: function_name, args, returns, body } => {
+                Statement::Function { name: function_name, args, returns, body } => {
                     let mut arguments_obj = Vec::with_capacity(args.len());
                     let mut arguments_type = Vec::with_capacity(args.len());
 
-                    for (name, typee) in args {
+                    for (arg_name, typee) in args {
                         let object_type = self.parse_type(typee)?;
                         if object_type.is_void() {
                             return Err(CE::UnexpectedVoidUse)
                         }
                         arguments_type.push(object_type.clone());
-                        let object = self.object_factory.create_object(name, object_type, &mut self.object_context_window);
+                        let object = self.object_factory.create_object(arg_name, object_type, &mut self.object_context_window);
                         arguments_obj.push(object);
                     }
 
@@ -209,6 +209,7 @@ impl LinkingContext<'_> {
                     LinkedStatement::Return(expression)
                 }
                 Statement::Function { .. } => return Err(CE::LocalFunctionNotSupported),
+                Statement::Struct { .. } => unimplemented!(),
                 Statement::Use { .. } => unimplemented!(),
             };
             result.push(linked);

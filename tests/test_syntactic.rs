@@ -362,3 +362,14 @@ fn test_use() {
     assert_has_error("use x::;");
     assert_has_error("use x::{x}::x;");
 }
+
+#[test]
+fn test_struct() {
+    assert_no_error("x :: struct {}");
+    assert_no_error("x :: struct { x: u8 }");
+    assert_no_error("x :: struct { x: u8, }");
+    assert_no_error("x :: struct { x: u8, y: u8 }");
+
+    assert_has_error("x :: struct");
+    assert_has_error("x :: struct { x }");
+}

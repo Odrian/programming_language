@@ -204,51 +204,63 @@ impl ParsingState {
         Ok(Statement::new_use(from, what))
     }
     /// parse "name .."
-    fn parse_statement2(&mut self, string: String, position: PositionInFile) -> Result<Statement, CE> {
+    fn parse_statement2(&mut self, name: String, position: PositionInFile) -> Result<Statement, CE> {
         let Some(TokenWithPos { token, position }) = self.next() else {
             return Err(CE::SyntacticsError(position, "expected statement, got EOL".to_owned()));
         };
         match token {
             Token::DoubleColon => {
                 // name ::
-                self.parse_function(string, position)
+                let Some(TokenWithPos { token, position: _ }) = self.peek() else {
+                    return Err(CE::Placeholder)
+                };
+                match token {
+                    Token::Bracket(_, BracketType::Round) => {
+                        self.parse_function(name, position)
+                    },
+                    Token::String(string) if string == "struct" => {
+                        let Some(TokenWithPos { token: _, position }) = self.next() else { unreachable!() };
+                        self.parse_struct(name, position)
+                    }
+                    _ => Err(CE::Placeholder)
+                }
             },
             Token::Colon => {
                 // name :
                 let typee = self.parse_type(position)?;
 
                 let Some(TokenWithPos { token, position }) = self.next() else {
-                    return Err(CE::SyntacticsError(position, format!("expected '=' after '{string}' : {typee}")))
+                    return Err(CE::SyntacticsError(position, format!("expected '=' after '{name}' : {typee}")))
                 };
                 if token != Token::EqualOperation(EqualOperation::Equal) {
-                    return Err(CE::SyntacticsError(position, format!("expected '=' after '{string}' : {typee}")))
+                    return Err(CE::SyntacticsError(position, format!("expected '=' after '{name}' : {typee}")))
                 }
 
                 let expression = self.parse_expression(position)?;
-                let statement = Statement::new_variable(string, Some(typee), expression);
+                let statement = Statement::new_variable(name, Some(typee), expression);
                 Ok(statement)
             }
             Token::EqualOperation(equal_operation) => {
                 // name _=
                 let expression2 = self.parse_expression(position)?;
                 let statement = match equal_operation {
-                    EqualOperation::ColonEqual => Statement::new_variable(string, None, expression2),
-                    EqualOperation::Equal => Statement::new_set(string, expression2),
+                    EqualOperation::ColonEqual => Statement::new_variable(name, None, expression2),
+                    EqualOperation::Equal => Statement::new_set(name, expression2),
                     EqualOperation::OperationEqual(op) => {
-                        Statement::new_equal_set(string, expression2, op)
+                        Statement::new_equal_set(name, expression2, op)
                     }
                 };
                 Ok(statement)
             }
             Token::Bracket(vec, BracketType::Round) => {
                 // name(..)
-                let name = string;
+                let name = name;
                 let args = parse_function_arguments(vec, position)?;
                 let expression = self.parse_expression2_without_ops(Expression::new_function_call(name, args), false)?;
                 Ok(Statement::Expression(expression))
             }
             _ => {
-                Err(CE::SyntacticsError(position, format!("expected statement, got '{string}' '{token:?}'")))
+                Err(CE::SyntacticsError(position, format!("expected statement, got '{name}' '{token:?}'")))
             }
         }
     }
@@ -489,6 +501,39 @@ impl ParsingState {
             }
             _ => Err(CE::SyntacticsError(position, "expected type".to_owned()))
         }
+    }
+    
+    fn parse_struct(&mut self, name: String, _position: PositionInFile) -> Result<Statement, CE> {
+        let Some(TokenWithPos { token: Token::Bracket(tokens, BracketType::Curly), position: _ }) = self.next() else {
+            return Err(CE::Placeholder)
+        };
+        let mut fields = Vec::new();
+        let mut state = ParsingState::new(tokens);
+        while !state.at_end() {
+            // name
+            let Some(TokenWithPos { token: Token::String(field_name), position: _ }) = state.next() else {
+                return Err(CE::Placeholder)
+            };
+
+            // :
+            let Some(TokenWithPos { token: Token::Colon, position }) = state.next() else {
+                return Err(CE::Placeholder)
+            };
+
+            // typee
+            let field_typee = state.parse_type(position)?;
+            fields.push((field_name, field_typee));
+
+            if state.at_end() { break };
+
+            // ,
+            let Some(TokenWithPos { token: Token::Comma, position: _ }) = state.next() else {
+                return Err(CE::Placeholder)
+            };
+            
+        }
+
+        Ok(Statement::new_struct(name, fields))
     }
 }
 

@@ -54,6 +54,7 @@ pub enum CompilationError {
     LLVMVerifyFunctionError { name: String },
     LLVMFailedToCreateAssembly { llvm_error: String },
     FailedToRunLinker { description: String },
+    Placeholder,
 }
 
 impl From<BuilderError> for CompilationError {
@@ -171,6 +172,9 @@ impl fmt::Display for CompilationError {
             }
             Self::FailedToRunLinker { description } => {
                 write!(f, "Error: failed run linked 'cc': {description}")
+            }
+            Self::Placeholder => {
+                write!(f, "Error: placeholder error")
             }
         }
     }

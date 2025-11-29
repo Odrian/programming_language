@@ -12,9 +12,10 @@ pub enum Statement {
     Expression(Expression),
     If { condition: Expression, body: Vec<Self> },
     While { condition: Expression, body: Vec<Self> },
-    Function { object: String, args: Vec<(String, Typee)>, returns: Option<Typee>, body: Vec<Self> },
+    Function { name: String, args: Vec<(String, Typee)>, returns: Option<Typee>, body: Vec<Self> },
     Return(Option<Expression>),
     Use { from: Vec<String>, what: Vec<(String, Option<String>)> },
+    Struct { name: String, fields: Vec<(String, Typee)> }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -61,12 +62,16 @@ impl Statement {
         Self::While { condition, body }
     }
     pub fn new_function(name: String, args: Vec<(String, Typee)>, returns: Option<Typee>, body: Vec<Self>) -> Self {
-        Self::Function { object: name, args, returns, body }
+        Self::Function { name, args, returns, body }
     }
     pub fn new_use(from: Vec<String>, what: Vec<(String, Option<String>)>) -> Self {
         Self::Use { from, what }
     }
+    pub fn new_struct(name: String, fields: Vec<(String, Typee)>) -> Self {
+        Self::Struct { name, fields }
+    }
 }
+
 impl Expression {
     pub fn new_operation(expression1: Self, expression2: Self, op: TwoSidedOperation) -> Self {
         Self::Operation(Box::new(expression1), Box::new(expression2), op)
@@ -123,7 +128,7 @@ impl fmt::Display for Statement {
                 let inside = statements_to_string_with_tabs(body);
                 write!(f, "while {condition} {{\n{inside}\n}}")
             }
-            Self::Function { object: name, args, returns, body } => {
+            Self::Function { name, args, returns, body } => {
                 let args: Vec<String> = args.iter().map(|s| format!("{}: {}", s.0, s.1)).collect();
                 let args = args.join(", ");
                 let returns = returns.as_ref().map_or(String::from("()"), |x| x.to_string());
@@ -149,6 +154,12 @@ impl fmt::Display for Statement {
                     }
                 };
                 write!(f, "use {from}::{what}")
+            }
+            Self::Struct { name, fields } => {
+                let fields = fields.iter().map(|(field_name, field_typee)|
+                    format!("  {field_name}: {field_typee}\n")
+                ).collect::<String>();
+                write!(f, "{name} :: struct {{\n{fields}}}")
             }
         }
     }
