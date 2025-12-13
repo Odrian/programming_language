@@ -9,3 +9,5 @@ debug = "full"
 
 [dependencies]
 inkwell = { version = "0.7.1", features = ["llvm21-1"] }
+clap = { version = "4.5.53", features = ["derive"]}
+tempfile = "3.23.0"

@@ -5,34 +5,30 @@ pub mod io_error;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use clap::Parser;
 use error::CResult;
 use io_error::FileError;
 
-pub struct Config {
-    pub input: String,
+// TODO: implement different collect files strategies: src folder, only input files, input files + use statements
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+pub struct Args {
     pub output: String,
-    pub create_executable: bool,
 
+    #[arg(long, default_value_t = false)]
+    pub dont_create_executable: bool,
+
+    #[arg(long, default_value_t = false)]
     pub write_tokens_to_file: bool,
+    #[arg(long, default_value_t = false)]
     pub write_unlinked_syntactic_tree_to_file: bool,
+    #[arg(long, default_value_t = false)]
     pub write_syntactic_tree_to_file: bool,
+    #[arg(long, default_value_t = false)]
     pub create_llvm_ir: bool,
+    #[arg(long, default_value_t = false)]
     pub create_object: bool,
-}
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            input: "main.txt".to_owned(),
-            output: "main".to_owned(),
-            create_executable: true,
-
-            write_tokens_to_file: false,
-            write_unlinked_syntactic_tree_to_file: false,
-            write_syntactic_tree_to_file: false,
-            create_llvm_ir: false,
-            create_object: false,
-        }
-    }
 }
 
 fn get_all_files(path: impl AsRef<Path>) -> Vec<PathBuf> {
@@ -45,17 +41,21 @@ fn get_all_files(path: impl AsRef<Path>) -> Vec<PathBuf> {
     }).collect()
 }
 
-pub fn entry_point(config: Config) -> Result<(), ()> {
+pub fn compile_src(args: Args) -> CResult<()> {
     let files = get_all_files("src");
+    compile_files(args, files)
+}
+
+pub fn compile_files(args: Args, files: Vec<PathBuf>) -> CResult<()> {
     println!("Compiling files:\n{}\n", files.iter().map(|x| x.to_str().unwrap().to_owned()).collect::<Vec<_>>().join("\n"));
 
-    assert_eq!(files.len(), 1);
+    if files.len() != 1 { unimplemented!("multiple files") }
 
     let prelinked: Vec<_> = files.iter()
         .map(|file| {
             let file_text = read_file(file)?;
             let file_name = file.file_name().unwrap().to_str().unwrap();
-            parser::parse(file_name, file_text, &config)
+            parser::parse(file_name, file_text, &args)
         })
         .collect::<Result<Vec<_>, _>>()?;
 

@@ -7,18 +7,18 @@ use std::path::Path;
 use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine}, OptimizationLevel};
 
 use crate::error::CompilationError as CE;
-use crate::Config;
+use crate::Args;
 use crate::parser::parse3_linking::linked_statement::*;
 use crate::parser::parse3_linking::object::{IntObjType, ObjType, ObjectFactory};
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(config: &Config, statements: Vec<GlobalLinkedStatement>, object_factory: &ObjectFactory) -> Result<(), CE> {
+pub fn parse_to_llvm(args: &Args, statements: Vec<GlobalLinkedStatement>, object_factory: &ObjectFactory) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
     verify_main_signature(&statements, object_factory)?;
 
-    let target_machine = create_target_machine(config);
+    let target_machine = create_target_machine(args);
     let target_data = target_machine.get_target_data();
 
     let module = module_generator::parse_module(&context, &target_data, statements, object_factory)?;
@@ -28,7 +28,7 @@ pub fn parse_to_llvm(config: &Config, statements: Vec<GlobalLinkedStatement>, ob
         return Err(CE::LLVMVerifyModuleError { llvm_error: err.to_string() });
     }
 
-    create_executable(config, &target_machine, &module)?;
+    create_executable(args, &target_machine, &module)?;
     Ok(())
 }
 
@@ -49,19 +49,19 @@ fn verify_main_signature(statements: &[GlobalLinkedStatement], object_factory: &
     Err(CE::NoMainFunction)
 }
 
-fn create_executable(config: &Config, tm: &TargetMachine, module: &Module) -> Result<(), CE> {
-    let assembly_name = format!("{}.ll", config.output);
-    let object_name = format!("{}.o", config.output);
-    let executable_name = config.output.clone();
+fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result<(), CE> {
+    let assembly_name = format!("{}.ll", args.output);
+    let object_name = format!("{}.o", args.output);
+    let executable_name = args.output.clone();
 
     // create assembly file
-    if config.create_llvm_ir {
+    if args.create_llvm_ir {
         if let Err(err) = module.print_to_file(assembly_name) {
             return Err(CE::LLVMFailedToCreateAssembly { llvm_error: err.to_string() });
         }
     }
 
-    if !config.create_object && !config.create_executable {
+    if !args.create_object && args.dont_create_executable {
         return Ok(())
     }
 
@@ -70,13 +70,13 @@ fn create_executable(config: &Config, tm: &TargetMachine, module: &Module) -> Re
         panic!("functions and whole module was verified, but got llvm error: {err}")
     }
 
-    let status_option = if config.create_executable {
+    let status_option = if !args.dont_create_executable {
         let status = Command::new("cc")
             .args([object_name.as_str(), "-o", executable_name.as_str()]).status();
         Some(status)
     } else { None };
 
-    if !config.create_object {
+    if !args.create_object {
         if let Err(err) = std::fs::remove_file(object_name.clone()) {
             return Err(CE::CantDeleteObjectFile { filepath: object_name, io_error: err.to_string() });
         }
@@ -99,7 +99,7 @@ fn create_executable(config: &Config, tm: &TargetMachine, module: &Module) -> Re
     Ok(())
 }
 
-fn create_target_machine(_config: &Config) -> TargetMachine {
+fn create_target_machine(_args: &Args) -> TargetMachine {
     let triple = TargetMachine::get_default_triple();
     let target = Target::from_triple(&triple)
         .expect("Failed to get target from default triple");

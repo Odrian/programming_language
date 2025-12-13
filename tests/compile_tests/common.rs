@@ -1,26 +1,24 @@
 use std::process::Command;
 use std::sync::atomic;
-use programming_language::Config;
+use clap::Parser;
+use programming_language::Args;
 use programming_language::error::CResult;
 
-pub fn run_code(text: &str) -> CResult<i32> {
-    static COUNTER: atomic::AtomicU32 = atomic::AtomicU32::new(0);
-    let id = COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
-    let name = format!("test{id}");
-    let path = format!("./{name}");
-    let config = Config {
-        input: "".to_owned(),
-        output: name,
-        ..Default::default()
-    };
+use tempfile;
 
-    let result = programming_language::parser::parse("test", text.to_owned(), &config);
+pub fn run_code(text: &str) -> CResult<i32> {
+    let temp_dir = tempfile::tempdir().expect("can't create temp dir");
+
+    let name = "main";
+    let path = temp_dir.path().join(name);
+
+    let args = Args::parse_from(["binary.exe", path.to_str().unwrap()]);
+    let result = programming_language::parser::parse("test", text.to_owned(), &args);
     
     match result {
         Ok(()) => {
-            let code = Command::new(&path).status();
-            let is_deleted = Command::new("rm").arg(&path).status().unwrap().success();
-            assert!(is_deleted, "{}", format!("can't delete {path}"));
+            println!("{path:?}");
+            let code = Command::new(path).status();
 
             Ok(code.unwrap().code().unwrap_or(-1))
         }
