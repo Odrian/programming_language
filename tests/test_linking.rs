@@ -1,10 +1,10 @@
-use programming_language::error::CompilationError as CE;
+use programming_language::error::CResult;
 use programming_language::parser::*;
 use programming_language::parser::parse3_linking::linked_statement::*;
 use programming_language::parser::parse3_linking::object::*;
 use programming_language::parser::operations::*;
 
-fn parse(text: &str) -> Result<(Vec<GlobalLinkedStatement>, ObjectFactory), CE> {
+fn parse(text: &str) -> CResult<(Vec<GlobalLinkedStatement>, ObjectFactory)> {
     let tokens = parse1_tokenize::tokenize(&text)?;
     let statements = parse2_syntactic::parse_statements(tokens)?;
     let mut object_factory = ObjectFactory::default();
@@ -198,8 +198,7 @@ fn test_function_with_while() {
     let text = "a :: (b: i32) -> i32 { c := b; while c != 0 { c = b } return c }";
     let result = parse(text);
     let Ok((mut statements, object_factory)) = result else {
-        let err = result.err().unwrap();
-        panic!("parsing error: {err}");
+        panic!("parsing error");
     };
     assert_eq!(statements.len(), 1);
     let GlobalLinkedStatement::Function { object: function_object, args, returns, body } = statements.pop().unwrap() else { panic!() };

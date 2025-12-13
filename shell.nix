@@ -14,6 +14,6 @@ pkgs.mkShell {
     pkgs.libffi
   ];
 
-  LLVM_SYS_181_PREFIX = "${llvm.llvm.dev}";
+  LLVM_SYS_211_PREFIX = "${llvm.llvm.dev}";
   LLVM_CONFIG_PATH    = "${llvm.llvm}/bin/llvm-config";
 }

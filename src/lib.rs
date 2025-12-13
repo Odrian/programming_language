@@ -1,10 +1,12 @@
 pub mod parser;
 
 pub mod error;
+pub mod io_error;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use error::CompilationError as CE;
+use error::CResult;
+use io_error::FileError;
 
 pub struct Config {
     pub input: String,
@@ -43,7 +45,7 @@ fn get_all_files(path: impl AsRef<Path>) -> Vec<PathBuf> {
     }).collect()
 }
 
-pub fn entry_point(config: Config) -> Result<(), CE> {
+pub fn entry_point(config: Config) -> Result<(), ()> {
     let files = get_all_files("src");
     println!("Compiling files:\n{}\n", files.iter().map(|x| x.to_str().unwrap().to_owned()).collect::<Vec<_>>().join("\n"));
 
@@ -60,13 +62,16 @@ pub fn entry_point(config: Config) -> Result<(), CE> {
     Ok(())
 }
 
-fn read_file(path: &PathBuf) -> Result<String, CE> {
+fn read_file(path: &PathBuf) -> CResult<String> {
     let result = fs::read_to_string(path.clone());
     match result {
         Ok(text) => Ok(text),
-        Err(error) => Err(CE::CantReadSourceFile {
-            filepath: path.to_str().unwrap().to_owned(),
-            io_error: error.to_string(),
-        })
+        Err(error) => {
+            FileError::CantReadSourceFile {
+                filepath: path.to_str().unwrap().to_owned(),
+                io_error: error.to_string(),
+            }.print();
+            Err(())
+        }
     }
 }

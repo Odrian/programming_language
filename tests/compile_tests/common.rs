@@ -1,9 +1,9 @@
 use std::process::Command;
 use std::sync::atomic;
 use programming_language::Config;
-use programming_language::error::CompilationError as CE;
+use programming_language::error::CResult;
 
-pub fn run_code(text: &str) -> Result<i32, CE> {
+pub fn run_code(text: &str) -> CResult<i32> {
     static COUNTER: atomic::AtomicU32 = atomic::AtomicU32::new(0);
     let id = COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
     let name = format!("test{id}");
@@ -30,10 +30,10 @@ pub fn run_code(text: &str) -> Result<i32, CE> {
 
 pub fn get_exit_code(text: &str) -> i32 {
     let result = run_code(text);
-    
+
     match result {
         Ok(value) => value,
-        Err(err) => panic!("{err}")
+        Err(()) => panic!("not compiled")
     }
 }
 

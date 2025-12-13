@@ -1,12 +1,11 @@
 use std::env;
-use std::io::Write;
 use std::process::exit;
 use programming_language::{Config, entry_point};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        print_error("WRONG ARGUMENTS, USE: programming_language <filepath>".to_owned());
+        eprintln!("WRONG ARGUMENTS, USE: programming_language <filepath>");
         exit(1);
     }
     let input = args[1].clone();
@@ -30,11 +29,11 @@ fn main() {
 
     let result = entry_point(config);
     match result {
-        Ok(()) => println!("compiled"),
-        Err(err) => print_error(err.to_string()),
+        Ok(()) => {
+            println!("compiled")
+        },
+        Err(()) => {
+            eprintln!("not compiled due to error")
+        },
     }
-}
-
-fn print_error(string: String) {
-    std::io::stderr().write_all(string.as_bytes()).unwrap()
 }

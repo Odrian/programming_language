@@ -11,15 +11,16 @@ pub use bracket_type::BracketType;
 
 pub mod operations;
 
-use crate::error::CompilationError as CE;
+use crate::error::CResult;
 use crate::Config;
 use crate::parser::parse3_linking::object::ObjectFactory;
 
+use crate::io_error::FileError;
 use std::fs;
 
 const ARTIFACT_DIR: &str = "artifacts";
 
-pub fn parse(filename: &str, text: String, config: &Config) -> Result<(), CE> {
+pub fn parse(filename: &str, text: String, config: &Config) -> CResult<()> {
     let tokens = parse1_tokenize::tokenize(&text)?;
     if config.write_tokens_to_file {
         let text = tokens.iter()
@@ -29,11 +30,12 @@ pub fn parse(filename: &str, text: String, config: &Config) -> Result<(), CE> {
         let filepath = format!("{}/{}_tokens.txt", ARTIFACT_DIR, filename);
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
-            return Err(CE::CantWriteToFile {
+            FileError::CantWriteToFile {
                 filepath,
                 what: "tokens".to_owned(),
                 io_error: err.to_string()
-            })
+            }.print();
+            return Err(())
         }
     }
 
@@ -44,11 +46,12 @@ pub fn parse(filename: &str, text: String, config: &Config) -> Result<(), CE> {
         let filepath = format!("{}/{}_unlinked_AST.txt", ARTIFACT_DIR, filename);
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
-            return Err(CE::CantWriteToFile {
+            FileError::CantWriteToFile {
                 filepath,
                 what: "unlinked AST".to_owned(),
                 io_error: err.to_string()
-            })
+            }.print();
+            return Err(())
         }
     }
 
@@ -60,15 +63,17 @@ pub fn parse(filename: &str, text: String, config: &Config) -> Result<(), CE> {
         let filepath = format!("{}/{}_AST.txt", ARTIFACT_DIR, filename);
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
-            return Err(CE::CantWriteToFile {
+            FileError::CantWriteToFile {
                 filepath,
                 what: "AST".to_owned(),
                 io_error: err.to_string()
-            })
+            }.print();
+            return Err(());
         }
     }
 
-    compiling::parse_to_llvm(&config, linked_statement, &object_factory)?;
+    compiling::parse_to_llvm(&config, linked_statement, &object_factory)
+        .map_err(|err| { println!("{err}"); () })?;
 
     Ok(())
 }

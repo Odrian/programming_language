@@ -1,9 +1,9 @@
-use programming_language::error::CompilationError as CE;
+use programming_language::error::CResult;
 use programming_language::parser::*;
 use programming_language::parser::operations::*;
 use programming_language::parser::parse2_syntactic::statement::*;
 
-fn parse(text: &str) -> Result<Vec<Statement>, CE> {
+fn parse(text: &str) -> CResult<Vec<Statement>> {
     let tokens = parse1_tokenize::tokenize(text)?;
     let statements = parse2_syntactic::parse_statements(tokens)?;
     Ok(statements)
@@ -14,7 +14,7 @@ fn assert_has_error(str: &str) {
 fn assert_no_error(str: &str) {
     assert_eq!(parse(str).err(), None);
 }
-fn assert_result(str: &str, result: Result<Vec<Statement>, CE>) {
+fn assert_result(str: &str, result: CResult<Vec<Statement>>) {
     assert_eq!(parse(str), result);
 }
 

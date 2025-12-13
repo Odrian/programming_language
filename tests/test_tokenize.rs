@@ -1,4 +1,4 @@
-use programming_language::error::CompilationError as CE;
+use programming_language::error::CResult;
 use programming_language::parser::parse1_tokenize::{token::*, tokenize};
 use programming_language::parser::*;
 use programming_language::parser::operations::*;
@@ -6,7 +6,7 @@ use programming_language::parser::operations::*;
 fn map_remove_place(vec: Vec<TokenWithPos>) -> Vec<Token> {
     vec.into_iter().map(|x| x.token).collect()
 }
-fn parse(text: &str) -> Result<Vec<Token>, CE> {
+fn parse(text: &str) -> CResult<Vec<Token>> {
     let tokens = tokenize(text);
     tokens.map(map_remove_place)
 }
@@ -16,12 +16,12 @@ fn assert_has_error(str: &str) {
 fn assert_no_error(str: &str) {
     assert_eq!(parse(str).err(), None);
 }
-fn assert_result(str: &str, result: Result<Vec<Token>, CE>) {
+fn assert_result(str: &str, result: CResult<Vec<Token>>) {
     let actual = parse(str);
     assert!(token_equality(&actual, &result), "assertion `left == right` failed\n  left = {0:?}\n right = {1:?}", &actual, &result);
 }
 
-fn token_equality(token1: &Result<Vec<Token>, CE>, token2: &Result<Vec<Token>, CE>) -> bool {
+fn token_equality(token1: &CResult<Vec<Token>>, token2: &CResult<Vec<Token>>) -> bool {
     if token1.is_ok() != token2.is_ok() {
         return false;
     }

@@ -1,11 +1,12 @@
-use crate::error::CompilationError as CE;
-use crate::parser::{BracketType, PositionInFile, operations::*};
+use crate::error::CResult;
+use crate::parser::{operations::*, BracketType, PositionInFile};
 
+use super::error::TokenizeError;
 use super::token::*;
 
 use std::str::Chars;
 
-pub fn parse_tokens(text: &str) -> Result<Vec<TokenWithPos>, CE> {
+pub fn parse_tokens(text: &str) -> CResult<Vec<TokenWithPos>> {
     let (token, _) = parse_inside_brackets(&mut text.chars(), 0, None)?;
     let Token::Bracket(vec, _) = token.token else { unreachable!() };
     Ok(vec)
@@ -15,7 +16,7 @@ fn parse_inside_brackets(
     text: &mut Chars,
     start_index: usize,
     open_bracket_type: Option<BracketType>,
-) -> Result<(TokenWithPos, usize), CE> {
+) -> CResult<(TokenWithPos, usize)> {
     let mut result_tokens = Vec::new();
 
     let mut buffer = String::new();
@@ -33,7 +34,9 @@ fn parse_inside_brackets(
             let mut inside_quotes = String::new();
             loop {
                 let Some(next_char) = text.next() else {
-                    return Err(CE::QuotesNotClosed(PositionInFile::new_sized(index, inside_quotes.len())));
+                    TokenizeError::QuotesNotClosed
+                        .print(index);
+                    return Err(());
                 };
                 if next_char == char {
                     break;
@@ -68,17 +71,15 @@ fn parse_inside_brackets(
         } else if let Some(bracket_type) = is_close_bracket(char) {
             // close bracket
             let Some(open_bracket_type) = open_bracket_type else {
-                let position = PositionInFile::new_sized(index, 1);
-                return Err(CE::BracketNotOpened(position, bracket_type));
+                TokenizeError::BracketNotOpened(bracket_type)
+                    .print(index);
+                return Err(());
             };
 
             if bracket_type != open_bracket_type {
-                return Err(CE::WrongBracketClosed {
-                    start: PositionInFile::new_sized(start_index, 1),
-                    start_bracket_type: open_bracket_type,
-                    end: PositionInFile::new_sized(index, 1),
-                    end_bracket_type: bracket_type,
-                });
+                TokenizeError::WrongBracketClosed { expected_bracket: open_bracket_type, actual_bracket: bracket_type }
+                    .print(index);
+                return Err(());
             }
 
             if index != start_buffer_index {
@@ -99,10 +100,9 @@ fn parse_inside_brackets(
     }
 
     if let Some(open_bracket_type) = open_bracket_type {
-        Err(CE::BracketNotClosed(
-            PositionInFile::new_sized(start_index, 1),
-            open_bracket_type,
-        ))
+        TokenizeError::BracketNotClosed(open_bracket_type)
+            .print(start_index);
+        Err(())
     } else {
         let unused_bracket_type = BracketType::Round;
         let unused_number = 0;
@@ -127,7 +127,7 @@ fn is_close_bracket(char: char) -> Option<BracketType> {
     }
 }
 
-pub fn split_text_without_brackets(text: String, offset_index: usize) -> Result<Vec<TokenWithPos>, CE> {
+pub fn split_text_without_brackets(text: String, offset_index: usize) -> CResult<Vec<TokenWithPos>> {
     let mut iter = text.chars().peekable();
     let mut state = TokenizeState::new(offset_index);
 
@@ -249,7 +249,9 @@ pub fn split_text_without_brackets(text: String, offset_index: usize) -> Result<
                 state.use_char_in_string(char);
             }
             _ => {
-                return Err(CE::UnexpectedChar(char))
+                TokenizeError::UnexpectedChar
+                    .print(state.offset_index + state.buffer_end);
+                return Err(())
             }
         }
     }
