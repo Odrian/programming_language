@@ -21,7 +21,7 @@ pub struct ObjectContextWindow {
 
 impl ObjectContextWindow {
     pub fn new() -> Self {
-        ObjectContextWindow { contexts: vec![ObjectsContext::default()] }
+        Self { contexts: vec![ObjectsContext::default()] }
     }
     pub fn step_in(&mut self) {
         self.contexts.push(ObjectsContext::default());

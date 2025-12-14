@@ -20,7 +20,7 @@ pub struct ValueContextWindow<'ctx> {
 }
 
 impl<'ctx> ValueContextWindow<'ctx> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         ValueContextWindow { contexts: vec![] }
     }
     pub fn step_in(&mut self) {
@@ -41,6 +41,6 @@ impl<'ctx> ValueContextWindow<'ctx> {
         self.get(object).unwrap().into_function_value()
     }
     pub fn add(&mut self, object: Object, value: AnyValueEnum<'ctx>) {
-        self.contexts.last_mut().unwrap().add(object, value)
+        self.contexts.last_mut().unwrap().add(object, value);
     }
 }

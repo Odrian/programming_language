@@ -7,6 +7,7 @@
 * add vararg
 * add default arguments
 * add function overloading
+* now using cc to link objects?
 
 # Programming language
 

@@ -11,10 +11,10 @@ fn main() {
     let result = compile_src(&args, &mut module_tree, path);
     match result {
         Ok(()) => {
-            println!("compiled")
+            println!("compiled");
         },
         Err(()) => {
-            eprintln!("not compiled due to error")
+            eprintln!("not compiled due to error");
         },
     }
 }

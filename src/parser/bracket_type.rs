@@ -8,22 +8,22 @@ pub enum BracketType {
 }
 
 impl BracketType {
-    pub fn to_string(self) -> &'static str {
+    pub const fn to_string(self) -> &'static str {
         match self {
-            BracketType::Round => "round",
-            BracketType::Curly => "curly",
+            Self::Round => "round",
+            Self::Curly => "curly",
         }
     }
-    pub fn to_open_string(self) -> &'static str {
+    pub const fn to_open_string(self) -> &'static str {
         match self {
-            BracketType::Round => "(",
-            BracketType::Curly => "{",
+            Self::Round => "(",
+            Self::Curly => "{",
         }
     }
-    pub fn to_close_string(self) -> &'static str {
+    pub const fn to_close_string(self) -> &'static str {
         match self {
-            BracketType::Round => ")",
-            BracketType::Curly => "}",
+            Self::Round => ")",
+            Self::Curly => "}",
         }
     }
 }

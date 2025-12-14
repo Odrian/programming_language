@@ -19,7 +19,7 @@ pub enum ErrKind {
 }
 
 impl ErrKind {
-    fn to_string(self) -> &'static str {
+    const fn to_string(self) -> &'static str {
         match self {
             Self::Error => "error",
             Self::Warning => "warning",
@@ -43,7 +43,6 @@ pub enum CompilationError {
     UnexpectedGlobalStatement { statement: String },
     IncorrectUseStatement(PositionInFile),
     LocalFunctionNotSupported,
-    UnexpectedReturn,
     FunctionMustReturn { function_name: String },
     NoMainFunction,
     IncorrectMainSignature,
@@ -105,9 +104,6 @@ impl fmt::Display for CompilationError {
             }
             Self::LocalFunctionNotSupported => {
                 write!(f, "Error: local functions not supported")
-            }
-            Self::UnexpectedReturn => {
-                write!(f, "Error: unexpected return")
             }
             Self::FunctionMustReturn { function_name } => {
                 write!(f, "Error: function {function_name} may not return")

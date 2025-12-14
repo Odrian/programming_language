@@ -12,19 +12,19 @@ pub enum ObjType {
     Char,
     Integer(IntObjType),
     Float(FloatObjType),
-    Reference(Box<ObjType>),
-    Function { arguments: Vec<ObjType>, returns: Box<ObjType> }
+    Reference(Box<Self>),
+    Function { arguments: Vec<Self>, returns: Box<Self> }
 }
 impl ObjType {
-    pub const BOOL: ObjType = ObjType::Integer(IntObjType::Bool);
-    pub const DEFAULT_INTEGER: ObjType = ObjType::Integer(IntObjType::I32);
-    pub const DEFAULT_FLOAT: ObjType = ObjType::Float(FloatObjType::F64);
+    pub const BOOL: Self = Self::Integer(IntObjType::Bool);
+    pub const DEFAULT_INTEGER: Self = Self::Integer(IntObjType::I32);
+    pub const DEFAULT_FLOAT: Self = Self::Float(FloatObjType::F64);
 
     pub fn is_void(&self) -> bool {
-        self == &ObjType::Void
+        self == &Self::Void
     }
-    pub fn get_float_bits_or_panic(&self) -> u8 {
-        let ObjType::Float(float) = self else {
+    pub const fn get_float_bits_or_panic(&self) -> u8 {
+        let Self::Float(float) = self else {
             panic!();
         };
         match float {
@@ -32,8 +32,8 @@ impl ObjType {
             FloatObjType::F64 => 8,
         }
     }
-    pub fn unwrap_ref(&self) -> &ObjType {
-        let ObjType::Reference(obj_type) = self else {
+    pub fn unwrap_ref(&self) -> &Self {
+        let Self::Reference(obj_type) = self else {
             panic!()
         };
         obj_type.as_ref()
@@ -53,11 +53,11 @@ pub enum IntObjType {
 }
 
 impl IntObjType {
-    pub fn is_signed(&self) -> bool {
-        matches!(self, IntObjType::I8 | IntObjType::I16 | IntObjType::I32 | IntObjType::I64 | IntObjType::I128 | IntObjType::ISize)
+    pub const fn is_signed(&self) -> bool {
+        matches!(self, Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::I128 | Self::ISize)
     }
     pub fn is_bool(&self) -> bool {
-        self == &IntObjType::Bool
+        self == &Self::Bool
     }
 }
 

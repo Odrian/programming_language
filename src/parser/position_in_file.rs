@@ -6,10 +6,10 @@ pub struct PositionInFile {
     end: usize,
 }
 impl PositionInFile {
-    pub fn new(start: usize, end: usize) -> Self {
+    pub const fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
-    pub fn new_sized(start: usize, size: usize) -> Self {
+    pub const fn new_sized(start: usize, size: usize) -> Self {
         let end = start + size;
         Self { start, end }
     }

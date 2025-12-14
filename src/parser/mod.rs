@@ -36,7 +36,7 @@ pub fn parse_to_statements(args: &Args, tree: &mut ModuleTree, module_id: Module
             .map(|t| format!("{:#?}", t.token))
             .collect::<Vec<_>>().join("\n");
 
-        let filepath = format!("{}/{}_tokens.txt", ARTIFACT_DIR, filename);
+        let filepath = format!("{ARTIFACT_DIR}/{filename}_tokens.txt");
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
             FileError::CantWriteToFile {
@@ -50,9 +50,9 @@ pub fn parse_to_statements(args: &Args, tree: &mut ModuleTree, module_id: Module
 
     let statements = parse2_syntactic::parse_statements(tokens)?;
     if args.write_unlinked_syntactic_tree_to_file {
-        let text = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
+        let text = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
 
-        let filepath = format!("{}/{}_unlinked_AST.txt", ARTIFACT_DIR, filename);
+        let filepath = format!("{ARTIFACT_DIR}/{filename}_unlinked_AST.txt");
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
             FileError::CantWriteToFile {
@@ -70,9 +70,9 @@ pub fn parse_statements_single_file(args: &Args, filename: &str, statements: Vec
     let mut object_factory = ObjectFactory::default();
     let linked_statement = parse3_linking::link_variables(statements, &mut object_factory)?;
     if args.write_syntactic_tree_to_file {
-        let text = linked_statement.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
+        let text = linked_statement.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
 
-        let filepath = format!("{}/{}_AST.txt", ARTIFACT_DIR, filename);
+        let filepath = format!("{ARTIFACT_DIR}/{filename}_AST.txt");
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
             FileError::CantWriteToFile {
@@ -84,8 +84,8 @@ pub fn parse_statements_single_file(args: &Args, filename: &str, statements: Vec
         }
     }
 
-    compiling::parse_to_llvm(&args, linked_statement, &object_factory)
-        .map_err(|err| { println!("{err}"); () })?;
+    compiling::parse_to_llvm(args, linked_statement, &object_factory)
+        .map_err(|err| { println!("{err}"); })?;
 
     Ok(())
 }

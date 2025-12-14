@@ -11,5 +11,5 @@ use object::ObjectFactory;
 
 pub fn link_variables(statement: Vec<Statement>, object_factory: &mut ObjectFactory) -> CResult<Vec<GlobalLinkedStatement>> {
     parser_linked_statement::link_names(statement, object_factory)
-        .map_err(|err| { println!("{err}"); () })
+        .map_err(|err| { println!("{err}"); })
 }

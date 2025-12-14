@@ -43,25 +43,22 @@ pub enum CompareOperator {
 }
 
 impl NumberOperation {
-    pub fn can_use_on_float(&self) -> bool {
-        matches!(self, NumberOperation::Add | NumberOperation::Sub | NumberOperation::Mul | NumberOperation::Div)
+    pub const fn can_use_on_float(&self) -> bool {
+        matches!(self, Self::Add | Self::Sub | Self::Mul | Self::Div)
     }
 }
 
 
 impl TwoSidedOperation {
-    pub fn get_prior(&self) -> u8 {
+    pub const fn get_prior(&self) -> u8 {
         match self {
+            Self::Compare(_comp_op) => 6,
             Self::Number(num_op) => match num_op {
-                NumberOperation::Add => 4,
-                NumberOperation::Sub => 4,
-                NumberOperation::Mul => 5,
-                NumberOperation::Div => 5,
-                NumberOperation::Rem => 5,
+                NumberOperation::Mul | NumberOperation::Div | NumberOperation::Rem => 5,
+                NumberOperation::Add | NumberOperation::Sub => 4,
                 NumberOperation::BitAnd => 3,
                 NumberOperation::BitOr => 2,
             }
-            Self::Compare(_comp_op) => 6,
             Self::Bool(bool_op) => match bool_op {
                 BoolOperation::And => 1,
                 BoolOperation::Or => 0,
@@ -71,7 +68,7 @@ impl TwoSidedOperation {
 }
 
 impl CompareOperator {
-    pub fn is_equal_op(&self) -> bool {
+    pub const fn is_equal_op(&self) -> bool {
         matches!(self, Self::Equal | Self::NotEqual)
     }
 }

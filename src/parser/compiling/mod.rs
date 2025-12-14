@@ -8,7 +8,7 @@ use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, I
 
 use crate::error::CompilationError as CE;
 use crate::Args;
-use crate::parser::parse3_linking::linked_statement::*;
+use crate::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
 use crate::parser::parse3_linking::object::{IntObjType, ObjType, ObjectFactory};
 
 /// previous steps guarantees that every used variables is valid

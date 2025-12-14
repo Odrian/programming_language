@@ -75,13 +75,13 @@ fn parse_module(tree: &mut ModuleTree, module_id: ModuleId, path: PathBuf) -> Ve
             let metadata = ModuleMetadata { name, is_file: true };
             let new_module_id = tree.create_child_or_panic(module_id, metadata);
             return vec![new_module_id];
-        };
+        }
         if metadata.is_dir() {
             let name = entry.file_name().to_str().unwrap().to_owned();
             let metadata = ModuleMetadata { name, is_file: false };
             let new_module_id = tree.create_child_or_panic(module_id, metadata);
             return parse_module(tree, new_module_id, entry.path());
-        };
+        }
         vec![]
     }).collect()
 }

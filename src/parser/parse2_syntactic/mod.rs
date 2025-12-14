@@ -8,5 +8,5 @@ use statement::Statement;
 
 pub fn parse_statements(tokens: Vec<TokenWithPos>) -> CResult<Vec<Statement>> {
     parser_statements::parse_statements(tokens)
-        .map_err(|err| { println!("{err}"); () })
+        .map_err(|err| { println!("{err}"); })
 }

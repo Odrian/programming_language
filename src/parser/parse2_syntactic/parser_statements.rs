@@ -16,7 +16,7 @@ struct ParsingState {
 
 impl ParsingState {
     pub fn new(tokens: Vec<TokenWithPos>) -> Self {
-        ParsingState { tokens: tokens.into() }
+        Self { tokens: tokens.into() }
     }
     fn next(&mut self) -> Option<TokenWithPos> {
         self.tokens.pop_front()
@@ -24,7 +24,7 @@ impl ParsingState {
     fn peek(&self) -> Option<&TokenWithPos> {
         self.tokens.front()
     }
-    fn at_end(&mut self) -> bool {
+    fn at_end(&self) -> bool {
         self.tokens.is_empty()
     }
     pub fn parse_statements(&mut self) -> Result<Vec<Statement>, CE> {
@@ -112,7 +112,7 @@ impl ParsingState {
             }
             Token::Semicolon => unreachable!(),
             _ => {
-                Err(CE::SyntacticsError(position, format!("unexpected token {:?}", token)))
+                Err(CE::SyntacticsError(position, format!("unexpected token {token:?}")))
                 // // next token exists, position is used only if next is None
                 // let position = PositionInFile::new(0, 0);
                 // Ok(Statement::Expression(self.parse_expression(position, false)?))
@@ -175,7 +175,7 @@ impl ParsingState {
                 return Err(CE::IncorrectUseStatement(position))
             };
 
-            if state.peek() == None { break }
+            if state.peek().is_none() { break }
             let Some(TokenWithPos { token, position }) = state.next() else {
                 return Err(CE::IncorrectUseStatement(position))
             };
@@ -255,7 +255,6 @@ impl ParsingState {
             }
             Token::Bracket(vec, BracketType::Round) => {
                 // name(..)
-                let name = name;
                 let args = parse_function_arguments(vec, position)?;
                 let expression = self.parse_expression2_without_ops(Expression::new_function_call(name, args), false)?;
                 Ok(Statement::Expression(expression))
@@ -287,7 +286,7 @@ impl ParsingState {
                 return Err(CE::SyntacticsError(position2, "expected expression".to_owned()))
             };
             position = position2;
-            operations.push(op)
+            operations.push(op);
         }
 
         // FIXME: speed up to O(n log n)
@@ -363,7 +362,7 @@ impl ParsingState {
                 Ok(self.parse_expression2_without_ops(unary_expression, false)?)
             }
             Token::Quotes(string) => { // '..'
-                let char_value = parse_quotes(string)?;
+                let char_value = parse_quotes(&string)?;
                 let expression = Expression::CharLiteral(char_value);
                 self.parse_expression2_without_ops(expression, was_unary)
             }
@@ -425,7 +424,7 @@ impl ParsingState {
         };
 
         // parse arguments
-        let arguments = self.parse_function_declaration_arguments(args)?;
+        let arguments = parse_function_declaration_arguments(args)?;
 
         // parse return type
         let Some(token_with_pos) = self.next() else {
@@ -454,39 +453,6 @@ impl ParsingState {
 
         let statement = Statement::new_function(name, arguments, return_type, body);
         Ok(statement)
-    }
-    fn parse_function_declaration_arguments(&self, args: Vec<TokenWithPos>) -> Result<Vec<(String, Typee)>, CE> {
-        if args.is_empty() {
-            return Ok(Vec::new())
-        }
-        let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
-        let mut state = Self::new(args);
-
-        while let Some(TokenWithPos { token, position }) = state.next() {
-            let Token::String(arg_i) = token else {
-                return Err(CE::SyntacticsError(position, "expected argument name in function declaration".to_owned()));
-            };
-
-            let Some(TokenWithPos { token, position }) = state.next() else {
-                return Err(CE::SyntacticsError(position, "expected argument type after name".to_owned()))
-            };
-            if token != Token::Colon {
-                return Err(CE::SyntacticsError(position, "expected argument type after name".to_owned()))
-            }
-
-            let argument_type = state.parse_type(position)?;
-
-            arguments.push((arg_i, argument_type));
-
-            let Some(TokenWithPos { token, position }) = state.next() else {
-                break;
-            };
-            if token != Token::Comma {
-                return Err(CE::SyntacticsError(position, "expected ',' or ')'".to_owned()));
-            }
-        }
-
-        Ok(arguments)
     }
 
     fn parse_type(&mut self, position: PositionInFile) -> Result<Typee, CE> {
@@ -525,7 +491,7 @@ impl ParsingState {
             let field_typee = state.parse_type(position)?;
             fields.push((field_name, field_typee));
 
-            if state.at_end() { break };
+            if state.at_end() { break }
 
             // ,
             let Some(TokenWithPos { token: Token::Comma, position: _ }) = state.next() else {
@@ -536,6 +502,40 @@ impl ParsingState {
 
         Ok(Statement::new_struct(name, fields))
     }
+}
+
+fn parse_function_declaration_arguments(args: Vec<TokenWithPos>) -> Result<Vec<(String, Typee)>, CE> {
+    if args.is_empty() {
+        return Ok(Vec::new())
+    }
+    let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
+    let mut state = ParsingState::new(args);
+
+    while let Some(TokenWithPos { token, position }) = state.next() {
+        let Token::String(arg_i) = token else {
+            return Err(CE::SyntacticsError(position, "expected argument name in function declaration".to_owned()));
+        };
+
+        let Some(TokenWithPos { token, position }) = state.next() else {
+            return Err(CE::SyntacticsError(position, "expected argument type after name".to_owned()))
+        };
+        if token != Token::Colon {
+            return Err(CE::SyntacticsError(position, "expected argument type after name".to_owned()))
+        }
+
+        let argument_type = state.parse_type(position)?;
+
+        arguments.push((arg_i, argument_type));
+
+        let Some(TokenWithPos { token, position }) = state.next() else {
+            break;
+        };
+        if token != Token::Comma {
+            return Err(CE::SyntacticsError(position, "expected ',' or ')'".to_owned()));
+        }
+    }
+
+    Ok(arguments)
 }
 
 fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile) -> Result<Vec<Expression>, CE> {
@@ -557,7 +557,7 @@ fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile)
     Ok(args)
 }
 
-fn parse_quotes(string: String) -> Result<u8, CE> {
+fn parse_quotes(string: &str) -> Result<u8, CE> {
     let mut chars = string.chars();
     let Some(first_char) = chars.next() else {
         return Err(CE::LiteralParseError { what: format!("'{string}'"), error: "incorrect char literal".to_owned() })

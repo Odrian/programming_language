@@ -44,28 +44,28 @@ pub enum LinkedExpression {
 }
 
 impl TypedExpression {
-    pub fn new(object_type: ObjType, expr: LinkedExpression) -> Self {
-        Self { expr, object_type }
+    pub const fn new(object_type: ObjType, expr: LinkedExpression) -> Self {
+        Self { object_type, expr }
     }
 }
 
 impl GlobalLinkedStatement {
-    pub fn new_function(name: Object, args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement>) -> Self {
+    pub const fn new_function(name: Object, args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement>) -> Self {
         Self::Function { object: name, args, returns, body }
     }
 }
 
 impl LinkedStatement {
-    pub fn new_variable(object: Object, value: TypedExpression) -> Self {
+    pub const fn new_variable(object: Object, value: TypedExpression) -> Self {
         Self::VariableDeclaration { object, value }
     }
-    pub fn new_set(what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation>) -> Self {
+    pub const fn new_set(what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation>) -> Self {
         Self::SetVariable { what, value, op }
     }
-    pub fn new_if(condition: TypedExpression, body: Vec<Self>) -> Self {
+    pub const fn new_if(condition: TypedExpression, body: Vec<Self>) -> Self {
         Self::If { condition, body }
     }
-    pub fn new_while(condition: TypedExpression, body: Vec<Self>) -> Self {
+    pub const fn new_while(condition: TypedExpression, body: Vec<Self>) -> Self {
         Self::While { condition, body }
     }
 }
@@ -83,7 +83,7 @@ impl LinkedExpression {
     pub fn new_round_bracket(expression: TypedExpression) -> Self {
         Self::RoundBracket(Box::new(expression))
     }
-    pub fn new_function_call(object: Object, args: Vec<TypedExpression>) -> Self {
+    pub const fn new_function_call(object: Object, args: Vec<TypedExpression>) -> Self {
         Self::FunctionCall { object, args }
     }
 }
@@ -91,7 +91,7 @@ impl LinkedExpression {
 // ----- Display implementation -----
 
 fn to_string_with_tabs<T: ToString>(statements: &[T]) -> String {
-    let string = statements.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n");
+    let string = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
     "    ".to_owned() + string.replace('\n', "\n    ").as_str()
 }
 
@@ -100,7 +100,7 @@ impl fmt::Display for GlobalLinkedStatement {
         match self {
             Self::Function { object, args, returns, body } => {
                 let inside = to_string_with_tabs(body);
-                let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
+                let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
                 write!(f, "{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
         }
@@ -162,7 +162,7 @@ impl fmt::Display for LinkedExpression {
             Self::Variable(object) => write!(f, "{object}"),
             Self::RoundBracket(expression) => write!(f, "({expression})"),
             Self::FunctionCall { object, args } => {
-                let args = args.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+                let args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
                 write!(f, "{} ({})", object, args.join(", "))
             },
         }

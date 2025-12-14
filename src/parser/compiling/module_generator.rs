@@ -91,7 +91,7 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
 mod module_parsing {
     use super::*;
 
-    impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
+    impl<'ctx> CodeModuleGen<'ctx, '_> {
         pub fn parse_module(&mut self, statements: Vec<GlobalLinkedStatement>) -> Result<(), CE> {
             self.context_window.step_in();
             for statement in statements {
@@ -143,7 +143,7 @@ mod module_parsing {
 mod function_parsing {
     use super::*;
 
-    impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
+    impl<'ctx> CodeModuleGen<'ctx, '_> {
         pub fn parse_function_body(&mut self, body: Vec<LinkedStatement>) -> Result<(), CE> {
             let is_returned = self.parse_statements(body)?;
             assert!(is_returned);
@@ -462,9 +462,7 @@ mod function_parsing {
                             NumberOperation::Sub => self.builder.build_float_sub(num1, num2, "sub")?.into(),
                             NumberOperation::Mul => self.builder.build_float_mul(num1, num2, "mul")?.into(),
                             NumberOperation::Div => self.builder.build_float_div(num1, num2, "div")?.into(),
-                            NumberOperation::Rem => unreachable!(),
-                            NumberOperation::BitAnd => unreachable!(),
-                            NumberOperation::BitOr => unreachable!(),
+                            NumberOperation::Rem | NumberOperation::BitAnd | NumberOperation::BitOr => unreachable!(),
                         }
                     }
                     _ => unreachable!()
@@ -523,36 +521,36 @@ mod function_parsing {
 }
 
 impl CompareOperator {
-    fn to_int_compare(self, signed: bool) -> IntPredicate {
+    const fn to_int_compare(self, signed: bool) -> IntPredicate {
         if signed {
             match self {
-                CompareOperator::Equal =>           IntPredicate::EQ,
-                CompareOperator::NotEqual =>        IntPredicate::NE,
-                CompareOperator::Greater =>         IntPredicate::SGT,
-                CompareOperator::GreaterEqual =>    IntPredicate::SGE,
-                CompareOperator::Less =>            IntPredicate::SLT,
-                CompareOperator::LessEqual =>       IntPredicate::SLE,
+                Self::Equal =>           IntPredicate::EQ,
+                Self::NotEqual =>        IntPredicate::NE,
+                Self::Greater =>         IntPredicate::SGT,
+                Self::GreaterEqual =>    IntPredicate::SGE,
+                Self::Less =>            IntPredicate::SLT,
+                Self::LessEqual =>       IntPredicate::SLE,
             }
         } else {
             match self {
-                CompareOperator::Equal =>           IntPredicate::EQ,
-                CompareOperator::NotEqual =>        IntPredicate::NE,
-                CompareOperator::Greater =>         IntPredicate::UGT,
-                CompareOperator::GreaterEqual =>    IntPredicate::UGE,
-                CompareOperator::Less =>            IntPredicate::ULT,
-                CompareOperator::LessEqual =>       IntPredicate::ULE,
+                Self::Equal =>           IntPredicate::EQ,
+                Self::NotEqual =>        IntPredicate::NE,
+                Self::Greater =>         IntPredicate::UGT,
+                Self::GreaterEqual =>    IntPredicate::UGE,
+                Self::Less =>            IntPredicate::ULT,
+                Self::LessEqual =>       IntPredicate::ULE,
             }
         }
     }
 
-    fn to_float_compare(self) -> FloatPredicate {
+    const fn to_float_compare(self) -> FloatPredicate {
         match self {
-            CompareOperator::Equal =>           FloatPredicate::OEQ,
-            CompareOperator::NotEqual =>        FloatPredicate::ONE,
-            CompareOperator::Greater =>         FloatPredicate::OGT,
-            CompareOperator::GreaterEqual =>    FloatPredicate::OGE,
-            CompareOperator::Less =>            FloatPredicate::OLT,
-            CompareOperator::LessEqual =>       FloatPredicate::OLE,
+            Self::Equal =>           FloatPredicate::OEQ,
+            Self::NotEqual =>        FloatPredicate::ONE,
+            Self::Greater =>         FloatPredicate::OGT,
+            Self::GreaterEqual =>    FloatPredicate::OGE,
+            Self::Less =>            FloatPredicate::OLT,
+            Self::LessEqual =>       FloatPredicate::OLE,
         }
     }
 }

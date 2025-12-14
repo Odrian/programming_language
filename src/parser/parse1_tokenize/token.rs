@@ -7,7 +7,7 @@ pub struct TokenWithPos {
     pub position: PositionInFile,
 }
 impl TokenWithPos {
-    pub fn new(token: Token, position: PositionInFile) -> Self {
+    pub const fn new(token: Token, position: PositionInFile) -> Self {
         Self { token, position }
     }
 }

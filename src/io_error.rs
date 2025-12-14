@@ -9,7 +9,7 @@ pub enum FileError {
 
 impl FileError {
     pub fn print(self) {
-        print_error(ErrKind::Error, &self.to_string())
+        print_error(ErrKind::Error, &self.to_string());
     }
 }
 
@@ -17,7 +17,7 @@ impl Display for FileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CantReadSourceFile { filepath, io_error } => {
-                write!(f, "while reading file {filepath:?}: {io_error}")
+                write!(f, "while reading file {}: {io_error}", filepath.display())
             }
             Self::CantWriteToFile { filepath, what, io_error } => {
                 write!(f, "while writing {what} to file {filepath}: {io_error}")

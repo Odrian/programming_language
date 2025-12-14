@@ -69,7 +69,7 @@ impl LinkingContext<'_> {
 
                         if !check_is_returns(&body) {
                             if return_type == ObjType::Void {
-                                body.push(LinkedStatement::Return(None))
+                                body.push(LinkedStatement::Return(None));
                             } else {
                                 return Err(CE::FunctionMustReturn { function_name: name })
                             }
@@ -95,8 +95,8 @@ impl LinkingContext<'_> {
                 Statement::SetVariable { what, value, op } => {
                     let what = self.parse_expression(what)?;
                     let value = self.parse_expression(value)?;
-                    if &what.object_type != &value.object_type {
-                        return Err(CE::IncorrectType { got: value.object_type.clone(), expected: what.object_type.clone() })
+                    if what.object_type != value.object_type {
+                        return Err(CE::IncorrectType { got: value.object_type, expected: what.object_type })
                     }
                     LinkedStatement::new_set(what, value, op)
                 }
@@ -130,10 +130,8 @@ impl LinkingContext<'_> {
                         None => &ObjType::Void,
                     };
                     if Some(expression_type) != self.current_function_returns.as_ref() {
-                        return match &self.current_function_returns {
-                            None => Err(CE::UnexpectedReturn),
-                            Some(cfr) => Err(CE::IncorrectType { got: expression_type.clone(), expected: cfr.clone() })
-                        }
+                        let expected_type = self.current_function_returns.clone().unwrap_or(ObjType::Void);
+                        return Err(CE::IncorrectType { got: expression_type.clone(), expected: expected_type });
                     }
                     LinkedStatement::Return(expression)
                 }
@@ -169,7 +167,7 @@ impl LinkingContext<'_> {
             Expression::Operation(expression1, expression2, op) => {
                 let ex1 = self.parse_expression(*expression1)?;
                 let ex2 = self.parse_expression(*expression2)?;
-                let Some(result_type) = ObjType::from_operation(&ex1.object_type, &ex2.object_type, &op) else {
+                let Some(result_type) = ObjType::from_operation(&ex1.object_type, &ex2.object_type, op) else {
                     return Err(CE::IncorrectTwoOper { object_type1: ex1.object_type, object_type2: ex2.object_type, op })
                 };
                 TypedExpression::new(
@@ -179,7 +177,7 @@ impl LinkingContext<'_> {
             }
             Expression::UnaryOperation(expression, op) => {
                 let ex = self.parse_expression(*expression)?;
-                let Some(result_type) = ObjType::from_unary_operation(&ex.object_type, &op) else {
+                let Some(result_type) = ObjType::from_unary_operation(&ex.object_type, op) else {
                     return Err(CE::IncorrectOneOper { object_type: ex.object_type, op })
                 };
                 TypedExpression::new(
@@ -335,12 +333,7 @@ fn check_is_returns(statements: &[LinkedStatement]) -> bool {
     for statement in statements {
         match statement {
             LinkedStatement::Return(_) => return true,
-            LinkedStatement::If { condition: _, body } => {
-                if check_is_returns(body) {
-                    return true;
-                }
-            }
-            LinkedStatement::While { condition: _, body } => {
+            LinkedStatement::If { condition: _, body } | LinkedStatement::While { condition: _, body } => {
                 if check_is_returns(body) {
                     return true;
                 }
@@ -352,42 +345,42 @@ fn check_is_returns(statements: &[LinkedStatement]) -> bool {
 }
 
 impl ObjType {
-    fn check_can_cast(from: &ObjType, other: &ObjType) -> bool {
-        if other == &ObjType::Char {
-            return from == &ObjType::Integer(IntObjType::U8)
+    fn check_can_cast(from: &Self, other: &Self) -> bool {
+        if other == &Self::Char {
+            return from == &Self::Integer(IntObjType::U8)
         }
         match from {
-            ObjType::Char => matches!(other, ObjType::Integer(_)),
-            ObjType::Float(_) => matches!(other, ObjType::Float(_)),
-            ObjType::Integer(from) => {
-                matches!(other, ObjType::Reference(_)) ||
-                matches!(other, ObjType::Integer(to) if !to.is_bool() || from.is_bool())
+            Self::Char => matches!(other, Self::Integer(_)),
+            Self::Float(_) => matches!(other, Self::Float(_)),
+            Self::Integer(from) => {
+                matches!(other, Self::Reference(_)) ||
+                matches!(other, Self::Integer(to) if !to.is_bool() || from.is_bool())
             },
-            ObjType::Reference(_) => matches!(other, ObjType::Reference(_) | ObjType::Integer(_)),
-            ObjType::Function { .. } | ObjType::Void => unreachable!(),
+            Self::Reference(_) => matches!(other, Self::Reference(_) | Self::Integer(_)),
+            Self::Function { .. } | Self::Void => unreachable!(),
         }
     }
-    fn from_unary_operation(object_type: &ObjType, one_sided_operation: &OneSidedOperation) -> Option<ObjType> {
+    fn from_unary_operation(object_type: &Self, one_sided_operation: OneSidedOperation) -> Option<Self> {
         match one_sided_operation {
             OneSidedOperation::BoolNot => {
-                if object_type == &ObjType::BOOL {
-                    Some(ObjType::BOOL)
+                if object_type == &Self::BOOL {
+                    Some(Self::BOOL)
                 } else {
                     None
                 }
             }
             OneSidedOperation::UnaryMinus => {
-                if matches!(object_type, ObjType::Integer(int) if int.is_signed()) || matches!(object_type, ObjType::Float(_)) {
+                if matches!(object_type, Self::Integer(int) if int.is_signed()) || matches!(object_type, Self::Float(_)) {
                     Some(object_type.clone())
                 } else {
                     None
                 }
             }
             OneSidedOperation::GetReference => {
-                Some(ObjType::Reference(Box::new(object_type.clone())))
+                Some(Self::Reference(Box::new(object_type.clone())))
             }
             OneSidedOperation::Dereference => {
-                if let ObjType::Reference(reference_object_type) = object_type {
+                if let Self::Reference(reference_object_type) = object_type {
                     Some(*reference_object_type.clone())
                 } else {
                     None
@@ -395,20 +388,20 @@ impl ObjType {
             }
         }
     }
-    fn from_operation(object_type1: &ObjType, object_type2: &ObjType, two_sided_operation: &TwoSidedOperation) -> Option<ObjType> {
+    fn from_operation(object_type1: &Self, object_type2: &Self, two_sided_operation: TwoSidedOperation) -> Option<Self> {
         match two_sided_operation {
             TwoSidedOperation::Number(op) => {
                 if object_type1 != object_type2 {
                     None
-                } else if matches!(object_type1, ObjType::Integer(_)) || matches!(object_type1, ObjType::Float(_) if op.can_use_on_float()) {
+                } else if matches!(object_type1, Self::Integer(_)) || matches!(object_type1, Self::Float(_) if op.can_use_on_float()) {
                     Some(object_type1.clone())
                 } else {
                     None
                 }
             }
             TwoSidedOperation::Bool(_) => {
-                if object_type1 == &ObjType::BOOL && object_type2 == &ObjType::BOOL {
-                    Some(ObjType::BOOL)
+                if object_type1 == &Self::BOOL && object_type2 == &Self::BOOL {
+                    Some(Self::BOOL)
                 } else {
                     None
                 }
@@ -420,11 +413,11 @@ impl ObjType {
                     true
                 } else {
                     // reference can't be compared
-                    !matches!(object_type1, ObjType::Reference(_))
+                    !matches!(object_type1, Self::Reference(_))
                 };
 
                 if is_allowed {
-                    Some(ObjType::BOOL)
+                    Some(Self::BOOL)
                 } else {
                     None
                 }

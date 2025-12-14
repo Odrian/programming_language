@@ -15,7 +15,7 @@ pub enum TokenizeError {
 
 impl TokenizeError {
     pub fn print(self, position: usize) {
-        print_error(ErrKind::Error, &self.to_string())
+        print_error(ErrKind::Error, &self.to_string());
     }
 }
 

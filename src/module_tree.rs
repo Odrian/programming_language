@@ -38,7 +38,7 @@ impl ModuleTree {
         }
     }
     fn new_node(&mut self, parent: Option<ModuleId>, metadata: ModuleMetadata) -> ModuleId {
-        let new_id = self.nodes.len() as u32;
+        let new_id = u32::try_from(self.nodes.len()).expect("more than u32::MAX nodes");
         let module_id = ModuleId { id: new_id };
         self.nodes.push(Node::new(parent, metadata));
         module_id
@@ -64,13 +64,13 @@ impl ModuleTree {
     pub fn create_root_or_panic(&mut self, metadata: ModuleMetadata, root_metadata: RootMetadata) -> ModuleId {
         let name = metadata.name.clone();
         let module_id = self.new_node(None, metadata);
-        if let Some(_) = self.roots.insert(name, (module_id, root_metadata)) { panic!("root already exist") }
+        if self.roots.insert(name, (module_id, root_metadata)).is_some() { panic!("root already exist") }
         module_id
     }
     pub fn create_child_or_panic(&mut self, module_id: ModuleId, metadata: ModuleMetadata) -> ModuleId {
         let name = metadata.name.clone();
         let module_id = self.new_node(Some(module_id), metadata);
-        if let Some(_) = self.get_node_mut(module_id).childs.insert(name, module_id) { panic!("child already exist") }
+        if self.get_node_mut(module_id).childs.insert(name, module_id).is_some() { panic!("child already exist") }
         module_id
     }
     pub fn get_full_path(&self, module_id: ModuleId) -> PathBuf {
@@ -83,10 +83,10 @@ impl ModuleTree {
         }
         let root_name = &self.get_metadata(module_id).name;
 
-        let (_, root_metadata) = self.get_root(&root_name).unwrap();
+        let (_, root_metadata) = self.get_root(root_name).unwrap();
         let mut path = root_metadata.path.clone();
         for name in modules.into_iter().rev() {
-            path.push(&self.get_metadata(name).name)
+            path.push(&self.get_metadata(name).name);
         }
         path
     }
