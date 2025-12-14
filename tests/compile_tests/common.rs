@@ -1,24 +1,31 @@
 use std::process::Command;
-use std::sync::atomic;
+use clap::builder::OsStr;
 use clap::Parser;
 use programming_language::Args;
 use programming_language::error::CResult;
 
+use programming_language::module_tree::ModuleTree;
 use tempfile;
 
 pub fn run_code(text: &str) -> CResult<i32> {
     let temp_dir = tempfile::tempdir().expect("can't create temp dir");
 
-    let name = "main";
-    let path = temp_dir.path().join(name);
+    let src_path = temp_dir.path().join("src");
+    std::fs::create_dir(&src_path).expect("can't create src dir");
+    let main_txt_path = src_path.join("main.txt");
+    std::fs::write(main_txt_path, text).expect("can't write to temp file");
 
-    let args = Args::parse_from(["binary.exe", path.to_str().unwrap()]);
-    let result = programming_language::parser::parse("test", text.to_owned(), &args);
+    let name = "main";
+    let out_path = temp_dir.path().join(name);
+
+    let args = Args::parse_from([&OsStr::from("binary.exe"), out_path.as_os_str()]);
+    let mut module_tree = ModuleTree::new();
+    let result = programming_language::compile_src(&args, &mut module_tree, src_path);
     
     match result {
         Ok(()) => {
-            println!("{path:?}");
-            let code = Command::new(path).status();
+            println!("{out_path:?}");
+            let code = Command::new(out_path).status();
 
             Ok(code.unwrap().code().unwrap_or(-1))
         }

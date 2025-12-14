@@ -16,11 +16,20 @@ use crate::Args;
 use crate::parser::parse3_linking::object::ObjectFactory;
 
 use crate::io_error::FileError;
+use crate::parser::parse2_syntactic::statement::Statement;
 use std::fs;
+use crate::module_tree::{ModuleId, ModuleTree};
 
 const ARTIFACT_DIR: &str = "artifacts";
 
-pub fn parse(filename: &str, text: String, args: &Args) -> CResult<()> {
+pub fn parse_to_statements(args: &Args, tree: &mut ModuleTree, module_id: ModuleId) -> CResult<Vec<Statement>> {
+    let metadata = tree.get_metadata(module_id);
+    if !metadata.is_file { panic!("try to parse directory") }
+    let filename = &metadata.name;
+
+    let path = tree.get_full_path(module_id);
+    let text = fs::read_to_string(path).expect("can't read file");
+
     let tokens = parse1_tokenize::tokenize(&text)?;
     if args.write_tokens_to_file {
         let text = tokens.iter()
@@ -54,7 +63,10 @@ pub fn parse(filename: &str, text: String, args: &Args) -> CResult<()> {
             return Err(())
         }
     }
+    Ok(statements)
+}
 
+pub fn parse_statements_single_file(args: &Args, filename: &str, statements: Vec<Statement>) -> CResult<()> {
     let mut object_factory = ObjectFactory::default();
     let linked_statement = parse3_linking::link_variables(statements, &mut object_factory)?;
     if args.write_syntactic_tree_to_file {

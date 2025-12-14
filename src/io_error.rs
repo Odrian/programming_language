@@ -1,8 +1,9 @@
 use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 use crate::error::{print_error, ErrKind};
 
 pub enum FileError {
-    CantReadSourceFile { filepath: String, io_error: String },
+    CantReadSourceFile { filepath: PathBuf, io_error: String },
     CantWriteToFile { filepath: String, what: String, io_error: String },
 }
 
@@ -16,7 +17,7 @@ impl Display for FileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CantReadSourceFile { filepath, io_error } => {
-                write!(f, "while reading file {filepath}: {io_error}")
+                write!(f, "while reading file {filepath:?}: {io_error}")
             }
             Self::CantWriteToFile { filepath, what, io_error } => {
                 write!(f, "while writing {what} to file {filepath}: {io_error}")
