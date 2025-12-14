@@ -24,7 +24,6 @@ pub fn run_code(text: &str) -> CResult<i32> {
     
     match result {
         Ok(()) => {
-            println!("{out_path:?}");
             let code = Command::new(out_path).status();
 
             Ok(code.unwrap().code().unwrap_or(-1))

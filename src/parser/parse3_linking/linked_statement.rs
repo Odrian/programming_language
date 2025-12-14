@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::Debug;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 use super::object::{Object, ObjType, FloatObjType, IntObjType};
 
@@ -16,8 +17,7 @@ pub enum GlobalLinkedStatement {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedStatement {
     VariableDeclaration { object: Object, value: TypedExpression },
-    SetVariable { object: Object, value: TypedExpression },
-    SetDereference { pointer: TypedExpression, value: TypedExpression },
+    SetVariable { what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation> },
 
     Expression(TypedExpression),
     If { condition: TypedExpression, body: Vec<Self> },
@@ -59,11 +59,8 @@ impl LinkedStatement {
     pub fn new_variable(object: Object, value: TypedExpression) -> Self {
         Self::VariableDeclaration { object, value }
     }
-    pub fn new_set(object: Object, value: TypedExpression) -> Self {
-        Self::SetVariable { object, value }
-    }
-    pub fn new_set_deref(pointer: TypedExpression, value: TypedExpression) -> Self {
-        Self::SetDereference { pointer, value }
+    pub fn new_set(what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation>) -> Self {
+        Self::SetVariable { what, value, op }
     }
     pub fn new_if(condition: TypedExpression, body: Vec<Self>) -> Self {
         Self::If { condition, body }
@@ -116,11 +113,11 @@ impl fmt::Display for LinkedStatement {
             Self::VariableDeclaration { object, value } => {
                 write!(f, "{object} := {value}")
             }
-            Self::SetVariable { object, value } => {
-                write!(f, "{object} = {value}")
-            }
-            Self::SetDereference { pointer, value } => {
-                write!(f, "*{pointer} = {value}")
+            Self::SetVariable { what, value, op } => {
+                match op {
+                    Some(op) => write!(f, "{what} {op}= {value}"),
+                    None => write!(f, "{what} = {value}"),
+                }
             }
             Self::Expression(expression) => {
                 write!(f, "{expression}")

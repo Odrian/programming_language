@@ -82,7 +82,7 @@ impl ParsingState {
                             Ok(Statement::Return(Some(expression)))
                         }
                     }
-                    "use" => self.parse_use(position),
+                    "import" => self.parse_import(position),
                     _ => {
                         self.parse_statement2(string, position)
                     }
@@ -90,6 +90,7 @@ impl ParsingState {
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
                 let left_expression = self.parse_expression_without_ops(position, true)?;
+                let left_expression = Expression::new_unary_operation(left_expression, OneSidedOperation::Dereference);
                 let Some(TokenWithPos { token, position }) = self.next() else {
                     return Err(CE::SyntacticsError(position, "unused dereference".to_owned()));
                 };
@@ -99,10 +100,10 @@ impl ParsingState {
                 let value = self.parse_expression(position)?;
                 match equal_op {
                     EqualOperation::Equal => {
-                        Ok(Statement::new_set_deref(left_expression, value))
+                        Ok(Statement::new_set(left_expression, value, None))
                     },
                     EqualOperation::OperationEqual(op) => {
-                        Ok(Statement::new_equal_set_deref(left_expression, value, op))
+                        Ok(Statement::new_set(left_expression, value, Some(op)))
                     },
                     EqualOperation::ColonEqual => {
                         Err(CE::SyntacticsError(position, "'*name := ..' is ".to_owned()))
@@ -118,7 +119,7 @@ impl ParsingState {
             }
         }
     }
-    fn parse_use(&mut self, mut position0: PositionInFile) -> Result<Statement, CE> {
+    fn parse_import(&mut self, mut position0: PositionInFile) -> Result<Statement, CE> {
         let Some(TokenWithPos { token, position }) = self.next() else {
             return Err(CE::IncorrectUseStatement(position0))
         };
@@ -135,7 +136,7 @@ impl ParsingState {
                 Token::DoubleColon => {}
                 Token::Semicolon => { // ::x;
                     let what = vec![(from.pop().unwrap(), None)];
-                    return Ok(Statement::new_use(from, what))
+                    return Ok(Statement::new_import(from, what))
                 }
                 Token::String(as_string) if as_string == "as" => { // ::x as x;
                     let Some(TokenWithPos { token: Token::String(as_name), position }) = self.next() else {
@@ -147,7 +148,7 @@ impl ParsingState {
                     };
 
                     let what = vec![(from.pop().unwrap(), Some(as_name))];
-                    return Ok(Statement::new_use(from, what))
+                    return Ok(Statement::new_import(from, what))
 
                 }
                 _ => return Err(CE::IncorrectUseStatement(position))
@@ -201,7 +202,7 @@ impl ParsingState {
             return Err(CE::IncorrectUseStatement(position0))
         };
 
-        Ok(Statement::new_use(from, what))
+        Ok(Statement::new_import(from, what))
     }
     /// parse "name .."
     fn parse_statement2(&mut self, name: String, position: PositionInFile) -> Result<Statement, CE> {
@@ -245,9 +246,9 @@ impl ParsingState {
                 let expression2 = self.parse_expression(position)?;
                 let statement = match equal_operation {
                     EqualOperation::ColonEqual => Statement::new_variable(name, None, expression2),
-                    EqualOperation::Equal => Statement::new_set(name, expression2),
+                    EqualOperation::Equal => Statement::new_set(Expression::Variable(name), expression2, None),
                     EqualOperation::OperationEqual(op) => {
-                        Statement::new_equal_set(name, expression2, op)
+                        Statement::new_set(Expression::Variable(name), expression2, Some(op))
                     }
                 };
                 Ok(statement)

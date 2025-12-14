@@ -31,52 +31,55 @@ impl LinkingContext<'_> {
 
         for statement in statements {
             let global_statement = match statement {
-                Statement::Function { name: function_name, args, returns, body } => {
-                    let mut arguments_obj = Vec::with_capacity(args.len());
-                    let mut arguments_type = Vec::with_capacity(args.len());
+                Statement::DeclarationStatement { name, statement } => match statement {
+                    DeclarationStatement::Function { args, returns, body } => {
+                        let mut arguments_obj = Vec::with_capacity(args.len());
+                        let mut arguments_type = Vec::with_capacity(args.len());
 
-                    for (arg_name, typee) in args {
-                        let object_type = self.parse_type(typee)?;
-                        if object_type.is_void() {
-                            return Err(CE::UnexpectedVoidUse)
+                        for (arg_name, typee) in args {
+                            let object_type = self.parse_type(typee)?;
+                            if object_type.is_void() {
+                                return Err(CE::UnexpectedVoidUse)
+                            }
+                            arguments_type.push(object_type.clone());
+                            let object = self.object_factory.create_object(arg_name, object_type, &mut self.object_context_window);
+                            arguments_obj.push(object);
                         }
-                        arguments_type.push(object_type.clone());
-                        let object = self.object_factory.create_object(arg_name, object_type, &mut self.object_context_window);
-                        arguments_obj.push(object);
-                    }
 
-                    let return_type = {
-                        match returns {
-                            Some(typee) => self.parse_type(typee)?,
-                            None => ObjType::Void,
+                        let return_type = {
+                            match returns {
+                                Some(typee) => self.parse_type(typee)?,
+                                None => ObjType::Void,
+                            }
+                        };
+
+                        let func_type = ObjType::Function {
+                            arguments: arguments_type,
+                            returns: Box::new(return_type.clone()),
+                        };
+                        if self.object_context_window.get(&name).is_some() {
+                            return Err(CE::FunctionOverloading { function_name: name })
                         }
-                    };
 
-                    let func_type = ObjType::Function {
-                        arguments: arguments_type,
-                        returns: Box::new(return_type.clone()),
-                    };
-                    if self.object_context_window.get(&function_name).is_some() {
-                        return Err(CE::FunctionOverloading { function_name })
-                    }
+                        self.object_context_window.step_in();
+                        self.current_function_returns = Some(return_type.clone());
+                        let mut body = self.link_statements_recursive(body)?;
+                        self.current_function_returns = None;
+                        self.object_context_window.step_out();
 
-                    self.object_context_window.step_in();
-                    self.current_function_returns = Some(return_type.clone());
-                    let mut body = self.link_statements_recursive(body)?;
-                    self.current_function_returns = None;
-                    self.object_context_window.step_out();
-
-                    if !check_is_returns(&body) {
-                        if return_type == ObjType::Void {
-                            body.push(LinkedStatement::Return(None))
-                        } else {
-                            return Err(CE::FunctionMustReturn { function_name })
+                        if !check_is_returns(&body) {
+                            if return_type == ObjType::Void {
+                                body.push(LinkedStatement::Return(None))
+                            } else {
+                                return Err(CE::FunctionMustReturn { function_name: name })
+                            }
                         }
+
+                        let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
+
+                        GlobalLinkedStatement::new_function(function_object, arguments_obj, return_type, body)
                     }
-
-                    let function_object = self.object_factory.create_object(function_name, func_type, &mut self.object_context_window);
-
-                    GlobalLinkedStatement::new_function(function_object, arguments_obj, return_type, body)
+                    _ => return Err(CE::UnexpectedGlobalStatement { statement: Statement::DeclarationStatement { name, statement }.to_string() })
                 }
                 _ => return Err(CE::UnexpectedGlobalStatement { statement: statement.to_string() })
             };
@@ -89,87 +92,13 @@ impl LinkingContext<'_> {
         let mut result = vec![];
         for statement in statements {
             let linked = match statement {
-                Statement::VariableDeclaration { object: name, typee, value } => {
-                    let typed_expr = self.parse_expression(value)?;
-                    if let Some(typee) = typee {
-                        let object_type = self.parse_type(typee)?;
-                        if object_type != typed_expr.object_type {
-                            return Err(CE::IncorrectType { got: typed_expr.object_type, expected: object_type })
-                        }
-                    }
-                    if typed_expr.object_type.is_void() {
-                        return Err(CE::UnexpectedVoidUse)
-                    }
-
-                    let object = self.object_factory.create_object(name, typed_expr.object_type.clone(), &mut self.object_context_window);
-                    LinkedStatement::new_variable(object, typed_expr)
-                }
-                Statement::SetVariable { object: name, value } => {
+                Statement::SetVariable { what, value, op } => {
+                    let what = self.parse_expression(what)?;
                     let value = self.parse_expression(value)?;
-                    let object = self.object_context_window.get_or_error(&name)?;
-                    if self.object_factory.get_type(object) != &value.object_type {
-                        return Err(CE::IncorrectType { got: value.object_type.clone(), expected: self.object_factory.get_type(object).clone() })
+                    if &what.object_type != &value.object_type {
+                        return Err(CE::IncorrectType { got: value.object_type.clone(), expected: what.object_type.clone() })
                     }
-                    LinkedStatement::new_set(object, value)
-                }
-                Statement::EqualSetVariable { object: name, value, op } => {
-                    let value = self.parse_expression(value)?;
-                    let object = self.object_context_window.get_or_error(&name)?;
-
-                    let object_type = self.object_factory.get_type(object);
-                    let Some(result_type) = ObjType::from_operation(&value.object_type, object_type, &op) else {
-                        return Err(CE::IncorrectTwoOper { object_type1: value.object_type, object_type2: object_type.clone(), op })
-                    };
-                    assert_eq!(&result_type, object_type, "EqualSet should not change type");
-
-                    let object_value = TypedExpression::new(object_type.clone(), LinkedExpression::Variable(object));
-                    let result_expression = TypedExpression::new(
-                        result_type,
-                        LinkedExpression::new_operation(object_value, value, op)
-                    );
-                    LinkedStatement::new_set(object, result_expression)
-                }
-                Statement::SetDereference { pointer, value } => {
-                    let pointer = self.parse_expression(pointer)?;
-                    let value = self.parse_expression(value)?;
-                    
-                    let ObjType::Reference(pointer_type) = &pointer.object_type else {
-                        return Err(CE::IncorrectDeref { what: pointer.expr.to_string(), from: pointer.object_type})
-                    };
-                    
-                    if pointer_type.as_ref() != &value.object_type {
-                        return Err(CE::IncorrectType { got: value.object_type, expected: *pointer_type.clone()})
-                    }
-
-                    LinkedStatement::new_set_deref(pointer, value)
-                }
-                Statement::EqualSetDereference { pointer, value, op } => {
-                    let pointer = self.parse_expression(pointer)?;
-                    let value = self.parse_expression(value)?;
-
-                    let ObjType::Reference(pointer_type) = &pointer.object_type else {
-                        return Err(CE::IncorrectDeref { what: pointer.expr.to_string(), from: pointer.object_type})
-                    };
-
-                    let Some(result_type) = ObjType::from_operation(&value.object_type, pointer_type.as_ref(), &op) else {
-                        return Err(CE::IncorrectTwoOper { object_type1: value.object_type, object_type2: *pointer_type.clone(), op })
-                    };
-
-                    if pointer_type.as_ref() != &value.object_type {
-                        return Err(CE::IncorrectType { got: value.object_type, expected: *pointer_type.clone()})
-                    }
-                    assert_eq!(result_type, pointer.object_type, "EqualSet should not change type");
-
-                    let pointer_value = TypedExpression::new(
-                        value.object_type.clone(),
-                        LinkedExpression::new_unary_operation(pointer.clone(), OneSidedOperation::Dereference)
-                    );
-
-                    let result_expression = TypedExpression::new(
-                        result_type,
-                        LinkedExpression::new_operation(pointer_value, value, op)
-                    );
-                    LinkedStatement::new_set_deref(pointer, result_expression)
+                    LinkedStatement::new_set(what, value, op)
                 }
                 Statement::Expression(expression) => {
                     let expression = self.parse_expression(expression)?;
@@ -208,9 +137,28 @@ impl LinkingContext<'_> {
                     }
                     LinkedStatement::Return(expression)
                 }
-                Statement::Function { .. } => return Err(CE::LocalFunctionNotSupported),
-                Statement::Struct { .. } => unimplemented!(),
-                Statement::Use { .. } => unimplemented!(),
+                Statement::DeclarationStatement { name, statement} => match statement {
+                    DeclarationStatement::VariableDeclaration { typee, value } => {
+                        let typed_expr = self.parse_expression(value)?;
+                        if let Some(typee) = typee {
+                            let object_type = self.parse_type(typee)?;
+                            if object_type != typed_expr.object_type {
+                                return Err(CE::IncorrectType { got: typed_expr.object_type, expected: object_type })
+                            }
+                        }
+                        if typed_expr.object_type.is_void() {
+                            return Err(CE::UnexpectedVoidUse)
+                        }
+
+                        let object = self.object_factory.create_object(name, typed_expr.object_type.clone(), &mut self.object_context_window);
+                        LinkedStatement::new_variable(object, typed_expr)
+                    }
+                    DeclarationStatement::Function { .. } => return Err(CE::LocalFunctionNotSupported),
+                    DeclarationStatement::Struct { .. } => unimplemented!(),
+                }
+                Statement::ComptimeStatement(statement) => match statement {
+                    ComptimeStatement::Import { .. } => unimplemented!(),
+                }
             };
             result.push(linked);
         }

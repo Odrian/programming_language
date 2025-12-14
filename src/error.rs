@@ -12,6 +12,7 @@ pub fn print_error(kind: ErrKind, error_string: &str) {
     println!("{kind}: {error_string}");
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ErrKind {
     Error,
     Warning,

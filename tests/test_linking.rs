@@ -234,7 +234,8 @@ fn test_function_with_while() {
     assert_eq!(object_factory.get_name(c_var), "c");
 
     assert_eq!(while_body.len(), 1);
-    let LinkedStatement::SetVariable { object: var2, value: value2 } = while_body.pop().unwrap() else { panic!() };
+    let LinkedStatement::SetVariable { what, value: value2, op: None } = while_body.pop().unwrap() else { panic!() };
+    let LinkedExpression::Variable(var2) = what.expr else { panic!() };
     let LinkedExpression::Variable(value2) = value2.expr else { panic!() };
     // arg = b
     // var1 = c
