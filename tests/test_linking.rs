@@ -217,7 +217,7 @@ fn test_function_with_while() {
     
     let mut body_iter = body.into_iter();
 
-    let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = body_iter.next().unwrap() else { panic!() };
+    let LinkedStatement::GlobalStatement(GlobalLinkedStatement::VariableDeclaration { object: var1, value: value1 }) = body_iter.next().unwrap() else { panic!() };
     let LinkedExpression::Variable(value1) = value1.expr else { panic!() };
 
     let LinkedStatement::While { condition, body: mut while_body } = body_iter.next().unwrap() else { panic!() };

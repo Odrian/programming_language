@@ -11,18 +11,25 @@ pub struct TypedExpression {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum GlobalLinkedStatement {
+    VariableDeclaration { object: Object, value: TypedExpression },
     Function { object: Object, args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement> },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedStatement {
-    VariableDeclaration { object: Object, value: TypedExpression },
+    GlobalStatement(GlobalLinkedStatement),
     SetVariable { what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation> },
 
     Expression(TypedExpression),
     If { condition: TypedExpression, body: Vec<Self> },
     While { condition: TypedExpression, body: Vec<Self> },
     Return(Option<TypedExpression>),
+}
+
+impl From<GlobalLinkedStatement> for LinkedStatement {
+    fn from(value: GlobalLinkedStatement) -> Self {
+        Self::GlobalStatement(value)
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -53,12 +60,12 @@ impl GlobalLinkedStatement {
     pub const fn new_function(name: Object, args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement>) -> Self {
         Self::Function { object: name, args, returns, body }
     }
-}
-
-impl LinkedStatement {
     pub const fn new_variable(object: Object, value: TypedExpression) -> Self {
         Self::VariableDeclaration { object, value }
     }
+}
+
+impl LinkedStatement {
     pub const fn new_set(what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation>) -> Self {
         Self::SetVariable { what, value, op }
     }
@@ -103,6 +110,9 @@ impl fmt::Display for GlobalLinkedStatement {
                 let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
                 write!(f, "{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
+            Self::VariableDeclaration { object, value } => {
+                write!(f, "{object} := {value}")
+            }
         }
     }
 }
@@ -110,9 +120,7 @@ impl fmt::Display for GlobalLinkedStatement {
 impl fmt::Display for LinkedStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::VariableDeclaration { object, value } => {
-                write!(f, "{object} := {value}")
-            }
+            Self::GlobalStatement(statement) => fmt::Display::fmt(&statement, f),
             Self::SetVariable { what, value, op } => {
                 match op {
                     Some(op) => write!(f, "{what} {op}= {value}"),

@@ -31,56 +31,7 @@ impl LinkingContext<'_> {
 
         for statement in statements {
             let global_statement = match statement {
-                Statement::DeclarationStatement { name, statement } => match statement {
-                    DeclarationStatement::Function { args, returns, body } => {
-                        let mut arguments_obj = Vec::with_capacity(args.len());
-                        let mut arguments_type = Vec::with_capacity(args.len());
-
-                        for (arg_name, typee) in args {
-                            let object_type = self.parse_type(typee)?;
-                            if object_type.is_void() {
-                                return Err(CE::UnexpectedVoidUse)
-                            }
-                            arguments_type.push(object_type.clone());
-                            let object = self.object_factory.create_object(arg_name, object_type, &mut self.object_context_window);
-                            arguments_obj.push(object);
-                        }
-
-                        let return_type = {
-                            match returns {
-                                Some(typee) => self.parse_type(typee)?,
-                                None => ObjType::Void,
-                            }
-                        };
-
-                        let func_type = ObjType::Function {
-                            arguments: arguments_type,
-                            returns: Box::new(return_type.clone()),
-                        };
-                        if self.object_context_window.get(&name).is_some() {
-                            return Err(CE::FunctionOverloading { function_name: name })
-                        }
-
-                        self.object_context_window.step_in();
-                        self.current_function_returns = Some(return_type.clone());
-                        let mut body = self.link_statements_recursive(body)?;
-                        self.current_function_returns = None;
-                        self.object_context_window.step_out();
-
-                        if !check_is_returns(&body) {
-                            if return_type == ObjType::Void {
-                                body.push(LinkedStatement::Return(None));
-                            } else {
-                                return Err(CE::FunctionMustReturn { function_name: name })
-                            }
-                        }
-
-                        let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
-
-                        GlobalLinkedStatement::new_function(function_object, arguments_obj, return_type, body)
-                    }
-                    _ => return Err(CE::UnexpectedGlobalStatement { statement: Statement::DeclarationStatement { name, statement }.to_string() })
-                }
+                Statement::DeclarationStatement { name, statement } => self.parse_declaration_statement(name, statement)?,
                 _ => return Err(CE::UnexpectedGlobalStatement { statement: statement.to_string() })
             };
             result.push(global_statement);
@@ -89,78 +40,129 @@ impl LinkingContext<'_> {
         Ok(result)
     }
     fn link_statements_recursive(&mut self, statements: Vec<Statement>) -> Result<Vec<LinkedStatement>, CE> {
-        let mut result = vec![];
+        let mut result = Vec::with_capacity(statements.len());
         for statement in statements {
-            let linked = match statement {
-                Statement::SetVariable { what, value, op } => {
-                    let what = self.parse_expression(what)?;
-                    let value = self.parse_expression(value)?;
-                    if what.object_type != value.object_type {
-                        return Err(CE::IncorrectType { got: value.object_type, expected: what.object_type })
-                    }
-                    LinkedStatement::new_set(what, value, op)
-                }
-                Statement::Expression(expression) => {
-                    let expression = self.parse_expression(expression)?;
-                    LinkedStatement::Expression(expression)
-                }
-                Statement::If { condition, body } => {
-                    let condition = self.parse_expression(condition)?;
-                    check_condition_type(&condition)?;
-                    self.object_context_window.step_in();
-                    let body = self.link_statements_recursive(body)?;
-                    self.object_context_window.step_out();
-                    LinkedStatement::new_if(condition, body)
-                }
-                Statement::While { condition, body } => {
-                    let condition = self.parse_expression(condition)?;
-                    check_condition_type(&condition)?;
-                    self.object_context_window.step_in();
-                    let body = self.link_statements_recursive(body)?;
-                    self.object_context_window.step_out();
-                    LinkedStatement::new_while(condition, body)
-                }
-                Statement::Return(option_expression) => {
-                    let expression = match option_expression {
-                        Some(expression) => Some(self.parse_expression(expression)?),
-                        None => None,
-                    };
-                    let expression_type = match &expression {
-                        Some(expr) => &expr.object_type,
-                        None => &ObjType::Void,
-                    };
-                    if Some(expression_type) != self.current_function_returns.as_ref() {
-                        let expected_type = self.current_function_returns.clone().unwrap_or(ObjType::Void);
-                        return Err(CE::IncorrectType { got: expression_type.clone(), expected: expected_type });
-                    }
-                    LinkedStatement::Return(expression)
-                }
-                Statement::DeclarationStatement { name, statement} => match statement {
-                    DeclarationStatement::VariableDeclaration { typee, value } => {
-                        let typed_expr = self.parse_expression(value)?;
-                        if let Some(typee) = typee {
-                            let object_type = self.parse_type(typee)?;
-                            if object_type != typed_expr.object_type {
-                                return Err(CE::IncorrectType { got: typed_expr.object_type, expected: object_type })
-                            }
-                        }
-                        if typed_expr.object_type.is_void() {
-                            return Err(CE::UnexpectedVoidUse)
-                        }
-
-                        let object = self.object_factory.create_object(name, typed_expr.object_type.clone(), &mut self.object_context_window);
-                        LinkedStatement::new_variable(object, typed_expr)
-                    }
-                    DeclarationStatement::Function { .. } => return Err(CE::LocalFunctionNotSupported),
-                    DeclarationStatement::Struct { .. } => unimplemented!(),
-                }
-                Statement::ComptimeStatement(statement) => match statement {
-                    ComptimeStatement::Import { .. } => unimplemented!(),
-                }
-            };
-            result.push(linked);
+            result.push(self.parse_statement(statement)?);
         }
         Ok(result)
+    }
+    fn parse_statement(&mut self, statement: Statement) -> Result<LinkedStatement, CE> {
+        Ok(match statement {
+            Statement::SetVariable { what, value, op } => {
+                let what = self.parse_expression(what)?;
+                let value = self.parse_expression(value)?;
+                if what.object_type != value.object_type {
+                    return Err(CE::IncorrectType { got: value.object_type, expected: what.object_type })
+                }
+                LinkedStatement::new_set(what, value, op)
+            }
+            Statement::Expression(expression) => {
+                let expression = self.parse_expression(expression)?;
+                LinkedStatement::Expression(expression)
+            }
+            Statement::If { condition, body } => {
+                let condition = self.parse_expression(condition)?;
+                check_condition_type(&condition)?;
+                self.object_context_window.step_in();
+                let body = self.link_statements_recursive(body)?;
+                self.object_context_window.step_out();
+                LinkedStatement::new_if(condition, body)
+            }
+            Statement::While { condition, body } => {
+                let condition = self.parse_expression(condition)?;
+                check_condition_type(&condition)?;
+                self.object_context_window.step_in();
+                let body = self.link_statements_recursive(body)?;
+                self.object_context_window.step_out();
+                LinkedStatement::new_while(condition, body)
+            }
+            Statement::Return(option_expression) => {
+                let expression = match option_expression {
+                    Some(expression) => Some(self.parse_expression(expression)?),
+                    None => None,
+                };
+                let expression_type = match &expression {
+                    Some(expr) => &expr.object_type,
+                    None => &ObjType::Void,
+                };
+                if Some(expression_type) != self.current_function_returns.as_ref() {
+                    let expected_type = self.current_function_returns.clone().unwrap_or(ObjType::Void);
+                    return Err(CE::IncorrectType { got: expression_type.clone(), expected: expected_type });
+                }
+                LinkedStatement::Return(expression)
+            }
+            Statement::DeclarationStatement { name, statement} => self.parse_declaration_statement(name, statement)?.into(),
+            Statement::ComptimeStatement(statement) => match statement {
+                ComptimeStatement::Import { .. } => unimplemented!(),
+            }
+        })
+    }
+    fn parse_declaration_statement(&mut self, name: String, declaration: DeclarationStatement) -> Result<GlobalLinkedStatement, CE> {
+        Ok(match declaration {
+            DeclarationStatement::VariableDeclaration { typee, value } => {
+                let typed_expr = self.parse_expression(value)?;
+                if let Some(typee) = typee {
+                    let object_type = self.parse_type(typee)?;
+                    if object_type != typed_expr.object_type {
+                        return Err(CE::IncorrectType { got: typed_expr.object_type, expected: object_type })
+                    }
+                }
+                if typed_expr.object_type.is_void() {
+                    return Err(CE::UnexpectedVoidUse)
+                }
+
+                let object = self.object_factory.create_object(name, typed_expr.object_type.clone(), &mut self.object_context_window);
+                GlobalLinkedStatement::new_variable(object, typed_expr)
+            }
+            DeclarationStatement::Function { args, returns, body } => {
+                let mut arguments_obj = Vec::with_capacity(args.len());
+                let mut arguments_type = Vec::with_capacity(args.len());
+
+                for (arg_name, typee) in args {
+                    let object_type = self.parse_type(typee)?;
+                    if object_type.is_void() {
+                        return Err(CE::UnexpectedVoidUse)
+                    }
+                    arguments_type.push(object_type.clone());
+                    let object = self.object_factory.create_object(arg_name, object_type, &mut self.object_context_window);
+                    arguments_obj.push(object);
+                }
+
+                let return_type = {
+                    match returns {
+                        Some(typee) => self.parse_type(typee)?,
+                        None => ObjType::Void,
+                    }
+                };
+
+                let func_type = ObjType::Function {
+                    arguments: arguments_type,
+                    returns: Box::new(return_type.clone()),
+                };
+                if self.object_context_window.get(&name).is_some() {
+                    return Err(CE::FunctionOverloading { function_name: name })
+                }
+
+                self.object_context_window.step_in();
+                self.current_function_returns = Some(return_type.clone());
+                let mut body = self.link_statements_recursive(body)?;
+                self.current_function_returns = None;
+                self.object_context_window.step_out();
+
+                if !check_is_returns(&body) {
+                    if return_type == ObjType::Void {
+                        body.push(LinkedStatement::Return(None));
+                    } else {
+                        return Err(CE::FunctionMustReturn { function_name: name })
+                    }
+                }
+
+                let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
+
+                GlobalLinkedStatement::new_function(function_object, arguments_obj, return_type, body)
+            }
+            DeclarationStatement::Struct { .. } => unimplemented!(),
+        })
     }
     fn parse_expression(&mut self, expression: Expression) -> Result<TypedExpression, CE> {
         let linked: TypedExpression = match expression {

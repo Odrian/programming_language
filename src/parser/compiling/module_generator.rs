@@ -96,6 +96,9 @@ mod module_parsing {
             self.context_window.step_in();
             for statement in statements {
                 match statement {
+                    GlobalLinkedStatement::VariableDeclaration { .. } => {
+                        unimplemented!("global variables not implemented")
+                    }
                     GlobalLinkedStatement::Function { .. } => {
                         self.create_function(statement)?;
                     }
@@ -219,12 +222,15 @@ mod function_parsing {
                         self.builder.build_store(pointer, rvalue)?;
                     }
                 }
-                LinkedStatement::VariableDeclaration { object, value } => {
-                    let value = self.parse_expression(value.expr)?.unwrap();
-                    let var_type = self.get_object_type(object);
-                    let pointer = self.builder.build_alloca(var_type, self.get_object_name(object).as_str())?;
-                    self.builder.build_store(pointer, value)?;
-                    self.context_window.add(object, pointer.into());
+                LinkedStatement::GlobalStatement(statement) => match statement {
+                    GlobalLinkedStatement::VariableDeclaration { object, value } => {
+                        let value = self.parse_expression(value.expr)?.unwrap();
+                        let var_type = self.get_object_type(object);
+                        let pointer = self.builder.build_alloca(var_type, self.get_object_name(object).as_str())?;
+                        self.builder.build_store(pointer, value)?;
+                        self.context_window.add(object, pointer.into());
+                    }
+                    GlobalLinkedStatement::Function { .. } => unreachable!("local functions must be moved out at linked step")
                 }
                 LinkedStatement::Return(expression) => {
                     if let Some(expression) = expression {
