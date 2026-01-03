@@ -306,7 +306,13 @@ impl TokenizeState {
             let token = if first_char.is_ascii_digit() {
                 Token::NumberLiteral(token_text)
             } else {
-                Token::String(token_text)
+                match token_text.as_str() {
+                    "return" => TokenKeyword::Return.into(),
+                    "if" => TokenKeyword::If.into(),
+                    "while" => TokenKeyword::While.into(),
+                    "import" => TokenKeyword::Import.into(),
+                    _ => Token::String(token_text)
+                }
             };
             let place_info = PositionInFile::new(self.offset_index + self.buffer_start, self.offset_index + self.buffer_end);
             self.tokens

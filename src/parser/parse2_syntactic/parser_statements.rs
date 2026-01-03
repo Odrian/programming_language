@@ -49,44 +49,43 @@ impl ParsingState {
     fn parse_statement(&mut self) -> Result<Statement, CE> {
         let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
         match token {
-            Token::String(_) => {
-                let Token::String(string) = token else { unreachable!() };
+            Token::Keyword(keyword) => match keyword {
+                TokenKeyword::If | TokenKeyword::While => {
+                    let condition = self.parse_expression(position)?;
 
-                match string.as_str() {
-                    "if" | "while" => {
-                        let condition = self.parse_expression(position)?;
+                    let Some(TokenWithPos { token, position }) = self.next() else {
+                        return Err(CE::SyntacticsError(position, format!("expected {keyword:?} body after that")));
+                    };
 
-                        let Some(TokenWithPos { token, position }) = self.next() else {
-                            return Err(CE::SyntacticsError(position, format!("expected {string} body after that")));
-                        };
+                    let Token::Bracket(vec, BracketType::Curly) = token else {
+                        return Err(CE::SyntacticsError(position, format!("expected {keyword:?} body")))
+                    };
+                    let body = ParsingState::new(vec).parse_statements()?;
 
-                        let Token::Bracket(vec, BracketType::Curly) = token else {
-                            return Err(CE::SyntacticsError(position, format!("expected {string} body")))
-                        };
-                        let body = ParsingState::new(vec).parse_statements()?;
-
-                        if string.as_str() == "if" {
-                            Ok(Statement::new_if(condition, body))
-                        } else {
-                            Ok(Statement::new_while(condition, body))
-                        }
-                    }
-                    "return" => {
-                        let peek_token = self.peek();
-                        if peek_token.is_none() {
-                            Ok(Statement::Return(None))
-                        } else if let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = peek_token {
-                            Ok(Statement::Return(None))
-                        } else {
-                            let expression = self.parse_expression(position)?;
-                            Ok(Statement::Return(Some(expression)))
-                        }
-                    }
-                    "import" => self.parse_import(position),
-                    _ => {
-                        self.parse_statement2(string, position)
+                    if keyword == TokenKeyword::If {
+                        Ok(Statement::new_if(condition, body))
+                    } else {
+                        Ok(Statement::new_while(condition, body))
                     }
                 }
+                TokenKeyword::Return => {
+                    let peek_token = self.peek();
+                    if peek_token.is_none() {
+                        Ok(Statement::Return(None))
+                    } else if let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = peek_token {
+                        Ok(Statement::Return(None))
+                    } else {
+                        let expression = self.parse_expression(position)?;
+                        Ok(Statement::Return(Some(expression)))
+                    }
+                }
+                TokenKeyword::Import => {
+                    self.parse_import(position)
+                }
+            },
+            Token::String(_) => {
+                let Token::String(string) = token else { unreachable!() };
+                self.parse_statement2(string, position)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
                 let left_expression = self.parse_expression_without_ops(position, true)?;

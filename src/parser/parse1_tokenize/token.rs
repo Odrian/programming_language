@@ -14,6 +14,7 @@ impl TokenWithPos {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
+    Keyword(TokenKeyword),
     String(String),             // any String
     NumberLiteral(String),      // any String starting with a digit
     Semicolon,                  // ;
@@ -31,12 +32,25 @@ pub enum Token {
     DoubleQuotes(String),
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum TokenKeyword {
+    If, While,
+    Return,
+    Import
+}
+
 /// `TwoSidedOperation` must not change type
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum EqualOperation {
     Equal,                      // =
     ColonEqual,                 // :=
     OperationEqual(TwoSidedOperation), // _=
+}
+
+impl From<TokenKeyword> for Token {
+    fn from(value: TokenKeyword) -> Self {
+        Self::Keyword(value)
+    }
 }
 
 impl From<EqualOperation> for Token {
