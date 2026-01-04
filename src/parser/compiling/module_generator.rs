@@ -253,6 +253,7 @@ mod function_parsing {
             }
         }
 
+        /// get pointer to local object or None
         fn get_pointer(&self, expression: &LinkedExpression) -> Result<Option<PointerValue<'ctx>>, CE> {
             match expression {
                 LinkedExpression::RoundBracket(exp) => self.get_pointer(&exp.expr),

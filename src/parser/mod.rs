@@ -36,6 +36,7 @@ pub fn parse_to_statements(args: &Args, tree: &mut ModuleTree, module_id: Module
             .map(|t| format!("{:#?}", t.token))
             .collect::<Vec<_>>().join("\n");
 
+        fs::create_dir_all(ARTIFACT_DIR).unwrap();
         let filepath = format!("{ARTIFACT_DIR}/{filename}_tokens.txt");
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
@@ -52,6 +53,7 @@ pub fn parse_to_statements(args: &Args, tree: &mut ModuleTree, module_id: Module
     if args.write_unlinked_syntactic_tree_to_file {
         let text = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
 
+        fs::create_dir_all(ARTIFACT_DIR).unwrap();
         let filepath = format!("{ARTIFACT_DIR}/{filename}_unlinked_AST.txt");
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {
@@ -72,6 +74,7 @@ pub fn parse_statements_single_file(args: &Args, filename: &str, statements: Vec
     if args.write_syntactic_tree_to_file {
         let text = linked_statement.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
 
+        fs::create_dir_all(ARTIFACT_DIR).unwrap();
         let filepath = format!("{ARTIFACT_DIR}/{filename}_AST.txt");
         let write_result = fs::write(&filepath, text);
         if let Err(err) = write_result {

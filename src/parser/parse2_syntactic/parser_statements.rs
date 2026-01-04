@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use crate::error::CompilationError as CE;
 use crate::parser::{BracketType, PositionInFile};
 
-use crate::parser::operations::{NumberOperation, OneSidedOperation, TwoSidedOperation};
+use crate::parser::operations::{BoolOperation, NumberOperation, OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse1_tokenize::token::*;
 use super::statement::*;
 
@@ -282,7 +282,7 @@ impl ParsingState {
 
             let Some(TokenWithPos { token, position: position2 }) = self.next() else { unreachable!() };
             let Token::Operation(op) = token else {
-                return Err(CE::SyntacticsError(position2, "expected expression".to_owned()))
+                return Err(CE::SyntacticsError(position2, format!("expected operation, got {token:?}")))
             };
             position = position2;
             operations.push(op);
@@ -355,6 +355,14 @@ impl ParsingState {
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 Ok(self.parse_expression2_without_ops(unary_expression, false)?)
             }
+            Token::Operation(TwoSidedOperation::Bool(BoolOperation::And)) => {
+                let op = OneSidedOperation::GetReference;
+                let expression = self.parse_expression_without_ops(position, true)?;
+
+                let unary_expression = Expression::new_unary_operation(expression, op);
+                let unary_expression2 = Expression::new_unary_operation(unary_expression, op);
+                Ok(self.parse_expression2_without_ops(unary_expression2, false)?)
+            }
             Token::UnaryOperation(op) => { // `unary`..
                 let expression = self.parse_expression_without_ops(position, true)?;
                 let unary_expression = Expression::new_unary_operation(expression, op);
@@ -369,7 +377,7 @@ impl ParsingState {
                 unimplemented!("string literal")
             }
             _ => {
-                Err(CE::SyntacticsError(position, "expected expression".to_owned()))
+                Err(CE::SyntacticsError(position, format!("expected expression, got {token:?}")))
             }
         }
     }

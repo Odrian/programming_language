@@ -15,6 +15,20 @@ y := &x;
 x = 5;
 return *y;
 "));
+
+    assert_eq!(5, get_exit_code_main("\
+x := 3;
+y := &&&&&x;
+x = 5;
+return *****y;
+"));
+    assert_eq!(5, get_exit_code_main("\
+x := 123;
+y := 5;
+z := &&x;
+*z = &y;
+return **z;
+"));
 }
 
 #[test]
