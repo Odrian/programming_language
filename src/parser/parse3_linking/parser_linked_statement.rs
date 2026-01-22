@@ -1,43 +1,131 @@
+use super::context_window::ObjectContextWindow;
+use super::linked_statement::*;
+use super::object::{FloatObjType, IntObjType, ObjType, Object};
 use crate::error::CompilationError as CE;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse2_syntactic::statement::*;
-use super::linked_statement::*;
-use super::object::{ObjectFactory, ObjType, FloatObjType, IntObjType};
-use super::context_window::ObjectContextWindow;
+use crate::parser::parse3_linking::TypeContext;
 
-pub fn link_names(statement: Vec<Statement>, object_factory: &mut ObjectFactory) -> Result<Vec<GlobalLinkedStatement>, CE> {
-    let mut context = LinkingContext::new(object_factory);
-    context.link_global_statements(statement)
+pub fn link_objects(context: &mut TypeContext) -> Result<(), CE> {
+    let declarations = std::mem::take(&mut context.function_statement);
+
+    let mut linking_context = FunctionLinkingContext::new(context);
+
+    for (&object, statement) in &declarations {
+        linking_context.prelink_global_statement(object, statement)?;
+    }
+    for (object, statement) in declarations {
+        linking_context.link_global_statement(object, statement)?;
+    }
+    Ok(())
 }
 
-struct LinkingContext<'factory> {
+struct FunctionLinkingContext<'factory> {
     object_context_window: ObjectContextWindow,
-    object_factory: &'factory mut ObjectFactory,
+    context: &'factory mut TypeContext,
     current_function_returns: Option<ObjType>,
 }
-impl<'factory> LinkingContext<'factory> {
-    fn new(object_factory: &'factory mut ObjectFactory) -> Self {
+
+impl<'factory> FunctionLinkingContext<'factory> {
+    fn new(context: &'factory mut TypeContext) -> Self {
         Self {
-            object_context_window: ObjectContextWindow::new(),
-            object_factory,
+            object_context_window: ObjectContextWindow::new(context.available_names.clone()),
+            context,
             current_function_returns: None,
         }
     }
 }
 
-impl LinkingContext<'_> {
-    fn link_global_statements(&mut self, statements: Vec<Statement>) -> Result<Vec<GlobalLinkedStatement>, CE> {
-        let mut result = vec![];
-
-        for statement in statements {
-            let global_statement = match statement {
-                Statement::DeclarationStatement { name, statement } => self.parse_declaration_statement(name, statement)?,
-                _ => return Err(CE::UnexpectedGlobalStatement { statement: statement.to_string() })
-            };
-            result.push(global_statement);
+impl FunctionLinkingContext<'_> {
+    fn prelink_global_statement(&mut self, object: Object, statement: &Statement) -> Result<(), CE> {
+        match statement {
+            Statement::DeclarationStatement { name, statement } => {
+                match &statement {
+                    DeclarationStatement::VariableDeclaration { .. } => self.prelink_global_variable(object, name, statement),
+                    DeclarationStatement::Function { .. } => self.prelink_global_function(object, name, statement),
+                    DeclarationStatement::Struct { .. } => unreachable!(),
+                }
+            },
+            _ => return Err(CE::UnexpectedGlobalStatement { statement: statement.to_string() })
+        }
+    }
+    fn link_global_statement(&mut self, object: Object, statement: Statement) -> Result<(), CE> {
+        match statement {
+            Statement::DeclarationStatement { name, statement } => {
+                match &statement {
+                    DeclarationStatement::VariableDeclaration { .. } => self.parse_global_variable(object, name, statement),
+                    DeclarationStatement::Function { .. } => self.parse_global_function(object, name, statement),
+                    DeclarationStatement::Struct { .. } => unreachable!(),
+                }
+            },
+            _ => return Err(CE::UnexpectedGlobalStatement { statement: statement.to_string() })
+        }
+    }
+    fn prelink_global_variable(&mut self, object: Object, name: &String, declaration: &DeclarationStatement) -> Result<(), CE> {
+        unimplemented!()
+    }
+    fn parse_global_variable(&mut self, object: Object, name: String, declaration: DeclarationStatement) -> Result<(), CE> {
+        unimplemented!()
+    }
+    fn prelink_global_function(&mut self, object: Object, name: &String, declaration: &DeclarationStatement) -> Result<(), CE> {
+        let DeclarationStatement::Function { args, returns, body: _ } = declaration else { unreachable!() };
+        let mut arguments_type = Vec::with_capacity(args.len());
+        for (_, typee) in args {
+            let object_type = self.parse_type(typee.clone())?;
+            if object_type.is_void() {
+                return Err(CE::UnexpectedVoidUse)
+            }
+            arguments_type.push(object_type);
         }
 
-        Ok(result)
+        let return_type = {
+            match returns.clone() {
+                Some(typee) => self.parse_type(typee)?,
+                None => ObjType::Void,
+            }
+        };
+
+        let func_type = ObjType::Function {
+            arguments: arguments_type,
+            returns: Box::new(return_type.clone()),
+        };
+        *self.context.factory.get_type_mut(object) = func_type;
+        self.object_context_window.add(name.clone(), object);
+
+        Ok(())
+    }
+    fn parse_global_function(&mut self, object: Object, name: String, declaration: DeclarationStatement) -> Result<(), CE> {
+        let DeclarationStatement::Function { args, returns: _, body } = declaration else { unreachable!() };
+        let mut arguments_obj = Vec::with_capacity(args.len());
+
+        let func_type = self.context.factory.get_type(object).clone();
+        let ObjType::Function { arguments, returns: return_type } = func_type else { unreachable!() };
+        let return_type = *return_type;
+
+        for (arg_name, _) in args {
+            let object_type = arguments[arguments_obj.len()].clone();
+            let object = self.context.factory.create_object(arg_name.clone(), object_type);
+            self.object_context_window.add(arg_name, object);
+            arguments_obj.push(object);
+        }
+
+        self.object_context_window.step_in();
+        self.current_function_returns = Some(return_type.clone());
+        let mut body = self.link_statements_recursive(body)?;
+        self.current_function_returns = None;
+        self.object_context_window.step_out();
+
+        if !check_is_returns(&body) {
+            if return_type == ObjType::Void {
+                body.push(LinkedStatement::Return(None));
+            } else {
+                return Err(CE::FunctionMustReturn { function_name: name })
+            }
+        }
+
+        let linked_statement = GlobalLinkedStatement::new_function(arguments_obj, return_type, body);
+        self.context.result.function_statement.insert(object, linked_statement);
+        Ok(())
     }
     fn link_statements_recursive(&mut self, statements: Vec<Statement>) -> Result<Vec<LinkedStatement>, CE> {
         let mut result = Vec::with_capacity(statements.len());
@@ -91,78 +179,33 @@ impl LinkingContext<'_> {
                 }
                 LinkedStatement::Return(expression)
             }
-            Statement::DeclarationStatement { name, statement} => self.parse_declaration_statement(name, statement)?.into(),
+            Statement::DeclarationStatement { name, statement} => match &statement {
+                DeclarationStatement::VariableDeclaration { .. } => {
+                    self.parse_variable_declaration(name, statement)?.into()
+                },
+                DeclarationStatement::Function { .. } | DeclarationStatement::Struct { .. } => unreachable!(),
+            },
             Statement::ComptimeStatement(statement) => match statement {
                 ComptimeStatement::Import { .. } => unimplemented!(),
             }
         })
     }
-    fn parse_declaration_statement(&mut self, name: String, declaration: DeclarationStatement) -> Result<GlobalLinkedStatement, CE> {
-        Ok(match declaration {
-            DeclarationStatement::VariableDeclaration { typee, value } => {
-                let typed_expr = self.parse_expression(value)?;
-                if let Some(typee) = typee {
-                    let object_type = self.parse_type(typee)?;
-                    if object_type != typed_expr.object_type {
-                        return Err(CE::IncorrectType { got: typed_expr.object_type, expected: object_type })
-                    }
-                }
-                if typed_expr.object_type.is_void() {
-                    return Err(CE::UnexpectedVoidUse)
-                }
-
-                let object = self.object_factory.create_object(name, typed_expr.object_type.clone(), &mut self.object_context_window);
-                GlobalLinkedStatement::new_variable(object, typed_expr)
+    fn parse_variable_declaration(&mut self, name: String, declaration: DeclarationStatement) -> Result<LinkedStatement, CE> {
+        let DeclarationStatement::VariableDeclaration { typee, value } = declaration else { unreachable!() };
+        let typed_expr = self.parse_expression(value)?;
+        if let Some(typee) = typee {
+            let object_type = self.parse_type(typee)?;
+            if object_type != typed_expr.object_type {
+                return Err(CE::IncorrectType { got: typed_expr.object_type, expected: object_type })
             }
-            DeclarationStatement::Function { args, returns, body } => {
-                let mut arguments_obj = Vec::with_capacity(args.len());
-                let mut arguments_type = Vec::with_capacity(args.len());
+        }
+        if typed_expr.object_type.is_void() {
+            return Err(CE::UnexpectedVoidUse)
+        }
 
-                for (arg_name, typee) in args {
-                    let object_type = self.parse_type(typee)?;
-                    if object_type.is_void() {
-                        return Err(CE::UnexpectedVoidUse)
-                    }
-                    arguments_type.push(object_type.clone());
-                    let object = self.object_factory.create_object(arg_name, object_type, &mut self.object_context_window);
-                    arguments_obj.push(object);
-                }
-
-                let return_type = {
-                    match returns {
-                        Some(typee) => self.parse_type(typee)?,
-                        None => ObjType::Void,
-                    }
-                };
-
-                let func_type = ObjType::Function {
-                    arguments: arguments_type,
-                    returns: Box::new(return_type.clone()),
-                };
-                if self.object_context_window.get(&name).is_some() {
-                    return Err(CE::FunctionOverloading { function_name: name })
-                }
-
-                self.object_context_window.step_in();
-                self.current_function_returns = Some(return_type.clone());
-                let mut body = self.link_statements_recursive(body)?;
-                self.current_function_returns = None;
-                self.object_context_window.step_out();
-
-                if !check_is_returns(&body) {
-                    if return_type == ObjType::Void {
-                        body.push(LinkedStatement::Return(None));
-                    } else {
-                        return Err(CE::FunctionMustReturn { function_name: name })
-                    }
-                }
-
-                let function_object = self.object_factory.create_object(name, func_type, &mut self.object_context_window);
-
-                GlobalLinkedStatement::new_function(function_object, arguments_obj, return_type, body)
-            }
-            DeclarationStatement::Struct { .. } => unimplemented!(),
-        })
+        let object = self.context.factory.create_object(name.clone(), typed_expr.object_type.clone());
+        self.object_context_window.add(name, object);
+        Ok(LinkedStatement::new_variable(object, typed_expr))
     }
     fn parse_expression(&mut self, expression: Expression) -> Result<TypedExpression, CE> {
         let linked: TypedExpression = match expression {
@@ -222,22 +265,22 @@ impl LinkingContext<'_> {
             }
             Expression::Variable(name) => {
                 let object = self.object_context_window.get_or_error(&name)?;
-                if matches!(self.object_factory.get_type(object), ObjType::Function { .. }) {
+                if matches!(self.context.factory.get_type(object), ObjType::Function { .. }) {
                     return Err(CE::LinkingErrorFunctionUsage { name });
                 }
                 TypedExpression::new(
-                    self.object_factory.get_type(object).clone(),
+                    self.context.factory.get_type(object).clone(),
                     LinkedExpression::Variable(object)
                 )
             },
             Expression::FunctionCall { object: name, args: args_values } => {
                 let object = self.object_context_window.get_or_error(&name)?;
-                let ObjType::Function { arguments, returns } = self.object_factory.get_type(object).clone() else {
+                let ObjType::Function { arguments, returns } = self.context.factory.get_type(object).clone() else {
                     let context = format!("{:?}", self.object_context_window);
                     return Err(CE::LinkingError { name, context });
                 };
                 if args_values.len() != arguments.len() {
-                    let function_name = self.object_factory.get_name(object).clone();
+                    let function_name = self.context.factory.get_name(object).clone();
                     return Err(CE::IncorrectArgumentCount { function_name, argument_need: arguments.len(), argument_got: args_values.len() });
                 }
                 let args = args_values.into_iter().map(|x| self.parse_expression(x)).collect::<Result<Vec<_>, _>>()?;
@@ -352,6 +395,7 @@ impl ObjType {
             return from == &Self::Integer(IntObjType::U8)
         }
         match from {
+            Self::Unknown => false,
             Self::Char => matches!(other, Self::Integer(_)),
             Self::Float(_) => matches!(other, Self::Float(_)),
             Self::Integer(from) => {

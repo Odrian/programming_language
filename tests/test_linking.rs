@@ -1,15 +1,19 @@
+use clap::builder::OsStr;
+use clap::Parser;
 use programming_language::error::CResult;
-use programming_language::parser::*;
+use programming_language::parser::operations::*;
 use programming_language::parser::parse3_linking::linked_statement::*;
 use programming_language::parser::parse3_linking::object::*;
-use programming_language::parser::operations::*;
+use programming_language::parser::parse3_linking::LinkedProgram;
+use programming_language::parser::*;
+use programming_language::Args;
 
-fn parse(text: &str) -> CResult<(Vec<GlobalLinkedStatement>, ObjectFactory)> {
+fn parse(text: &str) -> CResult<LinkedProgram> {
     let tokens = parse1_tokenize::tokenize(&text)?;
     let statements = parse2_syntactic::parse_statements(tokens)?;
-    let mut object_factory = ObjectFactory::default();
-    let linked_statements = parse3_linking::link_variables(statements, &mut object_factory)?;
-    Ok((linked_statements, object_factory))
+    let args = Args::parse_from([&OsStr::from("test_binary.exe"), &OsStr::from("test.exe")]);
+    let linked_program = parse3_linking::link_all(&args, statements)?;
+    Ok(linked_program)
 }
 fn assert_has_error_global(str: &str) {
     assert_ne!(parse(str).err(), None);
@@ -197,15 +201,15 @@ fn test_function_with_while() {
 
     let text = "a :: (b: i32) -> i32 { c := b; while c != 0 { c = b } return c }";
     let result = parse(text);
-    let Ok((mut statements, object_factory)) = result else {
+    let Ok(linked_program) = result else {
         panic!("parsing error");
     };
-    assert_eq!(statements.len(), 1);
-    let GlobalLinkedStatement::Function { object: function_object, args, returns, body } = statements.pop().unwrap() else { panic!() };
+    assert_eq!(linked_program.function_statement.len(), 1);
+    let (function_object, GlobalLinkedStatement::Function { args, returns, body }) = linked_program.function_statement.into_iter().next().unwrap() else { panic!() };
 
     assert!(matches!(returns, ObjType::DEFAULT_INTEGER), "{returns:?}");
 
-    let function_type = object_factory.get_type(function_object);
+    let function_type = linked_program.factory.get_type(function_object);
     assert!(matches!(function_type, ObjType::Function { .. }));
     let ObjType::Function { arguments, returns } = function_type else { unreachable!() };
     assert_eq!(arguments, &vec![ObjType::DEFAULT_INTEGER]);
@@ -217,7 +221,7 @@ fn test_function_with_while() {
     
     let mut body_iter = body.into_iter();
 
-    let LinkedStatement::GlobalStatement(GlobalLinkedStatement::VariableDeclaration { object: var1, value: value1 }) = body_iter.next().unwrap() else { panic!() };
+    let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = body_iter.next().unwrap() else { panic!() };
     let LinkedExpression::Variable(value1) = value1.expr else { panic!() };
 
     let LinkedStatement::While { condition, body: mut while_body } = body_iter.next().unwrap() else { panic!() };
@@ -231,7 +235,7 @@ fn test_function_with_while() {
 
     let LinkedStatement::Return(option_return) = body_iter.next().unwrap() else { panic!() };
     let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().expr else { panic!() };
-    assert_eq!(object_factory.get_name(c_var), "c");
+    assert_eq!(linked_program.factory.get_name(c_var), "c");
 
     assert_eq!(while_body.len(), 1);
     let LinkedStatement::SetVariable { what, value: value2, op: None } = while_body.pop().unwrap() else { panic!() };
@@ -263,7 +267,8 @@ fn test_function_call() {
 
     assert_has_error_global("a :: (0) {}");
     assert_has_error_global("a :: (0: i32) {}");
-    assert_has_error_global("b :: () { a() }    a :: () {}");
+
+    assert_no_error_global("b :: () { a() }    a :: () {}");
 
     assert_has_error_global(&cover("a :: () {}", "a(0)"));
     assert_has_error_global(&cover("a :: (ar1: i32) {}", "a()"));

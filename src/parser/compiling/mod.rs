@@ -9,19 +9,20 @@ use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, I
 use crate::error::CompilationError as CE;
 use crate::Args;
 use crate::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
-use crate::parser::parse3_linking::object::{IntObjType, ObjType, ObjectFactory};
+use crate::parser::parse3_linking::LinkedProgram;
+use crate::parser::parse3_linking::object::{IntObjType, ObjType};
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(args: &Args, statements: Vec<GlobalLinkedStatement>, object_factory: &ObjectFactory) -> Result<(), CE> {
+pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), CE> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
-    verify_main_signature(&statements, object_factory)?;
+    verify_main_signature(&linked_program)?;
 
     let target_machine = create_target_machine(args);
     let target_data = target_machine.get_target_data();
 
-    let module = module_generator::parse_module(&context, &target_data, statements, object_factory)?;
+    let module = module_generator::parse_module(&context, &target_data, linked_program)?;
     module.set_triple(&target_machine.get_triple());
 
     if let Err(err) = module.verify() {
@@ -32,10 +33,10 @@ pub fn parse_to_llvm(args: &Args, statements: Vec<GlobalLinkedStatement>, object
     Ok(())
 }
 
-fn verify_main_signature(statements: &[GlobalLinkedStatement], object_factory: &ObjectFactory) -> Result<(), CE> {
-    for statement in statements {
-        if let GlobalLinkedStatement::Function { object, returns, args, body: _body } = statement {
-            if object_factory.get_name(*object) == "main" {
+fn verify_main_signature(linked_program: &LinkedProgram) -> Result<(), CE> {
+    for (object, statement) in &linked_program.function_statement {
+        if let GlobalLinkedStatement::Function { returns, args, body: _body } = statement {
+            if linked_program.factory.get_name(*object) == "main" {
                 if returns != &ObjType::Integer(IntObjType::I32) {
                     return Err(CE::IncorrectMainSignature)
                 }

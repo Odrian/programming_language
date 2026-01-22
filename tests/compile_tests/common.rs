@@ -4,7 +4,6 @@ use clap::Parser;
 use programming_language::Args;
 use programming_language::error::CResult;
 
-use programming_language::module_tree::ModuleTree;
 use tempfile;
 
 pub fn run_code(text: &str) -> CResult<i32> {
@@ -19,8 +18,7 @@ pub fn run_code(text: &str) -> CResult<i32> {
     let out_path = temp_dir.path().join(name);
 
     let args = Args::parse_from([&OsStr::from("binary.exe"), out_path.as_os_str()]);
-    let mut module_tree = ModuleTree::new();
-    let result = programming_language::compile_src(&args, &mut module_tree, src_path);
+    let result = programming_language::compile_src(&args, src_path);
     
     match result {
         Ok(()) => {

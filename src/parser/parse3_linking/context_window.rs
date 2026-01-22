@@ -20,8 +20,8 @@ pub struct ObjectContextWindow {
 }
 
 impl ObjectContextWindow {
-    pub fn new() -> Self {
-        Self { contexts: vec![ObjectsContext::default()] }
+    pub fn new(global_context: HashMap<String, Object>) -> Self {
+        Self { contexts: vec![ObjectsContext(global_context)]}
     }
     pub fn step_in(&mut self) {
         self.contexts.push(ObjectsContext::default());

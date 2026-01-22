@@ -1,5 +1,7 @@
-use std::collections::HashMap;
+/*use std::collections::HashMap;
 use std::path::PathBuf;
+use crate::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
+use crate::parser::parse3_linking::object::Object;
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone)]
 pub struct ModuleId {
@@ -9,14 +11,33 @@ pub struct ModuleId {
 pub struct ModuleMetadata {
     pub name: String,
     pub is_file: bool, // TODO: maybe use module system from rust
+    pub declarations: HashMap<Object, GlobalLinkedStatement>,
 }
+
+impl ModuleMetadata {
+    pub fn new(name: String, is_file: bool) -> Self {
+        Self {
+            name, is_file,
+            declarations: HashMap::new(),
+        }
+    }
+}
+
+pub enum RootState {
+    Done,
+    Current,
+    Waiting,
+    NotUsed,
+}
+
 pub struct RootMetadata {
-    pub path: PathBuf
+    pub path: PathBuf,
+    pub state: RootState,
 }
 
 struct Node {
     parent: Option<ModuleId>,
-    metadata: ModuleMetadata,
+    pub metadata: ModuleMetadata,
     childs: HashMap<String, ModuleId>,
 }
 impl Node {
@@ -46,7 +67,7 @@ impl ModuleTree {
     fn get_node(&self, module_id: ModuleId) -> &Node {
         &self.nodes[module_id.id as usize]
     }
-    fn get_node_mut(&mut self, module_id: ModuleId) -> &mut Node {
+    pub fn get_node_mut(&mut self, module_id: ModuleId) -> &mut Node {
         &mut self.nodes[module_id.id as usize]
     }
     pub fn get_root(&self, string: &str) -> Option<&(ModuleId, RootMetadata)> {
@@ -91,3 +112,4 @@ impl ModuleTree {
         path
     }
 }
+*/

@@ -11,13 +11,15 @@ pub struct TypedExpression {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum GlobalLinkedStatement {
-    VariableDeclaration { object: Object, value: TypedExpression },
-    Function { object: Object, args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement> },
+    VariableDeclaration { value: TypedExpression },
+    Function { args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement> },
+    Struct { fields: Vec<(String, ObjType)> }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedStatement {
     GlobalStatement(GlobalLinkedStatement),
+    VariableDeclaration { object: Object, value: TypedExpression },
     SetVariable { what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation> },
 
     Expression(TypedExpression),
@@ -57,15 +59,21 @@ impl TypedExpression {
 }
 
 impl GlobalLinkedStatement {
-    pub const fn new_function(name: Object, args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement>) -> Self {
-        Self::Function { object: name, args, returns, body }
+    pub const fn new_struct(fields: Vec<(String, ObjType)>) -> Self {
+        Self::Struct { fields }
     }
-    pub const fn new_variable(object: Object, value: TypedExpression) -> Self {
-        Self::VariableDeclaration { object, value }
+    pub const fn new_function(args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement>) -> Self {
+        Self::Function { args, returns, body }
+    }
+    pub const fn new_variable(value: TypedExpression) -> Self {
+        Self::VariableDeclaration { value }
     }
 }
 
 impl LinkedStatement {
+    pub const fn new_variable(object: Object, value: TypedExpression) -> Self {
+        Self::VariableDeclaration { object, value }
+    }
     pub const fn new_set(what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation>) -> Self {
         Self::SetVariable { what, value, op }
     }
@@ -105,13 +113,20 @@ fn to_string_with_tabs<T: ToString>(statements: &[T]) -> String {
 impl fmt::Display for GlobalLinkedStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Function { object, args, returns, body } => {
+            Self::Struct { fields } => {
+                let fields = fields.iter().map(|(name, typee)| {
+                    format!("{name}: {typee}")
+                }).collect::<Vec<_>>().join(", ");
+
+                write!(f, "object :: struct {{ ({fields}) }}")
+            }
+            Self::Function { args, returns, body } => {
                 let inside = to_string_with_tabs(body);
                 let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
-                write!(f, "{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
+                write!(f, "object :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
-            Self::VariableDeclaration { object, value } => {
-                write!(f, "{object} := {value}")
+            Self::VariableDeclaration { value } => {
+                write!(f, "object := {value}")
             }
         }
     }
@@ -121,6 +136,9 @@ impl fmt::Display for LinkedStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::GlobalStatement(statement) => fmt::Display::fmt(&statement, f),
+            Self::VariableDeclaration { object, value } => {
+                write!(f, "{object} := {value}")
+            }
             Self::SetVariable { what, value, op } => {
                 match op {
                     Some(op) => write!(f, "{what} {op}= {value}"),
@@ -181,6 +199,7 @@ impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
             Self::Reference(object_type) => &format!("*{object_type}"),
+            Self::Unknown => "unknown",
             Self::Void => "void",
             Self::Char => "char",
             Self::Integer(int) => match int {

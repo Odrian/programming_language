@@ -1,4 +1,4 @@
-use crate::module_tree::ModuleId;
+/*use crate::module_tree::ModuleId;
 
 pub struct FileSpan {
     start: u32,
@@ -10,3 +10,4 @@ impl FileSpan {
         Self { module_id, start, length }
     }
 }
+*/

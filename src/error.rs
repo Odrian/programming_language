@@ -5,6 +5,19 @@ use crate::parser::parse3_linking::object::ObjType;
 
 use inkwell::builder::BuilderError;
 
+// enum FilePath {
+//     ReadFile(String),
+//     TestFile,
+// }
+// impl Display for FilePath {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Self::ReadFile(file) => write!(f, "{file}"),
+//             Self::TestFile => write!(f, "TEST_FILE"),
+//         }
+//     }
+// }
+
 pub type CResult<T> = Result<T, ()>;
 
 pub fn print_error(kind: ErrKind, error_string: &str) {
@@ -43,6 +56,7 @@ pub enum CompilationError {
     UnexpectedGlobalStatement { statement: String },
     IncorrectUseStatement(PositionInFile),
     LocalFunctionNotSupported,
+    LocalStructNotSupported,
     FunctionMustReturn { function_name: String },
     NoMainFunction,
     IncorrectMainSignature,
@@ -104,6 +118,9 @@ impl fmt::Display for CompilationError {
             }
             Self::LocalFunctionNotSupported => {
                 write!(f, "Error: local functions not supported")
+            }
+            Self::LocalStructNotSupported => {
+                write!(f, "Error: local struct not supported")
             }
             Self::FunctionMustReturn { function_name } => {
                 write!(f, "Error: function {function_name} may not return")

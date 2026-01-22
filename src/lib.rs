@@ -5,13 +5,10 @@ pub mod module_tree;
 pub mod error;
 pub mod io_error;
 
-use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 use clap::Parser;
 use error::CResult;
-use crate::module_tree::{ModuleId, ModuleMetadata, ModuleTree, RootMetadata};
-use crate::parser::{parse_statements_single_file, parse_to_statements};
+use crate::parser::parse_to_exe;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -33,31 +30,15 @@ pub struct Args {
     pub create_object: bool,
 }
 
-const SOURCE_ROOT_NAME: &str = "crete";
+pub fn compile_src(args: &Args, path: PathBuf) -> CResult<()> {
+    let file_path = path.join("main.txt");
 
-pub fn compile_src(args: &Args, tree: &mut ModuleTree, path: PathBuf) -> CResult<()> {
-    let name = SOURCE_ROOT_NAME.to_owned();
-    let metadata = RootMetadata { path };
-    compile_root_module(args, tree, name, metadata)
-}
-
-pub fn compile_root_module(args: &Args, tree: &mut ModuleTree, name: String, metadata: RootMetadata) -> CResult<()> {
-    let files = parse_root_module(tree, name, metadata);
-
-    let mut statements = HashMap::new();
-    for &file_id in &files {
-        let file_statements = parse_to_statements(args, tree, file_id)?;
-        statements.insert(file_id, file_statements);
-    }
-
-    if files.len() != 1 { unimplemented!("can't parse multiple files") }
-    for file_id in files {
-        parse_statements_single_file(args, &tree.get_metadata(file_id).name, statements.remove(&file_id).unwrap())?;
-    }
+    parse_to_exe(args, file_path)?;
 
     Ok(())
 }
 
+/*
 /// @returns Vec<ModuleId> of files
 fn parse_root_module(tree: &mut ModuleTree, name: String, metadata: RootMetadata) -> Vec<ModuleId> {
     let path = metadata.path.clone();
@@ -85,3 +66,5 @@ fn parse_module(tree: &mut ModuleTree, module_id: ModuleId, path: PathBuf) -> Ve
         vec![]
     }).collect()
 }
+
+ */

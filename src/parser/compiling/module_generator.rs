@@ -10,27 +10,28 @@ use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, Poi
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType};
+use crate::parser::parse3_linking::LinkedProgram;
 
 pub fn parse_module<'ctx>(
     context: &'ctx Context, target_data: &'ctx TargetData,
-    statements: Vec<GlobalLinkedStatement>, object_factory: &ObjectFactory
+    linked_program: LinkedProgram
 ) -> Result<Module<'ctx>, CE> {
-    let mut code_module_gen = CodeModuleGen::new(context, target_data, object_factory, "main_module");
-    code_module_gen.parse_module(statements)?;
+    let mut code_module_gen = CodeModuleGen::new(context, target_data, linked_program, "main_module");
+    code_module_gen.parse_module()?;
     Ok(code_module_gen.module)
 }
 
-struct CodeModuleGen<'ctx, 'factory> {
+struct CodeModuleGen<'ctx> {
     context: &'ctx Context,
     target_data: &'ctx TargetData,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
-    object_factory: &'factory ObjectFactory,
+    linked_program: LinkedProgram,
     current_function: Option<FunctionValue<'ctx>>,
     context_window: ValueContextWindow<'ctx>,
 }
-impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
-    fn new(context: &'ctx Context, target_data: &'ctx TargetData, object_factory: &'factory ObjectFactory, name: &str) -> Self {
+impl<'ctx> CodeModuleGen<'ctx> {
+    fn new(context: &'ctx Context, target_data: &'ctx TargetData, linked_program: LinkedProgram, name: &str) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
         let context_window = ValueContextWindow::new();
@@ -39,19 +40,23 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
             target_data,
             module,
             builder,
-            object_factory,
+            linked_program,
             current_function: None,
             context_window
         }
     }
+}
+
+impl<'ctx> CodeModuleGen<'ctx> {
     fn get_object_name(&self, object: Object) -> &String {
-        self.object_factory.get_name(object)
+        self.linked_program.factory.get_name(object)
     }
     fn get_object_type(&self, object: Object) -> BasicTypeEnum<'ctx> {
-        self.parse_type(self.object_factory.get_type(object))
+        self.parse_type(self.linked_program.factory.get_type(object))
     }
     fn parse_type(&self, object_type: &ObjType) -> BasicTypeEnum<'ctx> {
         match object_type {
+            ObjType::Unknown => unreachable!(),
             ObjType::Void => unimplemented!(),
             ObjType::Reference(_) => self.context.ptr_type(AddressSpace::default()).into(),
             ObjType::Char => self.context.i8_type().into(),
@@ -91,34 +96,54 @@ impl<'ctx, 'factory> CodeModuleGen<'ctx, 'factory> {
 mod module_parsing {
     use super::*;
 
-    impl<'ctx> CodeModuleGen<'ctx, '_> {
-        pub fn parse_module(&mut self, statements: Vec<GlobalLinkedStatement>) -> Result<(), CE> {
+    impl<'ctx> CodeModuleGen<'ctx> {
+        pub fn parse_module(&mut self) -> Result<(), CE> {
             self.context_window.step_in();
-            for statement in statements {
-                match statement {
-                    GlobalLinkedStatement::VariableDeclaration { .. } => {
-                        unimplemented!("global variables not implemented")
-                    }
-                    GlobalLinkedStatement::Function { .. } => {
-                        self.create_function(statement)?;
-                    }
-                }
+
+            let type_statements = std::mem::take(&mut self.linked_program.type_statements);
+            for (object, statement) in &self.linked_program.type_statements {
+                unimplemented!()
             }
+
+            let function_statements = std::mem::take(&mut self.linked_program.function_statement);
+            let variable_statements = std::mem::take(&mut self.linked_program.variable_statement);
+
+            // init global context
+            for (&object, statement) in &function_statements {
+                self.create_function(object, statement);
+            }
+            for (&object, statement) in &variable_statements {
+                unimplemented!()
+            }
+
+            // parse declarations
+            for (object, statement) in function_statements {
+                self.parse_function(object, statement)?;
+            }
+            for (object, statement) in variable_statements {
+                unimplemented!()
+            }
+
             self.context_window.step_out();
             Ok(())
         }
 
-        fn create_function(&mut self, statement: GlobalLinkedStatement) -> Result<(), CE> {
-            let GlobalLinkedStatement::Function { object, args, returns, body } = statement else { unreachable!() };
+        fn create_function(&mut self, object: Object, statement: &GlobalLinkedStatement) {
+            let GlobalLinkedStatement::Function { args, returns, body: _ } = statement else { unreachable!() };
 
             let arguments_types: Vec<BasicMetadataTypeEnum> = args.iter().map(|obj| self.get_object_type(*obj).into()).collect();
             let fn_type = self.function_from(&returns, &arguments_types, false);
 
-            let function = self.module.add_function(self.get_object_name(object).as_str(), fn_type, None);
+            let name = self.get_object_name(object);
+            let function = self.module.add_function(name.as_str(), fn_type, None);
+            self.context_window.add(object, function.into());
+        }
+        fn parse_function(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), CE> {
+            let GlobalLinkedStatement::Function { args, returns: _, body } = statement else { unreachable!() };
+            let function = self.context_window.get_function_unwrap(object);
+
             let entry = self.context.append_basic_block(function, "entry");
             self.builder.position_at_end(entry);
-
-            self.context_window.add(object, function.into());
             self.context_window.step_in();
 
             for (index, object) in args.into_iter().enumerate() {
@@ -132,7 +157,7 @@ mod module_parsing {
             self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
-                return Err(CE::LLVMVerifyFunctionError { name: self.object_factory.get_name(object).clone() });
+                return Err(CE::LLVMVerifyFunctionError { name: self.linked_program.factory.get_name(object).clone() });
             }
             self.current_function = None;
 
@@ -146,7 +171,7 @@ mod module_parsing {
 mod function_parsing {
     use super::*;
 
-    impl<'ctx> CodeModuleGen<'ctx, '_> {
+    impl<'ctx> CodeModuleGen<'ctx> {
         pub fn parse_function_body(&mut self, body: Vec<LinkedStatement>) -> Result<(), CE> {
             let is_returned = self.parse_statements(body)?;
             assert!(is_returned);
@@ -222,15 +247,12 @@ mod function_parsing {
                         self.builder.build_store(pointer, rvalue)?;
                     }
                 }
-                LinkedStatement::GlobalStatement(statement) => match statement {
-                    GlobalLinkedStatement::VariableDeclaration { object, value } => {
-                        let value = self.parse_expression(value.expr)?.unwrap();
-                        let var_type = self.get_object_type(object);
-                        let pointer = self.builder.build_alloca(var_type, self.get_object_name(object).as_str())?;
-                        self.builder.build_store(pointer, value)?;
-                        self.context_window.add(object, pointer.into());
-                    }
-                    GlobalLinkedStatement::Function { .. } => unreachable!("local functions must be moved out at linked step")
+                LinkedStatement::VariableDeclaration { object, value } => {
+                    let value = self.parse_expression(value.expr)?.unwrap();
+                    let var_type = self.get_object_type(object);
+                    let pointer = self.builder.build_alloca(var_type, self.get_object_name(object).as_str())?;
+                    self.builder.build_store(pointer, value)?;
+                    self.context_window.add(object, pointer.into());
                 }
                 LinkedStatement::Return(expression) => {
                     if let Some(expression) = expression {
@@ -241,6 +263,7 @@ mod function_parsing {
                     }
                     return Ok(true)
                 }
+                LinkedStatement::GlobalStatement(_) => unreachable!(),
             }
             Ok(false)
         }
@@ -437,7 +460,7 @@ mod function_parsing {
                                 _ => unreachable!()
                             }
                         }
-                        ObjType::Void | ObjType::Function { .. } => unreachable!()
+                        ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!()
                     };
                     Ok(Some(result))
                 }
@@ -508,7 +531,7 @@ mod function_parsing {
                         let predicate = comp_op.to_float_compare();
                         self.builder.build_float_compare(predicate, ex1, ex2, "compare_float")?.into()
                     }
-                    ObjType::Void | ObjType::Function { .. } => unreachable!(),
+                    ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!(),
                 }
             };
             Ok(result)
