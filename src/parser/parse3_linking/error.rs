@@ -15,6 +15,7 @@ pub enum LinkingError {
     IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
     IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
     IncorrectAs { what: String, from: ObjType, to: ObjType },
+    GlobalVariableWithoutType { name: String },
     UnexpectedVoidUse,
 
     UnexpectedGlobalStatement { statement: String },
@@ -64,6 +65,9 @@ impl Display for LinkingError {
             }
             Self::IncorrectAs { what, from, to } => {
                 write!(f, "can't cast {what}, which has type {from} to {to}")
+            }
+            Self::GlobalVariableWithoutType { name } => {
+                write!(f, "global variable '{name}' is declared without type annotation")
             }
             Self::UnexpectedVoidUse => {
                 write!(f, "`void` can't be used as actual type")

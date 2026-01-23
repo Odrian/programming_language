@@ -206,7 +206,7 @@ impl fmt::Display for LinkedExpression {
 impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            Self::Reference(object_type) => &format!("*{object_type}"),
+            Self::Pointer(object_type) => &format!("*{object_type}"),
             Self::Unknown => "unknown",
             Self::Void => "void",
             Self::Char => "char",

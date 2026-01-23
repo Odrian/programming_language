@@ -61,7 +61,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
         match object_type {
             ObjType::Unknown => unreachable!(),
             ObjType::Void => unimplemented!(),
-            ObjType::Reference(_) => self.context.ptr_type(AddressSpace::default()).into(),
+            ObjType::Pointer(_) => self.context.ptr_type(AddressSpace::default()).into(),
             ObjType::Char => self.context.i8_type().into(),
             ObjType::Integer(int) => match int {
                 IntObjType::Bool => self.context.bool_type().into(),
@@ -98,6 +98,8 @@ impl<'ctx> CodeModuleGen<'ctx> {
 
 /// parsing statements in global space
 mod module_parsing {
+    use inkwell::types::AnyTypeEnum;
+    use inkwell::values::AnyValue;
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx> {
@@ -114,7 +116,7 @@ mod module_parsing {
                 self.create_function(*object, statement);
             }
             for (object, statement) in &variable_statements {
-                // TODO
+                self.create_global_var(*object, statement);
             }
 
             // parse declarations
@@ -129,6 +131,17 @@ mod module_parsing {
             Ok(())
         }
 
+        fn create_global_var(&mut self, object: Object, statement: &GlobalLinkedStatement) {
+            let GlobalLinkedStatement::VariableDeclaration { value } = statement else { unreachable!() };
+            
+            let global_type = self.parse_type(&value.object_type);
+            unimplemented!(); // TODO: global_type actually is ObjType::Ref(T)
+
+            let name = self.get_object_name(object);
+            let global_value = self.module.add_global(global_type, None, name);
+
+            self.context_window.add(object, global_value.as_any_value_enum());
+        }
         fn create_function(&mut self, object: Object, statement: &GlobalLinkedStatement) {
             let GlobalLinkedStatement::Function { args, returns, body: _ } = statement else { unreachable!() };
 
@@ -470,9 +483,9 @@ mod declaration_parsing {
                                     }
                                 }
                             }
-                            ObjType::Reference(reference_type) => {
+                            ObjType::Pointer(reference_type) => {
                                 let ex_int = ex.into_int_value();
-                                let pointer_type = self.parse_type(&ObjType::Reference(reference_type)).into_pointer_type();
+                                let pointer_type = self.parse_type(&ObjType::Pointer(reference_type)).into_pointer_type();
 
                                 self.builder.build_int_to_ptr(ex_int, pointer_type, "int_to_ptr")?.into()
                             }
@@ -498,9 +511,9 @@ mod declaration_parsing {
                                 }
                             }
                         }
-                        ObjType::Reference(_) => {
+                        ObjType::Pointer(_) => {
                             match &to_obj_type {
-                                ObjType::Reference(_) => ex,
+                                ObjType::Pointer(_) => ex,
                                 ObjType::Integer(_) => {
                                     let ex_ptr = ex.into_pointer_value();
 
@@ -557,7 +570,7 @@ mod declaration_parsing {
                     }
                 }
                 TwoSidedOperation::Compare(comp_op) => match type1 {
-                    ObjType::Reference(_) => {
+                    ObjType::Pointer(_) => {
                         let ex1 = v1.into_pointer_value();
                         let ex2 = v2.into_pointer_value();
                         let predicate = comp_op.to_int_compare(false);

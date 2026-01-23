@@ -14,14 +14,14 @@ impl<'ctx> ValueContext<'ctx> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ValueContextWindow<'ctx> {
     contexts: Vec<ValueContext<'ctx>>,
 }
 
 impl<'ctx> ValueContextWindow<'ctx> {
-    pub const fn new() -> Self {
-        ValueContextWindow { contexts: vec![] }
+    pub fn new() -> Self {
+        Self::default()
     }
     pub fn step_in(&mut self) {
         self.contexts.push(ValueContext::default());

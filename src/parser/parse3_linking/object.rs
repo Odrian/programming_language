@@ -12,7 +12,8 @@ pub enum ObjType {
     Char,
     Integer(IntObjType),
     Float(FloatObjType),
-    Reference(Box<Self>),
+    Pointer(Box<Self>),
+    // Reference(Box<Self>),
     Struct(Object),
     Function { arguments: Vec<Self>, returns: Box<Self> },
 }
@@ -34,7 +35,7 @@ impl ObjType {
         }
     }
     pub fn unwrap_ref(&self) -> &Self {
-        let Self::Reference(obj_type) = self else {
+        let Self::Pointer(obj_type) = self else {
             panic!()
         };
         obj_type.as_ref()
@@ -54,6 +55,9 @@ pub enum IntObjType {
 }
 
 impl IntObjType {
+    pub const fn to_obj_type(self) -> ObjType {
+        ObjType::Integer(self)
+    }
     pub const fn is_signed(&self) -> bool {
         matches!(self, Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::I128 | Self::ISize)
     }

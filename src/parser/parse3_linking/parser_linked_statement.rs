@@ -69,10 +69,33 @@ impl FunctionLinkingContext<'_> {
         }
     }
     fn prelink_global_variable(&mut self, object: Object, name: &str, declaration: &DeclarationStatement) -> CResult<()> {
-        unimplemented!() // TODO
+        let DeclarationStatement::VariableDeclaration { typee, value: _ } = declaration else { unreachable!() };
+        let Some(typee) = typee else {
+            LinkingError::GlobalVariableWithoutType { name: name.to_owned() }.print();
+            return Err(())
+        };
+        let obj_type = self.parse_type(typee)?;
+        unimplemented!(); // TODO: obj_type must be ObjType::Ref(T)
+
+        *self.context.factory.get_type_mut(object) = obj_type;
+        self.object_context_window.add(name.to_owned(), object);
+
+        Ok(())
     }
     fn parse_global_variable(&mut self, object: Object, name: String, declaration: DeclarationStatement) -> CResult<()> {
-        unimplemented!() // TODO
+        let DeclarationStatement::VariableDeclaration { typee: _, value } = declaration else { unreachable!() };
+
+        let var_type = self.context.factory.get_type(object).clone();
+
+        let expression = self.parse_expression(value, Some(&var_type))?;
+        
+        if !matches!(expression.expr, LinkedExpression::Undefined(..)) {
+            unimplemented!() // TODO: default value for global
+        }
+
+        let linked_statement = GlobalLinkedStatement::new_variable(expression);
+        self.context.result.variable_statement.insert(object, linked_statement);
+        Ok(())
     }
     fn prelink_global_function(&mut self, object: Object, name: &str, declaration: &DeclarationStatement) -> CResult<()> {
         let DeclarationStatement::Function { args, returns, body: _ } = declaration else { unreachable!() };
@@ -348,7 +371,7 @@ impl FunctionLinkingContext<'_> {
                         let statement = self.context.result.type_statements.get(object).unwrap();
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
                         let Some(index) = field_names.get(&field) else {
-                            unimplemented!();
+                            unimplemented!(); // TODO: struct field expression
                         };
                         // Self::check_expected_type(expected_type, &obj_type)?;
                         unimplemented!();
@@ -376,7 +399,7 @@ impl FunctionLinkingContext<'_> {
             }
             Typee::Reference(obj_type) => {
                 let obj_type = self.parse_type(obj_type)?;
-                Ok(ObjType::Reference(Box::new(obj_type)))
+                Ok(ObjType::Pointer(Box::new(obj_type)))
             }
         }
     }
@@ -467,10 +490,10 @@ impl ObjType {
             Self::Char => matches!(other, Self::Integer(_)),
             Self::Float(_) => matches!(other, Self::Float(_)),
             Self::Integer(from) => {
-                matches!(other, Self::Reference(_)) ||
+                matches!(other, Self::Pointer(_)) ||
                 matches!(other, Self::Integer(to) if !to.is_bool() || from.is_bool())
             },
-            Self::Reference(_) => matches!(other, Self::Reference(_) | Self::Integer(_)),
+            Self::Pointer(_) => matches!(other, Self::Pointer(_) | Self::Integer(_)),
             Self::Struct(..) | Self::Function { .. } | Self::Void => unreachable!(),
         }
     }
@@ -491,10 +514,10 @@ impl ObjType {
                 }
             }
             OneSidedOperation::GetReference => {
-                Some(Self::Reference(Box::new(object_type.clone())))
+                Some(Self::Pointer(Box::new(object_type.clone())))
             }
             OneSidedOperation::Dereference => {
-                if let Self::Reference(reference_object_type) = object_type {
+                if let Self::Pointer(reference_object_type) = object_type {
                     Some(*reference_object_type.clone())
                 } else {
                     None
@@ -527,7 +550,7 @@ impl ObjType {
                     true
                 } else {
                     // reference can't be compared
-                    !matches!(object_type1, Self::Reference(_))
+                    !matches!(object_type1, Self::Pointer(_))
                 };
 
                 if is_allowed {
