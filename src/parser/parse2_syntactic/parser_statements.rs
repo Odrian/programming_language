@@ -230,10 +230,15 @@ impl ParsingState {
                 let typee = self.parse_type(position)?;
 
                 let Some(TokenWithPos { token, position }) = self.next() else {
-                    return Err(CE::SyntacticsError(position, format!("expected '=' after '{name}' : {typee}")))
+                    return Err(CE::SyntacticsError(position, format!("expected '=' or ';' after '{name} : {typee}'")))
                 };
+                if token == Token::Semicolon {
+                    let value = Expression::Undefined;
+                    let statement = Statement::new_variable(name, Some(typee), value);
+                    return Ok(statement)
+                }
                 if token != Token::EqualOperation(EqualOperation::Equal) {
-                    return Err(CE::SyntacticsError(position, format!("expected '=' after '{name}' : {typee}")))
+                    return Err(CE::SyntacticsError(position, format!("expected '=' or ';' after '{name} : {typee}'")))
                 }
 
                 let expression = self.parse_expression(position)?;

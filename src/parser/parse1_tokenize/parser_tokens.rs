@@ -228,10 +228,6 @@ pub fn split_text_without_brackets(text: &str, offset_index: usize) -> CResult<V
                     _ => state.add(1, Some(NumberOperation::BitOr.into())), // |
                 }
             }
-            '.' => {
-                let token = Token::Dot;
-                state.add(1, Some(token));
-            }
             ',' => {
                 let token = Token::Comma;
                 state.add(1, Some(token));
@@ -251,6 +247,10 @@ pub fn split_text_without_brackets(text: &str, offset_index: usize) -> CResult<V
             }
             '.' if state.is_buffer_number => {
                 state.use_char_in_string(char);
+            }
+            '.' => {
+                let token = Token::Dot;
+                state.add(1, Some(token));
             }
             _ => {
                 TokenizeError::UnexpectedChar

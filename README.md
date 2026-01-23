@@ -38,8 +38,11 @@ A :: struct {
 
 ### Variable declaration
 
-You can define variable as follows. Type annotation is sugar, type always can be determinate by value type
+You can define variable as follows.  
+Use --- for undefinded value, it can be used only if type can be determined by surrounding.
 ```
+name : type = ---;
+name : type;
 name : type = value;
 name := value;
 ```

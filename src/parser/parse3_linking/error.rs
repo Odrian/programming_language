@@ -11,6 +11,7 @@ pub enum LinkingError {
     DotNotOnStruct,
     StructFieldNameCollision { field_name: String },
     IncorrectType { got: ObjType, expected: ObjType },
+    CantDetermineType,
     IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
     IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
     IncorrectAs { what: String, from: ObjType, to: ObjType },
@@ -51,6 +52,9 @@ impl Display for LinkingError {
             }
             Self::IncorrectType { got, expected } => {
                 write!(f, "incorrect type, got {got}, expected {expected}")
+            }
+            Self::CantDetermineType => {
+                write!(f, "can't determine type")
             }
             Self::IncorrectOneOper { object_type, op } => {
                 write!(f, "can't use '{op}' to '{object_type}'")

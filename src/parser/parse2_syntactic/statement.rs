@@ -33,6 +33,7 @@ pub enum Expression {
     As(Box<Self>, Typee),
     StructField { left: Box<Self>, field: String },
 
+    Undefined,
     NumberLiteral(String),
     BoolLiteral(bool),
     CharLiteral(u8),
@@ -181,6 +182,7 @@ impl fmt::Display for Expression {
             Self::As(expression, typee) => {
                 write!(f, "({expression} as {typee})")
             }
+            Self::Undefined => write!(f, "---"),
             Self::NumberLiteral(number) => write!(f, "{number}"),
             Self::BoolLiteral(value) => match value {
                 true => write!(f, "true"),

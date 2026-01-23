@@ -42,6 +42,7 @@ pub enum LinkedExpression {
     UnaryOperation(Box<TypedExpression>, OneSidedOperation),
     As(Box<TypedExpression>, ObjType),
 
+    Undefined(ObjType),
     /// `ObjType` always `IntObjType`
     IntLiteral(String, ObjType),
     /// `ObjType` always `FloatObjType`
@@ -184,6 +185,7 @@ impl fmt::Display for LinkedExpression {
             Self::As(expression, object_type) => {
                 write!(f, "({expression} as {object_type})")
             }
+            Self::Undefined(_) => write!(f, "---"),
             Self::IntLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
             Self::FloatLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
             Self::BoolLiteral(value) => match value {

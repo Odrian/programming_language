@@ -297,7 +297,7 @@ mod declaration_parsing {
                 LinkedStatement::StructField { what, index } => {
                     let struct_value = self.parse_expression(what.expr);
                     let struct_type = what.object_type;
-                    
+
                     // self.builder.build_struct_gep();
                     unimplemented!()
                 }
@@ -331,6 +331,19 @@ mod declaration_parsing {
                 LinkedExpression::FunctionCall { object, args } => {
                     Ok(Some(self.call_function(object, args)?.unwrap()))
                 },
+                LinkedExpression::Undefined(obj_type) => {
+                    let value_type = self.parse_type(&obj_type);
+                    let undef_value: BasicValueEnum = match value_type {
+                        BasicTypeEnum::ArrayType(v) => v.get_undef().into(),
+                        BasicTypeEnum::FloatType(v) => v.get_undef().into(),
+                        BasicTypeEnum::IntType(v) => v.get_undef().into(),
+                        BasicTypeEnum::PointerType(v) => v.get_undef().into(),
+                        BasicTypeEnum::StructType(v) => v.get_undef().into(),
+                        BasicTypeEnum::VectorType(v) => v.get_undef().into(),
+                        BasicTypeEnum::ScalableVectorType(v) => v.get_undef().into(),
+                    };
+                    Ok(Some(undef_value))
+                }
                 LinkedExpression::IntLiteral(literal, object_type) => {
                     let int_type = self.parse_type(&object_type).into_int_type();
 
