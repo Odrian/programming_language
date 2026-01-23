@@ -18,6 +18,7 @@ pub enum Token {
     String(String),             // any String
     NumberLiteral(String),      // any String starting with a digit
     Semicolon,                  // ;
+    Dot,                        // .
     Comma,                      // ,
     Colon,                      // :
     DoubleColon,                // ::

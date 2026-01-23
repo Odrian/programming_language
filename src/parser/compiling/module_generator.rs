@@ -186,12 +186,12 @@ mod type_parsing {
         }
 
         fn parse_struct_statement(&mut self, object: Object, statement: GlobalLinkedStatement) {
-            let GlobalLinkedStatement::Struct { fields } = statement else { unreachable!() };
+            let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
             
             let fields_types: Vec<_> = fields.iter()
-                .map(|(_, obj_type)| self.parse_type(obj_type))
+                .map(|obj_type| self.parse_type(obj_type))
                 .collect();
-            
+
             let struct_type = self.context.struct_type(&fields_types, false);
             self.struct_context.insert(object, struct_type);
         }
@@ -293,6 +293,13 @@ mod declaration_parsing {
                         self.builder.build_return(None)?;
                     }
                     return Ok(true)
+                }
+                LinkedStatement::StructField { what, index } => {
+                    let struct_value = self.parse_expression(what.expr);
+                    let struct_type = what.object_type;
+                    
+                    // self.builder.build_struct_gep();
+                    unimplemented!()
                 }
                 LinkedStatement::GlobalStatement(_) => unreachable!(),
             }

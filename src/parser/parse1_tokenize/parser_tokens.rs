@@ -228,6 +228,10 @@ pub fn split_text_without_brackets(text: &str, offset_index: usize) -> CResult<V
                     _ => state.add(1, Some(NumberOperation::BitOr.into())), // |
                 }
             }
+            '.' => {
+                let token = Token::Dot;
+                state.add(1, Some(token));
+            }
             ',' => {
                 let token = Token::Comma;
                 state.add(1, Some(token));

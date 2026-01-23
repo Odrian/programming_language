@@ -316,6 +316,24 @@ impl FunctionLinkingContext<'_> {
                     LinkedExpression::new_function_call(object, args)
                 )
             }
+            Expression::StructField { left, field } => {
+                let left = self.parse_expression(*left)?;
+                
+                match &left.object_type {
+                    ObjType::Struct(object) => {
+                        let statement = self.context.result.type_statements.get(object).unwrap();
+                        let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
+                        let Some(index) = field_names.get(&field) else {
+                            unimplemented!();
+                        };
+                        unimplemented!();
+                    }
+                    _ => {
+                        LinkingError::DotNotOnStruct.print();
+                        return Err(())
+                    }
+                }
+            }
         };
         Ok(linked)
     }

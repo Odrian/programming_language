@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
@@ -13,7 +14,7 @@ pub struct TypedExpression {
 pub enum GlobalLinkedStatement {
     VariableDeclaration { value: TypedExpression },
     Function { args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement> },
-    Struct { fields: Vec<(String, ObjType)> }
+    Struct { fields: Vec<ObjType>, field_names: HashMap<String, u32> }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -21,6 +22,7 @@ pub enum LinkedStatement {
     GlobalStatement(GlobalLinkedStatement),
     VariableDeclaration { object: Object, value: TypedExpression },
     SetVariable { what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation> },
+    StructField { what: TypedExpression, index: u32 },
 
     Expression(TypedExpression),
     If { condition: TypedExpression, body: Vec<Self> },
@@ -59,8 +61,8 @@ impl TypedExpression {
 }
 
 impl GlobalLinkedStatement {
-    pub const fn new_struct(fields: Vec<(String, ObjType)>) -> Self {
-        Self::Struct { fields }
+    pub const fn new_struct(fields: Vec<ObjType>, field_names: HashMap<String, u32>) -> Self {
+        Self::Struct { fields, field_names }
     }
     pub const fn new_function(args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement>) -> Self {
         Self::Function { args, returns, body }
@@ -113,8 +115,9 @@ fn to_string_with_tabs<T: ToString>(statements: &[T]) -> String {
 impl fmt::Display for GlobalLinkedStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Struct { fields } => {
-                let fields = fields.iter().map(|(name, typee)| {
+            Self::Struct { fields, field_names } => {
+                let fields = fields.iter().enumerate().map(|(index, typee)| {
+                    let (name, _) = field_names.iter().find(|(_, index1)| index as u32 == **index1).unwrap();
                     format!("{name}: {typee}")
                 }).collect::<Vec<_>>().join(", ");
 
@@ -161,6 +164,9 @@ impl fmt::Display for LinkedStatement {
                     Some(exp) => write!(f, "return {exp}"),
                     None => write!(f, "return")
                 }
+            }
+            Self::StructField { what, index } => {
+                write!(f, "{what}.[{index}]")
             }
         }
     }

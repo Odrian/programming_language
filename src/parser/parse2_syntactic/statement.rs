@@ -31,6 +31,7 @@ pub enum Expression {
     Operation(Box<Self>, Box<Self>, TwoSidedOperation),
     UnaryOperation(Box<Self>, OneSidedOperation),
     As(Box<Self>, Typee),
+    StructField { left: Box<Self>, field: String },
 
     NumberLiteral(String),
     BoolLiteral(bool),
@@ -86,6 +87,9 @@ impl Expression {
     }
     pub const fn new_function_call(object: String, args: Vec<Self>) -> Self {
         Self::FunctionCall { object, args }
+    }
+    pub fn new_dot(left: Self, field: String) -> Self {
+        Self::StructField { left: Box::new(left), field }
     }
 }
 
@@ -165,6 +169,9 @@ impl fmt::Display for Statement {
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::StructField { left, field } => {
+                write!(f, "{left}.{field}")
+            }
             Self::Operation(a, b, op) => {
                 write!(f, "({a} {op} {b})")
             },

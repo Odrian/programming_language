@@ -412,6 +412,17 @@ impl ParsingState {
                 let expression = Expression::new_as(expression1, typee);
                 self.parse_expression2_without_ops(expression, false)
             }
+            Token::Dot => {
+                let Some(TokenWithPos { token: _, position: _ }) = self.next() else { unreachable!() };
+                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
+                
+                match token {
+                    Token::String(field_name) => {
+                        Ok(Expression::new_dot(expression1, field_name))
+                    }
+                    _ => Err(CE::SyntacticsError(position, "incorrect dot usage".to_owned()))
+                }
+            }
             Token::Semicolon | Token::Comma | Token::Bracket(_, _) | Token::EqualOperation(_) => {
                 Ok(expression1)
             }

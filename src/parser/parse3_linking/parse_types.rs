@@ -51,9 +51,15 @@ impl TypeResolver<'_> {
 
         let mut dependencies = Vec::new();
         let mut linked_fields = Vec::with_capacity(fields.len());
-        for (name, typee) in fields {
+        let mut field_names = HashMap::with_capacity(fields.len());
+        for (index, (name, typee)) in fields.iter().enumerate() {
             let obj_type = self.parse_type(typee, &mut dependencies, false)?;
-            linked_fields.push((name.clone(), obj_type));
+            linked_fields.push(obj_type);
+            let previous_name = field_names.insert(name.clone(), index as u32);
+            if previous_name.is_some() {
+                LinkingError::StructFieldNameCollision { field_name: name.clone() }.print();
+                return Err(())
+            }
         }
 
         if !dependencies.is_empty() {
@@ -63,7 +69,7 @@ impl TypeResolver<'_> {
 
         self.dependency_resolver.key_done(object);
 
-        let linked_statement = GlobalLinkedStatement::new_struct(linked_fields);
+        let linked_statement = GlobalLinkedStatement::new_struct(linked_fields, field_names);
         self.context.result.type_statements_order.push(object);
         self.context.result.type_statements.insert(object, linked_statement);
 

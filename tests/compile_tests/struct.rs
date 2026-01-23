@@ -7,6 +7,8 @@ fn test_struct_declarations() {
     assert_eq!(None, test_global("A :: struct { x: i32, }").err());
     assert_eq!(None, test_global("A :: struct { x: i32, y: i32, }").err());
 
+    assert_ne!(None, test_global("A :: struct { x: u32, x: u32 }").err());
+
     assert_eq!(None, test_global("A :: struct { x: i32, y: i32, } B :: struct { a: A }").err());
     assert_eq!(None, test_global("A :: struct { x: i32, y: i32, } B :: struct { a: A }").err());
 
