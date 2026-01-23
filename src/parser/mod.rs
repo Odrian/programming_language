@@ -64,9 +64,9 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> CResult<()> {
     let linked_program = parse3_linking::link_all(args, statements)?;
 
     if args.write_syntactic_tree_to_file {
-        let text = vec![&linked_program.type_statements, &linked_program.variable_statement, &linked_program.function_statement]
-            .iter().map(|hashmap| hashmap.iter()
-                .map(|(_, statement)| statement.to_string())
+        let text = [&linked_program.type_statements, &linked_program.variable_statement, &linked_program.function_statement]
+            .iter().map(|hashmap| hashmap.values()
+                .map(|statement| statement.to_string())
                 .collect::<Vec<_>>().join("\n")
         ).collect::<Vec<_>>().join("\n");
     

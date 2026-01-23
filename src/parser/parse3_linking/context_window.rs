@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use super::object::Object;
-use crate::error::CompilationError as CE;
+use crate::error::CResult;
+use crate::parser::parse3_linking::error::LinkingError;
 
 #[derive(Debug, Default)]
 struct ObjectsContext(HashMap<String, Object>);
@@ -34,10 +35,13 @@ impl ObjectContextWindow {
         self.contexts.iter().rev()
             .find_map(|obj_con|obj_con.get(name))
     }
-    pub fn get_or_error(&self, name: &String) -> Result<Object, CE> {
+    pub fn get_or_error(&self, name: &String) -> CResult<Object> {
         match self.get(name) {
             Some(obj) => Ok(obj),
-            None => Err(CE::LinkingError { name: name.clone(), context: format!("{self:?}") })
+            None => {
+                LinkingError::NameNotFound { name: name.clone(), context: format!("{self:?}") }.print();
+                Err(())
+            }
         }
     }
     pub fn add(&mut self, name: String, object: Object) {

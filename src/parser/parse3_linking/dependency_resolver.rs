@@ -17,7 +17,7 @@ impl<Key: Eq + Hash + Copy> Default for DependencyResolver<Key> {
 
 impl<Key: Eq + Hash + Copy> DependencyResolver<Key> {
     pub fn is_empty(&self) -> bool {
-        self.queue.is_empty()
+        self.queue.is_empty() && self.waiting_for.is_empty() && self.waiting_rev.is_empty()
     }
     pub fn add(&mut self, keys: impl IntoIterator<Item=Key>) {
         self.queue.extend(keys);
@@ -50,8 +50,10 @@ impl<Key: Eq + Hash + Copy> DependencyResolver<Key> {
     fn get_dependency_cycle_error(&mut self) -> LinkingError {
         LinkingError::DependencyCycle
     }
-    pub fn add_dependency(&mut self, what: Key, depends_on: Key) {
-        self.waiting_for.entry(what).or_default().insert(depends_on);
-        self.waiting_rev.entry(depends_on).or_default().insert(what);
+    pub fn add_dependency(&mut self, what: Key, depends_on: Vec<Key>) {
+        for &depends_on_one in &depends_on {
+            self.waiting_rev.entry(depends_on_one).or_default().insert(what);
+        }
+        self.waiting_for.entry(what).or_default().extend(depends_on);
     }
 }

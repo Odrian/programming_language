@@ -1,17 +1,12 @@
 # TODO
-* add structs
+* add structs (almost done)
 * add export
-* import another files
-
-
-* add vararg
-* add default arguments
-* add function overloading
-* now using cc to link objects?
+* add #import
+* not using cc to link objects?
 
 # Programming language
 
-Function declaration
+### Function declaration
 ```
 foo :: (argument : i32) -> void {
     return;
@@ -31,6 +26,17 @@ main :: () -> i32 {
     return 0;
 }
 ```
+
+### Struct declaration
+
+```
+A :: struct {
+    field1: u32,
+    field2: *A,
+}
+```
+
+### Variable declaration
 
 You can define variable as follows. Type annotation is sugar, type always can be determinate by value type
 ```

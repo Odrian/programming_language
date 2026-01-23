@@ -60,3 +60,14 @@ main :: () -> i32 {
 pub fn get_exit_code_main_return(text: &str) -> i32 {
     get_exit_code_main(&format!("return {text}"))
 }
+
+pub fn test_global(global: &str) -> CResult<()> {
+    let program = format!("\
+main :: () -> i32 {{
+    return 0;
+}}
+
+{global}
+");
+    run_code(&program).map(|_| ())
+}

@@ -33,6 +33,7 @@ struct TypeContext {
 pub struct LinkedProgram {
     pub factory: ObjectFactory,
 
+    pub type_statements_order: Vec<Object>,
     pub type_statements: HashMap<Object, GlobalLinkedStatement>,
     pub function_statement: HashMap<Object, GlobalLinkedStatement>,
     pub variable_statement: HashMap<Object, GlobalLinkedStatement>,
@@ -44,8 +45,7 @@ pub fn link_all(args: &Args, statements: Vec<Statement>) -> CResult<LinkedProgra
     parse_available_names::parse_available_names(&mut context, statements)?;
     parse_types::parse_types(&mut context)?;
 
-    parser_linked_statement::link_objects(&mut context)
-        .map_err(|err| { println!("{err}"); })?;
+    parser_linked_statement::link_objects(&mut context)?;
 
     context.result.factory = context.factory;
     Ok(context.result)

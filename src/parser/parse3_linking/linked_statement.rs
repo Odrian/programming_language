@@ -221,7 +221,7 @@ impl fmt::Display for ObjType {
                 FloatObjType::F32 => "f32",
                 FloatObjType::F64 => "f64",
             }
-            Self::Function { .. } => {
+            Self::Struct(..) | Self::Function { .. } => {
                 unimplemented!()
             }
         };

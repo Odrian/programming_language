@@ -12,4 +12,7 @@ mod compile_tests {
 
     #[cfg(test)]
     mod big_program_tests;
+
+    #[cfg(test)]
+    mod r#struct;
 }

@@ -6,10 +6,11 @@ use crate::parser::parse3_linking::linked_statement::*;
 use super::context_window::ValueContextWindow;
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue};
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::targets::TargetData;
-use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType};
+use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
 use crate::parser::parse3_linking::LinkedProgram;
 
 pub fn parse_module<'ctx>(
@@ -29,6 +30,7 @@ struct CodeModuleGen<'ctx> {
     linked_program: LinkedProgram,
     current_function: Option<FunctionValue<'ctx>>,
     context_window: ValueContextWindow<'ctx>,
+    struct_context: HashMap<Object, StructType<'ctx>>
 }
 impl<'ctx> CodeModuleGen<'ctx> {
     fn new(context: &'ctx Context, target_data: &'ctx TargetData, linked_program: LinkedProgram, name: &str) -> Self {
@@ -42,7 +44,8 @@ impl<'ctx> CodeModuleGen<'ctx> {
             builder,
             linked_program,
             current_function: None,
-            context_window
+            context_window,
+            struct_context: Default::default(),
         }
     }
 }
@@ -80,7 +83,8 @@ impl<'ctx> CodeModuleGen<'ctx> {
                 FloatObjType::F32 => self.context.f32_type().into(),
                 FloatObjType::F64 => self.context.f64_type().into(),
             }
-            ObjType::Function { .. } => unimplemented!(),
+            ObjType::Struct(object) => self.struct_context.get(object).copied().unwrap().into(),
+            ObjType::Function { .. } => unimplemented!("function type"),
         }
     }
     fn function_from(&self, returns: &ObjType, args: &[BasicMetadataTypeEnum<'ctx>], is_var_args: bool) -> FunctionType<'ctx> {
@@ -100,20 +104,17 @@ mod module_parsing {
         pub fn parse_module(&mut self) -> Result<(), CE> {
             self.context_window.step_in();
 
-            let type_statements = std::mem::take(&mut self.linked_program.type_statements);
-            for (object, statement) in &self.linked_program.type_statements {
-                unimplemented!()
-            }
+            self.parse_type_statements();
 
             let function_statements = std::mem::take(&mut self.linked_program.function_statement);
             let variable_statements = std::mem::take(&mut self.linked_program.variable_statement);
 
             // init global context
-            for (&object, statement) in &function_statements {
-                self.create_function(object, statement);
+            for (object, statement) in &function_statements {
+                self.create_function(*object, statement);
             }
-            for (&object, statement) in &variable_statements {
-                unimplemented!()
+            for (object, statement) in &variable_statements {
+                // TODO
             }
 
             // parse declarations
@@ -121,7 +122,7 @@ mod module_parsing {
                 self.parse_function(object, statement)?;
             }
             for (object, statement) in variable_statements {
-                unimplemented!()
+                // TODO
             }
 
             self.context_window.step_out();
@@ -132,7 +133,7 @@ mod module_parsing {
             let GlobalLinkedStatement::Function { args, returns, body: _ } = statement else { unreachable!() };
 
             let arguments_types: Vec<BasicMetadataTypeEnum> = args.iter().map(|obj| self.get_object_type(*obj).into()).collect();
-            let fn_type = self.function_from(&returns, &arguments_types, false);
+            let fn_type = self.function_from(returns, &arguments_types, false);
 
             let name = self.get_object_name(object);
             let function = self.module.add_function(name.as_str(), fn_type, None);
@@ -167,8 +168,38 @@ mod module_parsing {
     }
 }
 
-/// parsing statements inside function
-mod function_parsing {
+mod type_parsing {
+    use super::*;
+
+    impl<'ctx> CodeModuleGen<'ctx> {
+        pub fn parse_type_statements(&mut self) {
+            let mut type_statements = std::mem::take(&mut self.linked_program.type_statements);
+            let type_statements_order = std::mem::take(&mut self.linked_program.type_statements_order);
+
+            for object in type_statements_order {
+                let statement = type_statements.remove(&object).unwrap();
+                match &statement {
+                    GlobalLinkedStatement::Struct { .. } => self.parse_struct_statement(object, statement),
+                    GlobalLinkedStatement::VariableDeclaration { .. } | GlobalLinkedStatement::Function { .. } => unreachable!(),
+                }
+            }
+        }
+
+        fn parse_struct_statement(&mut self, object: Object, statement: GlobalLinkedStatement) {
+            let GlobalLinkedStatement::Struct { fields } = statement else { unreachable!() };
+            
+            let fields_types: Vec<_> = fields.iter()
+                .map(|(_, obj_type)| self.parse_type(obj_type))
+                .collect();
+            
+            let struct_type = self.context.struct_type(&fields_types, false);
+            self.struct_context.insert(object, struct_type);
+        }
+    }
+}
+
+/// parsing functions and global variables
+mod declaration_parsing {
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx> {
@@ -460,7 +491,7 @@ mod function_parsing {
                                 _ => unreachable!()
                             }
                         }
-                        ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!()
+                        ObjType::Struct(..) | ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!()
                     };
                     Ok(Some(result))
                 }
@@ -531,6 +562,7 @@ mod function_parsing {
                         let predicate = comp_op.to_float_compare();
                         self.builder.build_float_compare(predicate, ex1, ex2, "compare_float")?.into()
                     }
+                    ObjType::Struct(..) => unimplemented!(),
                     ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!(),
                 }
             };

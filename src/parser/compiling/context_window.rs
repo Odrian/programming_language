@@ -3,14 +3,14 @@ use inkwell::values::{AnyValueEnum, FunctionValue, PointerValue};
 use crate::parser::parse3_linking::object::Object;
 
 #[derive(Debug, Default)]
-struct ValueContext<'ctx>(HashMap<u32, AnyValueEnum<'ctx>>);
+struct ValueContext<'ctx>(HashMap<Object, AnyValueEnum<'ctx>>);
 
 impl<'ctx> ValueContext<'ctx> {
     fn add(&mut self, object: Object, value: AnyValueEnum<'ctx>) {
-        self.0.insert(object.id, value);
+        self.0.insert(object, value);
     }
     fn get(&self, object: Object) -> Option<&AnyValueEnum<'ctx>> {
-        self.0.get(&object.id)
+        self.0.get(&object)
     }
 }
 

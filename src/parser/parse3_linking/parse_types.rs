@@ -5,6 +5,8 @@ use crate::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
 use crate::parser::parse3_linking::object::{ObjType, Object};
 use crate::parser::parse3_linking::TypeContext;
 use std::collections::HashMap;
+use crate::parser::parse3_linking::error::LinkingError;
+use crate::parser::parse3_linking::parser_linked_statement::parse_primitive_type;
 
 pub fn parse_types(context: &mut TypeContext) -> CResult<()> {
     let statements = std::mem::take(&mut context.type_statements);
@@ -40,6 +42,7 @@ impl TypeResolver<'_> {
         self.dependency_resolver.is_empty()
     }
     fn try_parse(&mut self) -> CResult<()> {
+        // .next return error if there is dependency cycle
         let Some(object) = self.dependency_resolver.next()? else { return Ok(()) };
 
         let statement = self.statements.get(&object).unwrap();
@@ -47,29 +50,54 @@ impl TypeResolver<'_> {
         let Statement::DeclarationStatement { name: _, statement: DeclarationStatement::Struct { fields }} = statement else { unreachable!() };
 
         let mut dependencies = Vec::new();
-        let linked_fields = fields.iter().map(|(name, typee)| {
-            let obj_type_option = self.parse_type(typee);
-            let obj_type = obj_type_option.unwrap_or_else(|object| {
-                dependencies.push(object);
-                ObjType::Unknown
-            });
-            (name.clone(), obj_type)
-        }).collect();
+        let mut linked_fields = Vec::with_capacity(fields.len());
+        for (name, typee) in fields {
+            let obj_type = self.parse_type(typee, &mut dependencies, false)?;
+            linked_fields.push((name.clone(), obj_type));
+        }
 
         if !dependencies.is_empty() {
-            unimplemented!(); // add dependencies
+            self.dependency_resolver.add_dependency(object, dependencies);
             return Ok(())
         }
 
         self.dependency_resolver.key_done(object);
 
         let linked_statement = GlobalLinkedStatement::new_struct(linked_fields);
+        self.context.result.type_statements_order.push(object);
         self.context.result.type_statements.insert(object, linked_statement);
 
         Ok(())
     }
-    /// return ObjType or return None and update dependencies
-    fn parse_type(&self, typee: &Typee) -> Result<ObjType, Object> {
-        unimplemented!()
+    /// return [ObjType::Unknown] if it needs dependency and update [dependencies]
+    fn parse_type(&self, typee: &Typee, dependencies: &mut Vec<Object>, is_ref: bool) -> CResult<ObjType> {
+        match typee {
+            Typee::String(string) => {
+                if let Some(object_type) = parse_primitive_type(string) {
+                    return Ok(object_type)
+                }
+
+                let Some(&object) = self.context.available_names.get(string) else {
+                    LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.context.factory) }.print();
+                    return Err(())
+                };
+
+                if !self.statements.contains_key(&object) {
+                    LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.context.factory) }.print();
+                    return Err(())
+                }
+
+                if !is_ref && !self.context.result.type_statements.contains_key(&object) {
+                    dependencies.push(object);
+                    return Ok(ObjType::Unknown)
+                }
+
+                Ok(ObjType::Struct(object))
+            }
+            Typee::Reference(obj_type) => {
+                let obj_type = self.parse_type(obj_type, dependencies, true)?;
+                Ok(ObjType::Reference(Box::new(obj_type)))
+            }
+        }
     }
 }

@@ -13,6 +13,7 @@ pub enum ObjType {
     Integer(IntObjType),
     Float(FloatObjType),
     Reference(Box<Self>),
+    Struct(Object),
     Function { arguments: Vec<Self>, returns: Box<Self> },
 }
 impl ObjType {

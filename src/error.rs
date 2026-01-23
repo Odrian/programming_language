@@ -1,7 +1,5 @@
 use std::fmt;
 use crate::parser::PositionInFile;
-use crate::parser::operations::{TwoSidedOperation, OneSidedOperation};
-use crate::parser::parse3_linking::object::ObjType;
 
 use inkwell::builder::BuilderError;
 
@@ -48,25 +46,12 @@ pub enum CompilationError {
 
     LiteralParseError { what: String, error: String },
 
-    FunctionOverloading { function_name: String },
-    IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
-    LinkingError { name: String, context: String },
-    LinkingErrorFunctionUsage { name: String },
-
-    UnexpectedGlobalStatement { statement: String },
     IncorrectUseStatement(PositionInFile),
     LocalFunctionNotSupported,
     LocalStructNotSupported,
-    FunctionMustReturn { function_name: String },
     NoMainFunction,
     IncorrectMainSignature,
 
-    IncorrectType { got: ObjType, expected: ObjType },
-    IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
-    IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
-    IncorrectAs { what: String, from: ObjType, to: ObjType },
-    IncorrectDeref { what: String, from: ObjType },
-    UnexpectedVoidUse,
 
     LLVMError(BuilderError),
     LLVMVerifyModuleError { llvm_error: String },
@@ -97,22 +82,6 @@ impl fmt::Display for CompilationError {
                 write!(f, "Error: {error} in literal {what}")
             }
 
-            Self::FunctionOverloading { function_name } => {
-                write!(f, "Error: function overloading is not allowed, you overload {function_name}")
-            }
-            Self::IncorrectArgumentCount { function_name, argument_need, argument_got } => {
-                write!(f, "Error: incorrect argument count for function {function_name}, need {argument_need}, got {argument_got}")
-            }
-            Self::LinkingError { name, context } => {
-                write!(f, "Linking Error: can't find {name} in {context}")
-            }
-            Self::LinkingErrorFunctionUsage { name } => {
-                write!(f, "Linking Error: can't use function {name} as variable value")
-            }
-
-            Self::UnexpectedGlobalStatement { statement } => {
-                write!(f, "Error: unexpected global statement: {statement}")
-            }
             Self::IncorrectUseStatement(position) => {
                 write!(f, "Error: incorrect use statement at {position}")
             }
@@ -122,33 +91,11 @@ impl fmt::Display for CompilationError {
             Self::LocalStructNotSupported => {
                 write!(f, "Error: local struct not supported")
             }
-            Self::FunctionMustReturn { function_name } => {
-                write!(f, "Error: function {function_name} may not return")
-            }
             Self::NoMainFunction => {
                 write!(f, "Error: No 'main' function")
             }
             Self::IncorrectMainSignature => {
                 write!(f, "Error: incorrect main signature, only () -> i32 allowed")
-            }
-
-            Self::IncorrectType { got, expected } => {
-                write!(f, "Error: incorrect type, got {got}, expected {expected}")
-            }
-            Self::IncorrectOneOper { object_type, op } => {
-                write!(f, "Error: can't use '{op}' to '{object_type}'")
-            }
-            Self::IncorrectTwoOper { object_type1, object_type2, op } => {
-                write!(f, "Error: can't use '{op}' between '{object_type1}' and '{object_type2}'")
-            }
-            Self::IncorrectAs { what, from, to } => {
-                write!(f, "Error: can't cast {what}, which has type {from} to {to}")
-            }
-            Self::IncorrectDeref { what, from } => {
-                write!(f, "Error: can't deref {what}, which has type {from}")
-            }
-            Self::UnexpectedVoidUse => {
-                write!(f, "Error: `void` can't be used as actual type")
             }
 
             Self::LLVMError(build_error) => {

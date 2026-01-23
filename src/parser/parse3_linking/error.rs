@@ -1,9 +1,25 @@
 use std::fmt::{Display, Formatter};
 use crate::error::{print_error, ErrKind};
+use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
+use crate::parser::parse3_linking::object::ObjType;
 
 pub enum LinkingError {
     DependencyCycle,
     Overloading { name: String },
+    NameNotFound { name: String, context: String },
+
+    IncorrectType { got: ObjType, expected: ObjType },
+    IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
+    IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
+    IncorrectAs { what: String, from: ObjType, to: ObjType },
+    UnexpectedVoidUse,
+
+    UnexpectedGlobalStatement { statement: String },
+    FunctionMustReturn { function_name: String },
+
+    LiteralParseError { what: String, error: String },
+    IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
+    FunctionAsValue { name: String },
 }
 
 impl LinkingError {
@@ -20,6 +36,42 @@ impl Display for LinkingError {
             }
             Self::Overloading { name } => {
                 write!(f, "overloaded '{name}'")
+            }
+            Self::NameNotFound { name, context } => {
+                write!(f, "can't find {name} in {context}")
+            }
+
+            Self::IncorrectType { got, expected } => {
+                write!(f, "incorrect type, got {got}, expected {expected}")
+            }
+            Self::IncorrectOneOper { object_type, op } => {
+                write!(f, "can't use '{op}' to '{object_type}'")
+            }
+            Self::IncorrectTwoOper { object_type1, object_type2, op } => {
+                write!(f, "can't use '{op}' between '{object_type1}' and '{object_type2}'")
+            }
+            Self::IncorrectAs { what, from, to } => {
+                write!(f, "can't cast {what}, which has type {from} to {to}")
+            }
+            Self::UnexpectedVoidUse => {
+                write!(f, "`void` can't be used as actual type")
+            }
+
+            Self::UnexpectedGlobalStatement { statement } => {
+                write!(f, "unexpected global statement: {statement}")
+            }
+            Self::FunctionMustReturn { function_name } => {
+                write!(f, "function {function_name} may not return")
+            }
+
+            Self::LiteralParseError { what, error } => {
+                write!(f, "{error} in literal {what}")
+            }
+            Self::IncorrectArgumentCount { function_name, argument_need, argument_got } => {
+                write!(f, "incorrect argument count for function {function_name}, need {argument_need}, got {argument_got}")
+            }
+            Self::FunctionAsValue { name } => {
+                write!(f, "can't use function {name} as variable value")
             }
         }
     }
