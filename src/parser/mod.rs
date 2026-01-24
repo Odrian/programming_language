@@ -65,8 +65,8 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> CResult<()> {
 
     if args.write_syntactic_tree_to_file {
         let text = [&linked_program.type_statements, &linked_program.variable_statement, &linked_program.function_statement]
-            .iter().map(|hashmap| hashmap.values()
-                .map(|statement| statement.to_string() + "\n")
+            .iter().map(|hashmap| hashmap.iter()
+                .map(|(&object, statement)| statement.to_string(object) + "\n")
                 .collect::<String>()
         ).collect::<String>();
     

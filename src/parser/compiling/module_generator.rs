@@ -324,7 +324,6 @@ mod declaration_parsing {
                     }
                     return Ok(true)
                 }
-                LinkedStatement::GlobalStatement(_) => unreachable!(),
             }
             Ok(false)
         }

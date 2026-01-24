@@ -19,7 +19,6 @@ pub enum GlobalLinkedStatement {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedStatement {
-    GlobalStatement(GlobalLinkedStatement),
     VariableDeclaration { object: Object, value: TypedExpression },
     SetVariable { what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation> },
 
@@ -27,12 +26,6 @@ pub enum LinkedStatement {
     If { condition: TypedExpression, body: Vec<Self> },
     While { condition: TypedExpression, body: Vec<Self> },
     Return(Option<TypedExpression>),
-}
-
-impl From<GlobalLinkedStatement> for LinkedStatement {
-    fn from(value: GlobalLinkedStatement) -> Self {
-        Self::GlobalStatement(value)
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -117,8 +110,8 @@ fn to_string_with_tabs<T: ToString>(statements: &[T]) -> String {
     "    ".to_owned() + string.replace('\n', "\n    ").as_str()
 }
 
-impl fmt::Display for GlobalLinkedStatement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl GlobalLinkedStatement {
+    pub fn to_string(&self, object: Object) -> String {
         match self {
             Self::Struct { fields, field_names } => {
                 let fields = fields.iter().enumerate().map(|(index, typee)| {
@@ -126,15 +119,15 @@ impl fmt::Display for GlobalLinkedStatement {
                     format!("{name}: {typee}")
                 }).collect::<Vec<_>>().join(", ");
 
-                write!(f, "object :: struct {{ ({fields}) }}")
+                format!("{object} :: struct {{ ({fields}) }}")
             }
             Self::Function { args, returns, body } => {
                 let inside = to_string_with_tabs(body);
                 let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
-                write!(f, "object :: ({args}) -> {returns} {{\n{inside}\n}}")
+                format!("{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
             Self::VariableDeclaration { value } => {
-                write!(f, "object := {value}")
+                format!("{object} := {value}")
             }
         }
     }
@@ -143,7 +136,6 @@ impl fmt::Display for GlobalLinkedStatement {
 impl fmt::Display for LinkedStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GlobalStatement(statement) => fmt::Display::fmt(&statement, f),
             Self::VariableDeclaration { object, value } => {
                 write!(f, "{object} := {value}")
             }
@@ -209,36 +201,46 @@ impl fmt::Display for LinkedExpression {
 
 impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = match self {
-            Self::Pointer(object_type) => &format!("*{object_type}"),
-            Self::Reference(object_type) => &format!("&{object_type}"),
-            Self::Unknown => "unknown",
-            Self::Void => "void",
-            Self::Char => "char",
-            Self::Integer(int) => match int {
-                IntObjType::Bool => "bool",
-                IntObjType::I8 => "i8",
-                IntObjType::I16 => "i16",
-                IntObjType::I32 => "i32",
-                IntObjType::I64 => "i64",
-                IntObjType::I128 => "i128",
-                IntObjType::ISize => "isize",
-                IntObjType::U8 => "u8",
-                IntObjType::U16 => "u16",
-                IntObjType::U32 => "u32",
-                IntObjType::U64 => "u64",
-                IntObjType::U128 => "u128",
-                IntObjType::USize => "usize",
+        match self {
+            Self::Pointer(object_type) => write!(f, "*{object_type}"),
+            Self::Reference(object_type) => write!(f, "&{object_type}"),
+            Self::Unknown => write!(f, "unknown"),
+            Self::Void => write!(f, "void"),
+            Self::Char => write!(f, "char"),
+            Self::Integer(int) => {
+                let string = match int {
+                    IntObjType::Bool => "bool",
+                    IntObjType::I8 => "i8",
+                    IntObjType::I16 => "i16",
+                    IntObjType::I32 => "i32",
+                    IntObjType::I64 => "i64",
+                    IntObjType::I128 => "i128",
+                    IntObjType::ISize => "isize",
+                    IntObjType::U8 => "u8",
+                    IntObjType::U16 => "u16",
+                    IntObjType::U32 => "u32",
+                    IntObjType::U64 => "u64",
+                    IntObjType::U128 => "u128",
+                    IntObjType::USize => "usize",
+                };
+                write!(f, "{string}")
             }
             Self::Float(float) => match float {
-                FloatObjType::F32 => "f32",
-                FloatObjType::F64 => "f64",
+                FloatObjType::F32 => write!(f, "f32"),
+                FloatObjType::F64 => write!(f, "f64"),
             }
-            Self::Struct(..) | Self::Function { .. } => {
-                unimplemented!()
+            Self::Struct(object) => {
+                write!(f, "struct{object}")
             }
-        };
-        write!(f, "{name}")
+            Self::Function { arguments, returns } => {
+                if arguments.is_empty() {
+                    write!(f, "() -> {returns}")
+                } else {
+                    let arguments = arguments.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                    write!(f, "({arguments}) -> {returns}")
+                }
+            }
+        }
     }
 }
 
