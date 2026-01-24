@@ -39,9 +39,7 @@ A :: struct {
 ### Variable declaration
 
 You can define variable as follows.  
-Use --- for undefinded value, it can be used only if type can be determined by surrounding.
 ```
-name : type = ---;
 name : type;
 name : type = value;
 name := value;
@@ -68,6 +66,19 @@ Names may contain only `A..Z`, `a..z`, `0..9` and `_`. Using ` you can use any c
 ```
 `if` := 0;
 `a > b` := 0;
+```
+
+### Global variables
+
+Global can't be defined with value
+
+```
+count: i32;
+
+main :: () -> i32 {
+    count += 10;
+}
+
 ```
 
 ### Pointers

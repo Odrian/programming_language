@@ -51,6 +51,7 @@ pub enum CompilationError {
     LocalStructNotSupported,
     NoMainFunction,
     IncorrectMainSignature,
+    GlobalWithValue { name: String },
 
 
     LLVMError(BuilderError),
@@ -96,6 +97,9 @@ impl fmt::Display for CompilationError {
             }
             Self::IncorrectMainSignature => {
                 write!(f, "Error: incorrect main signature, only () -> i32 allowed")
+            }
+            Self::GlobalWithValue { name } => {
+                write!(f, "Error: global '{name}' has value, use ---")
             }
 
             Self::LLVMError(build_error) => {

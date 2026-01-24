@@ -8,15 +8,23 @@ use crate::parser::parse3_linking::error::LinkingError;
 use crate::parser::parse3_linking::TypeContext;
 
 pub fn link_objects(context: &mut TypeContext) -> CResult<()> {
-    let declarations = std::mem::take(&mut context.function_statement);
+    let function_declarations = std::mem::take(&mut context.function_statement);
+    let variable_declarations = std::mem::take(&mut context.variable_statement);
 
     let mut linking_context = FunctionLinkingContext::new(context);
 
-    for (&object, statement) in &declarations {
-        linking_context.prelink_global_statement(object, statement)?;
+    for (&object, statement) in &variable_declarations {
+        linking_context.prelink_global_variable(object, statement)?;
     }
-    for (object, statement) in declarations {
-        linking_context.link_global_statement(object, statement)?;
+    for (&object, statement) in &function_declarations {
+        linking_context.prelink_global_function(object, statement)?;
+    }
+
+    for (object, statement) in variable_declarations {
+        linking_context.parse_global_variable(object, statement)?;
+    }
+    for (object, statement) in function_declarations {
+        linking_context.parse_global_function(object, statement)?;
     }
     Ok(())
 }
@@ -38,67 +46,37 @@ impl<'factory> FunctionLinkingContext<'factory> {
 }
 
 impl FunctionLinkingContext<'_> {
-    fn prelink_global_statement(&mut self, object: Object, statement: &Statement) -> CResult<()> {
-        match statement {
-            Statement::DeclarationStatement { name, statement } => {
-                match &statement {
-                    DeclarationStatement::VariableDeclaration { .. } => self.prelink_global_variable(object, name, statement),
-                    DeclarationStatement::Function { .. } => self.prelink_global_function(object, name, statement),
-                    DeclarationStatement::Struct { .. } => unreachable!(),
-                }
-            },
-            _ => {
-                LinkingError::UnexpectedGlobalStatement { statement: statement.to_string() }.print();
-                Err(())
-            }
-        }
-    }
-    fn link_global_statement(&mut self, object: Object, statement: Statement) -> CResult<()> {
-        match statement {
-            Statement::DeclarationStatement { name, statement } => {
-                match &statement {
-                    DeclarationStatement::VariableDeclaration { .. } => self.parse_global_variable(object, name, statement),
-                    DeclarationStatement::Function { .. } => self.parse_global_function(object, name, statement),
-                    DeclarationStatement::Struct { .. } => unreachable!(),
-                }
-            },
-            _ => {
-                LinkingError::UnexpectedGlobalStatement { statement: statement.to_string() }.print();
-                Err(())
-            }
-        }
-    }
-    fn prelink_global_variable(&mut self, object: Object, name: &str, declaration: &DeclarationStatement) -> CResult<()> {
-        let DeclarationStatement::VariableDeclaration { typee, value: _ } = declaration else { unreachable!() };
+    fn prelink_global_variable(&mut self, object: Object, statement: &Statement) -> CResult<()> {
+        let Statement::DeclarationStatement { name, statement } = statement else { unreachable!() };
+        let DeclarationStatement::VariableDeclaration { typee, value: _ } = statement else { unreachable!() };
+
         let Some(typee) = typee else {
             LinkingError::GlobalVariableWithoutType { name: name.to_owned() }.print();
             return Err(())
         };
         let obj_type = self.parse_type(typee)?;
-        unimplemented!(); // TODO: obj_type must be ObjType::Ref(T)
 
         *self.context.factory.get_type_mut(object) = obj_type;
         self.object_context_window.add(name.to_owned(), object);
 
         Ok(())
     }
-    fn parse_global_variable(&mut self, object: Object, name: String, declaration: DeclarationStatement) -> CResult<()> {
-        let DeclarationStatement::VariableDeclaration { typee: _, value } = declaration else { unreachable!() };
+    fn parse_global_variable(&mut self, object: Object, statement: Statement) -> CResult<()> {
+        let Statement::DeclarationStatement { name: _, statement } = statement else { unreachable!() };
+        let DeclarationStatement::VariableDeclaration { typee: _, value } = statement else { unreachable!() };
 
         let var_type = self.context.factory.get_type(object).clone();
 
         let expression = self.parse_expression(value, Some(&var_type))?;
-
-        if !matches!(expression.expr, LinkedExpression::Undefined(..)) {
-            unimplemented!() // TODO: default value for global
-        }
-
         let linked_statement = GlobalLinkedStatement::new_variable(expression);
+
         self.context.result.variable_statement.insert(object, linked_statement);
         Ok(())
     }
-    fn prelink_global_function(&mut self, object: Object, name: &str, declaration: &DeclarationStatement) -> CResult<()> {
-        let DeclarationStatement::Function { args, returns, body: _ } = declaration else { unreachable!() };
+    fn prelink_global_function(&mut self, object: Object, statement: &Statement) -> CResult<()> {
+        let Statement::DeclarationStatement { name, statement } = statement else { unreachable!() };
+        let DeclarationStatement::Function { args, returns, body: _ } = statement else { unreachable!() };
+
         let mut arguments_type = Vec::with_capacity(args.len());
         for (_, typee) in args {
             let object_type = self.parse_type(typee)?;
@@ -125,8 +103,10 @@ impl FunctionLinkingContext<'_> {
 
         Ok(())
     }
-    fn parse_global_function(&mut self, object: Object, name: String, declaration: DeclarationStatement) -> CResult<()> {
-        let DeclarationStatement::Function { args, returns: _, body } = declaration else { unreachable!() };
+    fn parse_global_function(&mut self, object: Object, statement: Statement) -> CResult<()> {
+        let Statement::DeclarationStatement { name, statement } = statement else { unreachable!() };
+        let DeclarationStatement::Function { args, returns: _, body } = statement else { unreachable!() };
+
         let mut arguments_obj = Vec::with_capacity(args.len());
 
         let func_type = self.context.factory.get_type(object).clone();
@@ -347,13 +327,15 @@ impl FunctionLinkingContext<'_> {
             }
             Expression::Variable(name) => {
                 let object = self.object_context_window.get_or_error(&name)?;
-                if matches!(self.context.factory.get_type(object), ObjType::Function { .. }) {
+                let obj_type = self.context.factory.get_type(object);
+
+                if matches!(obj_type, ObjType::Function { .. }) {
                     LinkingError::FunctionAsValue { name }.print();
                     return Err(())
                 }
-                let obj_type = self.context.factory.get_type(object).clone();
+
                 let result = TypedExpression::new(
-                    obj_type,
+                    obj_type.clone(),
                     LinkedExpression::Variable(object)
                 );
                 Self::try_autocast(result, expected_type)
@@ -417,16 +399,18 @@ impl FunctionLinkingContext<'_> {
                     return Ok(object_type)
                 }
 
+                // TODO: get struct type
+
                 LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.object_context_window) }.print();
                 Err(())
             }
             Typee::Pointer(obj_type) => {
                 let obj_type = self.parse_type(obj_type)?;
-                Ok(ObjType::Pointer(Box::new(obj_type)))
+                Ok(ObjType::new_pointer(obj_type))
             }
             Typee::Reference(obj_type) => {
                 let obj_type = self.parse_type(obj_type)?;
-                Ok(ObjType::Reference(Box::new(obj_type)))
+                Ok(ObjType::new_reference(obj_type))
             }
         }
     }

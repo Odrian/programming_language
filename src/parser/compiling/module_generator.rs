@@ -96,6 +96,18 @@ impl<'ctx> CodeModuleGen<'ctx> {
     }
 }
 
+fn get_undef(value_type: BasicTypeEnum) -> BasicValueEnum {
+    match value_type {
+        BasicTypeEnum::ArrayType(v) => v.get_undef().into(),
+        BasicTypeEnum::FloatType(v) => v.get_undef().into(),
+        BasicTypeEnum::IntType(v) => v.get_undef().into(),
+        BasicTypeEnum::PointerType(v) => v.get_undef().into(),
+        BasicTypeEnum::StructType(v) => v.get_undef().into(),
+        BasicTypeEnum::VectorType(v) => v.get_undef().into(),
+        BasicTypeEnum::ScalableVectorType(v) => v.get_undef().into(),
+    }
+}
+
 /// parsing statements in global space
 mod module_parsing {
     use super::*;
@@ -113,32 +125,39 @@ mod module_parsing {
             for (object, statement) in &function_statements {
                 self.create_function(*object, statement);
             }
-            for (object, statement) in &variable_statements {
-                self.create_global_var(*object, statement);
+            for (object, statement) in variable_statements {
+                self.create_global_var(object, statement)?;
             }
 
             // parse declarations
             for (object, statement) in function_statements {
                 self.parse_function(object, statement)?;
             }
-            for (object, statement) in variable_statements {
-                // TODO
-            }
 
             self.context_window.step_out();
             Ok(())
         }
 
-        fn create_global_var(&mut self, object: Object, statement: &GlobalLinkedStatement) {
+        fn create_global_var(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), CE> {
             let GlobalLinkedStatement::VariableDeclaration { value } = statement else { unreachable!() };
 
             let global_type = self.parse_type(&value.object_type);
-            unimplemented!(); // TODO: global_type actually is ObjType::Ref(T)
 
             let name = self.get_object_name(object);
             let global_value = self.module.add_global(global_type, None, name);
 
+            let global_const_value = self.get_const_value(object, value)?;
+            global_value.set_initializer(&global_const_value);
+
             self.context_window.add(object, global_value.as_any_value_enum());
+            Ok(())
+        }
+        fn get_const_value(&self, object: Object, value: TypedExpression) -> Result<BasicValueEnum<'ctx>, CE> {
+            let TypedExpression { object_type: _, expr } = value;
+            let LinkedExpression::Undefined(obj_type) = expr else {
+                return Err(CE::GlobalWithValue { name: self.get_object_name(object).clone()});
+            };
+            Ok(get_undef(self.parse_type(&obj_type)))
         }
         fn create_function(&mut self, object: Object, statement: &GlobalLinkedStatement) {
             let GlobalLinkedStatement::Function { args, returns, body: _ } = statement else { unreachable!() };
@@ -344,16 +363,7 @@ mod declaration_parsing {
                 },
                 LinkedExpression::Undefined(obj_type) => {
                     let value_type = self.parse_type(&obj_type);
-                    let undef_value: BasicValueEnum = match value_type {
-                        BasicTypeEnum::ArrayType(v) => v.get_undef().into(),
-                        BasicTypeEnum::FloatType(v) => v.get_undef().into(),
-                        BasicTypeEnum::IntType(v) => v.get_undef().into(),
-                        BasicTypeEnum::PointerType(v) => v.get_undef().into(),
-                        BasicTypeEnum::StructType(v) => v.get_undef().into(),
-                        BasicTypeEnum::VectorType(v) => v.get_undef().into(),
-                        BasicTypeEnum::ScalableVectorType(v) => v.get_undef().into(),
-                    };
-                    Ok(Some(undef_value))
+                    Ok(Some(get_undef(value_type)))
                 }
                 LinkedExpression::IntLiteral(literal, object_type) => {
                     let int_type = self.parse_type(&object_type).into_int_type();

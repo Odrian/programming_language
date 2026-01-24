@@ -99,3 +99,42 @@ main :: () -> i32 {
     let result = get_exit_code(program);
     assert_eq!(result, 10);
 }
+
+#[test]
+fn test_global() {
+    assert_eq!(10, get_exit_code("\
+count : i32;
+
+main :: () -> i32 {
+    count = 10;
+    return count;
+}
+"));
+
+    assert_eq!(17, get_exit_code("\
+count: i32;
+
+add :: (n: i32) {
+    count += n;
+}
+
+main :: () -> i32 {
+    count = 10;
+    add(7);
+    return count;
+}
+"));
+
+    assert_eq!(17, get_exit_code("\
+count: i32;
+
+foo :: (n: i32) -> i32 {
+    return count + n;
+}
+
+main :: () -> i32 {
+    count = 10;
+    return foo(7)
+}
+"));
+}

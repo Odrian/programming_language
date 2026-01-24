@@ -18,7 +18,6 @@ pub enum LinkingError {
     GlobalVariableWithoutType { name: String },
     UnexpectedVoidUse,
 
-    UnexpectedGlobalStatement { statement: String },
     FunctionMustReturn { function_name: String },
 
     LiteralParseError { what: String, error: String },
@@ -73,9 +72,6 @@ impl Display for LinkingError {
                 write!(f, "`void` can't be used as actual type")
             }
 
-            Self::UnexpectedGlobalStatement { statement } => {
-                write!(f, "unexpected global statement: {statement}")
-            }
             Self::FunctionMustReturn { function_name } => {
                 write!(f, "function {function_name} may not return")
             }

@@ -102,11 +102,11 @@ impl TypeResolver<'_> {
             }
             Typee::Pointer(obj_type) => {
                 let obj_type = self.parse_type(obj_type, dependencies, true)?;
-                Ok(ObjType::Pointer(Box::new(obj_type)))
+                Ok(ObjType::new_pointer(obj_type))
             }
             Typee::Reference(obj_type) => {
                 let obj_type = self.parse_type(obj_type, dependencies, true)?;
-                Ok(ObjType::Reference(Box::new(obj_type)))
+                Ok(ObjType::new_reference(obj_type))
             }
         }
     }

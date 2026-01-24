@@ -22,6 +22,13 @@ impl ObjType {
     pub const DEFAULT_INTEGER: Self = Self::Integer(IntObjType::I32);
     pub const DEFAULT_FLOAT: Self = Self::Float(FloatObjType::F64);
 
+    pub fn new_pointer(obj_type: ObjType) -> Self {
+        Self::Pointer(Box::new(obj_type))
+    }
+    pub fn new_reference(obj_type: ObjType) -> Self {
+        Self::Reference(Box::new(obj_type))
+    }
+
     pub fn is_void(&self) -> bool {
         self == &Self::Void
     }
