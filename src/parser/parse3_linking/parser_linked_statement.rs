@@ -373,6 +373,26 @@ impl FunctionLinkingContext<'_> {
                 let left = self.parse_expression(*left, None)?;
 
                 match &left.object_type {
+                    ObjType::Reference(object) if matches!(object.as_ref(), ObjType::Struct(..)) => {
+                        let ObjType::Struct(object) = object.as_ref() else { unreachable!() };
+
+                        let statement = self.context.result.type_statements.get(&object).unwrap();
+                        let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
+                        let Some(&index) = field_names.get(&field) else {
+                            LinkingError::StructFieldNameNotFound {
+                                struct_name: self.context.factory.get_name(*object).clone(),
+                                field_name: field,
+                            }.print();
+                            return Err(());
+                        };
+                        let obj_type = fields.get(index as usize).unwrap().clone();
+
+                        let result = TypedExpression {
+                            object_type: ObjType::new_reference(obj_type),
+                            expr: LinkedExpression::new_struct_field(left, index)
+                        };
+                        Self::try_autocast(result, expected_type)
+                    }
                     ObjType::Struct(object) => {
                         let statement = self.context.result.type_statements.get(object).unwrap();
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
@@ -396,7 +416,7 @@ impl FunctionLinkingContext<'_> {
                         Self::try_autocast(result, expected_type)
                     }
                     _ => {
-                        LinkingError::DotNotOnStruct.print();
+                        LinkingError::DotNotOnStruct { got: left.object_type }.print();
                         Err(())
                     }
                 }

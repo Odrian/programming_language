@@ -41,7 +41,9 @@ A :: struct {
 }
 ```
 
-can be created only with garbage
+`struct.field` works as reference to T
+
+struct can be created only with garbage
 ```
 a: A;
 a.field1 = 0_u32;

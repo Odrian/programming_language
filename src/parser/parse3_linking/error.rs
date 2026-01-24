@@ -8,7 +8,7 @@ pub enum LinkingError {
     Overloading { name: String },
     NameNotFound { name: String, context: String },
 
-    DotNotOnStruct,
+    DotNotOnStruct { got: ObjType },
     StructFieldNameCollision { field_name: String },
     StructFieldNameNotFound { struct_name: String, field_name: String },
     IncorrectType { got: ObjType, expected: ObjType },
@@ -45,8 +45,8 @@ impl Display for LinkingError {
                 write!(f, "can't find {name} in {context}")
             }
 
-            Self::DotNotOnStruct => {
-                write!(f, "dot operator can be used only on struct type")
+            Self::DotNotOnStruct { got } => {
+                write!(f, "dot operator can't be used on {got}")
             }
             Self::StructFieldNameCollision { field_name } => {
                 write!(f, "struct has two fields with name {field_name}")
