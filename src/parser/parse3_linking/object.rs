@@ -13,7 +13,7 @@ pub enum ObjType {
     Integer(IntObjType),
     Float(FloatObjType),
     Pointer(Box<Self>),
-    // Reference(Box<Self>),
+    Reference(Box<Self>),
     Struct(Object),
     Function { arguments: Vec<Self>, returns: Box<Self> },
 }
@@ -35,10 +35,29 @@ impl ObjType {
         }
     }
     pub fn unwrap_ref(&self) -> &Self {
-        let Self::Pointer(obj_type) = self else {
-            panic!()
-        };
-        obj_type.as_ref()
+        match self {
+            Self::Pointer(obj_type) => obj_type.as_ref(),
+            Self::Reference(obj_type) => obj_type.as_ref(),
+            _ => panic!(),
+        }
+    }
+    /// check that self and other are &T and *T or *T and &T
+    pub fn is_different_pointers(&self, other: &ObjType) -> bool {
+        match self {
+            Self::Reference(obj_type) => {
+                match other {
+                    Self::Pointer(obj_type2) => obj_type == obj_type2,
+                    _ => false,
+                }
+            }
+            Self::Pointer(obj_type) => {
+                match other {
+                    Self::Reference(obj_type2) => obj_type == obj_type2,
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
     }
 }
 

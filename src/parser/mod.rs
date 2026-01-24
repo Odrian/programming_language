@@ -66,9 +66,9 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> CResult<()> {
     if args.write_syntactic_tree_to_file {
         let text = [&linked_program.type_statements, &linked_program.variable_statement, &linked_program.function_statement]
             .iter().map(|hashmap| hashmap.values()
-                .map(|statement| statement.to_string())
-                .collect::<Vec<_>>().join("\n")
-        ).collect::<Vec<_>>().join("\n");
+                .map(|statement| statement.to_string() + "\n")
+                .collect::<String>()
+        ).collect::<String>();
     
         fs::create_dir_all(ARTIFACT_DIR).unwrap();
         let filepath = format!("{ARTIFACT_DIR}/{filename}_AST.txt");

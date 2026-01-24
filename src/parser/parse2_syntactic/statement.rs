@@ -46,7 +46,20 @@ pub enum Expression {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Typee {
     String(String),
+    Pointer(Box<Typee>),
     Reference(Box<Typee>),
+}
+
+impl Typee {
+    pub fn new_string(string: String) -> Self {
+        Self::String(string)
+    }
+    pub fn new_pointer(typee: Typee) -> Self {
+        Self::Pointer(Box::new(typee))
+    }
+    pub fn new_reference(typee: Typee) -> Self {
+        Self::Reference(Box::new(typee))
+    }
 }
 
 impl Statement {
@@ -203,7 +216,8 @@ impl fmt::Display for Typee {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::String(string) => write!(f, "{string}"),
-            Self::Reference(typee) => write!(f, "*{typee}"),
+            Self::Pointer(typee) => write!(f, "*{typee}"),
+            Self::Reference(typee) => write!(f, "&{typee}"),
         }
     }
 }

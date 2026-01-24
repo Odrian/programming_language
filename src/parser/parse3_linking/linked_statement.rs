@@ -207,6 +207,7 @@ impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
             Self::Pointer(object_type) => &format!("*{object_type}"),
+            Self::Reference(object_type) => &format!("&{object_type}"),
             Self::Unknown => "unknown",
             Self::Void => "void",
             Self::Char => "char",

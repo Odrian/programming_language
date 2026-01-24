@@ -7,7 +7,7 @@ use super::context_window::ValueContextWindow;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue};
+use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue, AnyValue};
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
@@ -61,7 +61,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
         match object_type {
             ObjType::Unknown => unreachable!(),
             ObjType::Void => unimplemented!(),
-            ObjType::Pointer(_) => self.context.ptr_type(AddressSpace::default()).into(),
+            ObjType::Pointer(..) | ObjType::Reference(..) => self.context.ptr_type(AddressSpace::default()).into(),
             ObjType::Char => self.context.i8_type().into(),
             ObjType::Integer(int) => match int {
                 IntObjType::Bool => self.context.bool_type().into(),
@@ -98,8 +98,6 @@ impl<'ctx> CodeModuleGen<'ctx> {
 
 /// parsing statements in global space
 mod module_parsing {
-    use inkwell::types::AnyTypeEnum;
-    use inkwell::values::AnyValue;
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx> {
@@ -133,7 +131,7 @@ mod module_parsing {
 
         fn create_global_var(&mut self, object: Object, statement: &GlobalLinkedStatement) {
             let GlobalLinkedStatement::VariableDeclaration { value } = statement else { unreachable!() };
-            
+
             let global_type = self.parse_type(&value.object_type);
             unimplemented!(); // TODO: global_type actually is ObjType::Ref(T)
 
@@ -432,103 +430,105 @@ mod declaration_parsing {
                 LinkedExpression::As(expression, to_obj_type) => {
                     let TypedExpression { expr: linked_expr, object_type: was_obj_type } = *expression;
                     let ex = self.parse_expression(linked_expr)?.unwrap();
-
-                    let result = match was_obj_type {
-                        ObjType::Char => {
-                            let ex_int = ex.into_int_value();
-
-                            let from_type = self.parse_type(&ObjType::Char).into_int_type();
-                            let to_type = self.parse_type(&to_obj_type).into_int_type();
-
-                            let from_size = from_type.get_bit_width();
-                            let to_size = to_type.get_bit_width();
-
-                            match from_size.cmp(&to_size) {
-                                Ordering::Equal => {
-                                    ex
-                                }
-                                Ordering::Less => { // extend
-                                    self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
-                                }
-                                Ordering::Greater => { // truncation
-                                    self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
-                                }
-                            }
-                        }
-                        ObjType::Integer(int_type_from) => match to_obj_type {
-                            ObjType::Integer(_) | ObjType::Char => {
-                                let ex_int = ex.into_int_value();
-
-                                let from_type = self.parse_type(&was_obj_type).into_int_type();
-                                let to_type = self.parse_type(&to_obj_type).into_int_type();
-
-                                let from_size = from_type.get_bit_width();
-                                let to_size = to_type.get_bit_width();
-
-                                match from_size.cmp(&to_size) {
-                                    Ordering::Equal => {
-                                        ex
-                                    }
-                                    Ordering::Less => { // extend
-                                        if int_type_from.is_signed() {
-                                            // example: i8 -> i16, i8 -> u16 (i8 -> i16 -> u16)
-                                            self.builder.build_int_s_extend(ex_int, to_type, "int_casing")?.into()
-                                        } else {
-                                            // example: u8 -> i16/u16
-                                            self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
-                                        }
-                                    }
-                                    Ordering::Greater => { // truncation
-                                        self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
-                                    }
-                                }
-                            }
-                            ObjType::Pointer(reference_type) => {
-                                let ex_int = ex.into_int_value();
-                                let pointer_type = self.parse_type(&ObjType::Pointer(reference_type)).into_pointer_type();
-
-                                self.builder.build_int_to_ptr(ex_int, pointer_type, "int_to_ptr")?.into()
-                            }
-                            _ => unreachable!()
-                        }
-                        ObjType::Float(_) => {
-                            let ex_float = ex.into_float_value();
-
-                            let to_type = self.parse_type(&to_obj_type).into_float_type();
-
-                            let from_size = was_obj_type.get_float_bits_or_panic();
-                            let to_size = to_obj_type.get_float_bits_or_panic();
-
-                            match from_size.cmp(&to_size) {
-                                Ordering::Equal => {
-                                    ex
-                                }
-                                Ordering::Less => { // extend
-                                    self.builder.build_float_ext(ex_float, to_type, "float_casing")?.into()
-                                }
-                                Ordering::Greater => { // truncation
-                                    self.builder.build_float_trunc(ex_float, to_type, "float_casing")?.into()
-                                }
-                            }
-                        }
-                        ObjType::Pointer(_) => {
-                            match &to_obj_type {
-                                ObjType::Pointer(_) => ex,
-                                ObjType::Integer(_) => {
-                                    let ex_ptr = ex.into_pointer_value();
-
-                                    let to_type = self.parse_type(&to_obj_type).into_int_type();
-
-                                    self.builder.build_ptr_to_int(ex_ptr, to_type, "asd")?.into()
-                                }
-                                _ => unreachable!()
-                            }
-                        }
-                        ObjType::Struct(..) | ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!()
-                    };
-                    Ok(Some(result))
+                    self.parse_as(ex, was_obj_type, to_obj_type)
                 }
             }
+        }
+        fn parse_as(&self, ex: BasicValueEnum<'ctx>, was_obj_type: ObjType, to_obj_type: ObjType) -> Result<Option<BasicValueEnum<'ctx>>, CE> {
+            let result = match was_obj_type {
+                ObjType::Char => {
+                    let ex_int = ex.into_int_value();
+
+                    let from_type = self.parse_type(&ObjType::Char).into_int_type();
+                    let to_type = self.parse_type(&to_obj_type).into_int_type();
+
+                    let from_size = from_type.get_bit_width();
+                    let to_size = to_type.get_bit_width();
+
+                    match from_size.cmp(&to_size) {
+                        Ordering::Equal => {
+                            ex
+                        }
+                        Ordering::Less => { // extend
+                            self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
+                        }
+                        Ordering::Greater => { // truncation
+                            self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
+                        }
+                    }
+                }
+                ObjType::Integer(int_type_from) => match to_obj_type {
+                    ObjType::Integer(_) | ObjType::Char => {
+                        let ex_int = ex.into_int_value();
+
+                        let from_type = self.parse_type(&was_obj_type).into_int_type();
+                        let to_type = self.parse_type(&to_obj_type).into_int_type();
+
+                        let from_size = from_type.get_bit_width();
+                        let to_size = to_type.get_bit_width();
+
+                        match from_size.cmp(&to_size) {
+                            Ordering::Equal => {
+                                ex
+                            }
+                            Ordering::Less => { // extend
+                                if int_type_from.is_signed() {
+                                    // example: i8 -> i16, i8 -> u16 (i8 -> i16 -> u16)
+                                    self.builder.build_int_s_extend(ex_int, to_type, "int_casing")?.into()
+                                } else {
+                                    // example: u8 -> i16/u16
+                                    self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
+                                }
+                            }
+                            Ordering::Greater => { // truncation
+                                self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
+                            }
+                        }
+                    }
+                    ObjType::Pointer(reference_type) => {
+                        let ex_int = ex.into_int_value();
+                        let pointer_type = self.parse_type(&ObjType::Pointer(reference_type)).into_pointer_type();
+
+                        self.builder.build_int_to_ptr(ex_int, pointer_type, "int_to_ptr")?.into()
+                    }
+                    _ => unreachable!()
+                }
+                ObjType::Float(_) => {
+                    let ex_float = ex.into_float_value();
+
+                    let to_type = self.parse_type(&to_obj_type).into_float_type();
+
+                    let from_size = was_obj_type.get_float_bits_or_panic();
+                    let to_size = to_obj_type.get_float_bits_or_panic();
+
+                    match from_size.cmp(&to_size) {
+                        Ordering::Equal => {
+                            ex
+                        }
+                        Ordering::Less => { // extend
+                            self.builder.build_float_ext(ex_float, to_type, "float_casing")?.into()
+                        }
+                        Ordering::Greater => { // truncation
+                            self.builder.build_float_trunc(ex_float, to_type, "float_casing")?.into()
+                        }
+                    }
+                }
+                ObjType::Reference(_) | ObjType::Pointer(_) => {
+                    match &to_obj_type {
+                        ObjType::Pointer(_) => ex,
+                        ObjType::Integer(_) => {
+                            let ex_ptr = ex.into_pointer_value();
+
+                            let to_type = self.parse_type(&to_obj_type).into_int_type();
+
+                            self.builder.build_ptr_to_int(ex_ptr, to_type, "asd")?.into()
+                        }
+                        _ => unreachable!()
+                    }
+                }
+                ObjType::Struct(..) | ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!()
+            };
+            Ok(Some(result))
         }
         fn parse_operation(&self, v1: BasicValueEnum<'ctx>, v2: BasicValueEnum<'ctx>, type1: ObjType, op: TwoSidedOperation) -> Result<BasicValueEnum<'ctx>, CE> {
             let result = match op {
@@ -570,6 +570,7 @@ mod declaration_parsing {
                     }
                 }
                 TwoSidedOperation::Compare(comp_op) => match type1 {
+                    ObjType::Reference(..) => unreachable!(),
                     ObjType::Pointer(_) => {
                         let ex1 = v1.into_pointer_value();
                         let ex2 = v2.into_pointer_value();

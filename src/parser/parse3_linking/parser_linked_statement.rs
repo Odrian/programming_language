@@ -88,7 +88,7 @@ impl FunctionLinkingContext<'_> {
         let var_type = self.context.factory.get_type(object).clone();
 
         let expression = self.parse_expression(value, Some(&var_type))?;
-        
+
         if !matches!(expression.expr, LinkedExpression::Undefined(..)) {
             unimplemented!() // TODO: default value for global
         }
@@ -150,7 +150,7 @@ impl FunctionLinkingContext<'_> {
             if return_type == ObjType::Void {
                 body.push(LinkedStatement::Return(None));
             } else {
-                LinkingError::FunctionMustReturn { function_name: name }.print(); 
+                LinkingError::FunctionMustReturn { function_name: name }.print();
                 return Err(())
             }
         }
@@ -167,33 +167,40 @@ impl FunctionLinkingContext<'_> {
         Ok(result)
     }
     fn parse_statement(&mut self, statement: Statement) -> CResult<LinkedStatement> {
-        Ok(match statement {
+        match statement {
             Statement::SetVariable { what, value, op } => {
                 let what = self.parse_expression(what, None)?;
-                let value = self.parse_expression(value, Some(&what.object_type))?;
-                if what.object_type != value.object_type {
-                    LinkingError::IncorrectType { got: value.object_type, expected: what.object_type }.print();
-                    return Err(())
+                if let ObjType::Reference(what_ref) = &what.object_type {
+                    // &T = T
+                    let value = self.parse_expression(value, Some(what_ref))?;
+                    let new_what = TypedExpression {
+                        object_type: what_ref.as_ref().clone(),
+                        expr: LinkedExpression::new_unary_operation(what, OneSidedOperation::Dereference)
+                    };
+                    Ok(LinkedStatement::new_set(new_what, value, op))
+                } else {
+                    // T = T
+                    let value = self.parse_expression(value, Some(&what.object_type))?;
+                    Ok(LinkedStatement::new_set(what, value, op))
                 }
-                LinkedStatement::new_set(what, value, op)
             }
             Statement::Expression(expression) => {
                 let expression = self.parse_expression(expression, None)?;
-                LinkedStatement::Expression(expression)
+                Ok(LinkedStatement::Expression(expression))
             }
             Statement::If { condition, body } => {
                 let condition = self.parse_expression(condition, Some(&ObjType::BOOL))?;
                 self.object_context_window.step_in();
                 let body = self.link_statements_recursive(body)?;
                 self.object_context_window.step_out();
-                LinkedStatement::new_if(condition, body)
+                Ok(LinkedStatement::new_if(condition, body))
             }
             Statement::While { condition, body } => {
                 let condition = self.parse_expression(condition, Some(&ObjType::BOOL))?;
                 self.object_context_window.step_in();
                 let body = self.link_statements_recursive(body)?;
                 self.object_context_window.step_out();
-                LinkedStatement::new_while(condition, body)
+                Ok(LinkedStatement::new_while(condition, body))
             }
             Statement::Return(option_expression) => {
                 let expression = match option_expression {
@@ -209,18 +216,18 @@ impl FunctionLinkingContext<'_> {
                     LinkingError::IncorrectType { got: expression_type.clone(), expected: expected_type }.print();
                     return Err(())
                 }
-                LinkedStatement::Return(expression)
+                Ok(LinkedStatement::Return(expression))
             }
             Statement::DeclarationStatement { name, statement} => match &statement {
                 DeclarationStatement::VariableDeclaration { .. } => {
-                    self.parse_variable_declaration(name, statement)?
+                    self.parse_variable_declaration(name, statement)
                 },
                 DeclarationStatement::Function { .. } | DeclarationStatement::Struct { .. } => unreachable!(),
             },
             Statement::ComptimeStatement(statement) => match statement {
                 ComptimeStatement::Import { .. } => unimplemented!(),
             }
-        })
+        }
     }
     fn parse_variable_declaration(&mut self, name: String, declaration: DeclarationStatement) -> CResult<LinkedStatement> {
         let DeclarationStatement::VariableDeclaration { typee, value } = declaration else { unreachable!() };
@@ -238,15 +245,30 @@ impl FunctionLinkingContext<'_> {
         self.object_context_window.add(name, object);
         Ok(LinkedStatement::new_variable(object, typed_expr))
     }
-    fn check_expected_type(expected_type: Option<&ObjType>, actual_type: &ObjType) -> CResult<()> {
-        if let Some(obj_type) = expected_type && obj_type != actual_type {
-            LinkingError::IncorrectType { expected: obj_type.clone(), got: actual_type.clone() }.print();
-            return Err(())
+    fn try_autocast(mut typed_expression: TypedExpression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
+        let Some(expected_type) = expected_type else {
+            return Ok(typed_expression)
+        };
+        if &typed_expression.object_type == expected_type {
+            return Ok(typed_expression)
         }
-        Ok(())
+        // &T <-> *T
+        if typed_expression.object_type.is_different_pointers(expected_type) {
+            typed_expression.object_type = expected_type.clone();
+            return Ok(typed_expression)
+        }
+        // &T -> T
+        if let ObjType::Reference(obj_type) = &typed_expression.object_type && expected_type == obj_type.as_ref() {
+            return Ok(TypedExpression {
+                object_type: expected_type.clone(),
+                expr: LinkedExpression::new_unary_operation(typed_expression, OneSidedOperation::Dereference)
+            })
+        }
+        LinkingError::IncorrectType { expected: expected_type.clone(), got: typed_expression.object_type }.print();
+        Err(())
     }
     fn parse_expression(&mut self, expression: Expression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
-        let linked: TypedExpression = match expression {
+        match expression {
             Expression::Operation(expression1, expression2, op) => {
                 let ex1 = self.parse_expression(*expression1, None)?;
                 let ex2 = self.parse_expression(*expression2, None)?;
@@ -254,11 +276,11 @@ impl FunctionLinkingContext<'_> {
                     LinkingError::IncorrectTwoOper { object_type1: ex1.object_type, object_type2: ex2.object_type, op }.print();
                     return Err(())
                 };
-                Self::check_expected_type(expected_type, &result_type)?;
-                TypedExpression::new(
+                let result = TypedExpression::new(
                     result_type,
                     LinkedExpression::new_operation(ex1, ex2, op)
-                )
+                );
+                Self::try_autocast(result, expected_type)
             }
             Expression::UnaryOperation(expression, op) => {
                 let ex = self.parse_expression(*expression, None)?;
@@ -266,16 +288,15 @@ impl FunctionLinkingContext<'_> {
                     LinkingError::IncorrectOneOper { object_type: ex.object_type, op }.print();
                     return Err(())
                 };
-                Self::check_expected_type(expected_type, &result_type)?;
-                TypedExpression::new(
+                let result = TypedExpression::new(
                     result_type,
                     LinkedExpression::new_unary_operation(ex, op)
-                )
+                );
+                Self::try_autocast(result, expected_type)
             }
             Expression::As(expression, typee) => {
                 let ex = self.parse_expression(*expression, None)?;
                 let object_type = self.parse_type(&typee)?;
-                Self::check_expected_type(expected_type, &object_type)?;
 
                 let can_cast = ObjType::check_can_cast(&ex.object_type, &object_type);
                 if !can_cast {
@@ -283,43 +304,46 @@ impl FunctionLinkingContext<'_> {
                     return Err(())
                 }
 
-                TypedExpression::new(
+                let result = TypedExpression::new(
                     object_type.clone(),
                     LinkedExpression::new_as(ex, object_type),
-                )
+                );
+                Self::try_autocast(result, expected_type)
             }
             Expression::Undefined => {
                 let Some(obj_type) = expected_type else {
                     LinkingError::CantDetermineType.print();
                     return Err(())
                 };
-                TypedExpression::new(
+                Ok(TypedExpression::new(
                     obj_type.clone(),
                     LinkedExpression::Undefined(obj_type.clone()),
-                )
+                ))
             }
             Expression::NumberLiteral(string) => {
                 let result = parse_number_literal(string)?;
-                Self::check_expected_type(expected_type, &result.object_type)?;
-                result
+                Self::try_autocast(result, expected_type)
             },
             Expression::BoolLiteral(value) => {
-                Self::check_expected_type(expected_type, &ObjType::BOOL)?;
-                TypedExpression::new(
+                let result = TypedExpression::new(
                     ObjType::BOOL,
                     LinkedExpression::BoolLiteral(value),
-                )
+                );
+                Self::try_autocast(result, expected_type)
             }
             Expression::CharLiteral(value) => {
-                Self::check_expected_type(expected_type, &ObjType::Char)?;
-                TypedExpression::new(
+                let result = TypedExpression::new(
                     ObjType::Char,
                     LinkedExpression::CharLiteral(value),
-                )
+                );
+                Self::try_autocast(result, expected_type)
             }
             Expression::RoundBracket(ex1) => {
                 let ex1 = self.parse_expression(*ex1, expected_type)?;
-                TypedExpression::new(ex1.object_type.clone(), LinkedExpression::new_round_bracket(ex1))
+                Ok(TypedExpression::new(
+                    ex1.object_type.clone(),
+                    LinkedExpression::new_round_bracket(ex1)
+                ))
             }
             Expression::Variable(name) => {
                 let object = self.object_context_window.get_or_error(&name)?;
@@ -328,11 +352,11 @@ impl FunctionLinkingContext<'_> {
                     return Err(())
                 }
                 let obj_type = self.context.factory.get_type(object).clone();
-                Self::check_expected_type(expected_type, &obj_type)?;
-                TypedExpression::new(
+                let result = TypedExpression::new(
                     obj_type,
                     LinkedExpression::Variable(object)
-                )
+                );
+                Self::try_autocast(result, expected_type)
             },
             Expression::FunctionCall { object: name, args: args_values } => {
                 let object = self.object_context_window.get_or_error(&name)?;
@@ -341,7 +365,6 @@ impl FunctionLinkingContext<'_> {
                     LinkingError::NameNotFound { name, context }.print();
                     return Err(())
                 };
-                Self::check_expected_type(expected_type, returns.as_ref())?;
                 if args_values.len() != arguments.len() {
                     let function_name = self.context.factory.get_name(object).clone();
                     LinkingError::IncorrectArgumentCount { function_name, argument_need: arguments.len(), argument_got: args_values.len() }.print();
@@ -358,10 +381,11 @@ impl FunctionLinkingContext<'_> {
                     }
                 }
 
-                TypedExpression::new(
+                let result = TypedExpression::new(
                     returns.as_ref().clone(),
                     LinkedExpression::new_function_call(object, args)
-                )
+                );
+                Self::try_autocast(result, expected_type)
             }
             Expression::StructField { left, field } => {
                 let left = self.parse_expression(*left, None)?;
@@ -373,8 +397,8 @@ impl FunctionLinkingContext<'_> {
                         let Some(index) = field_names.get(&field) else {
                             unimplemented!(); // TODO: struct field expression
                         };
-                        // Self::check_expected_type(expected_type, &obj_type)?;
                         unimplemented!();
+                        // Self::try_autocast(result, expected_type)
                     }
                     _ => {
                         LinkingError::DotNotOnStruct.print();
@@ -382,8 +406,7 @@ impl FunctionLinkingContext<'_> {
                     }
                 }
             }
-        };
-        Ok(linked)
+        }
     }
 
     fn parse_type(&self, typee: &Typee) -> CResult<ObjType> {
@@ -397,9 +420,13 @@ impl FunctionLinkingContext<'_> {
                 LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.object_context_window) }.print();
                 Err(())
             }
-            Typee::Reference(obj_type) => {
+            Typee::Pointer(obj_type) => {
                 let obj_type = self.parse_type(obj_type)?;
                 Ok(ObjType::Pointer(Box::new(obj_type)))
+            }
+            Typee::Reference(obj_type) => {
+                let obj_type = self.parse_type(obj_type)?;
+                Ok(ObjType::Reference(Box::new(obj_type)))
             }
         }
     }
@@ -434,7 +461,7 @@ pub fn parse_primitive_type(string: &str) -> Option<ObjType> {
 }
 
 fn parse_number_literal(mut string: String) -> CResult<TypedExpression> {
-    string = string.replace('_', ""); 
+    string = string.replace('_', "");
 
     let has_dot = string.find('.').is_some();
 
@@ -493,7 +520,8 @@ impl ObjType {
                 matches!(other, Self::Pointer(_)) ||
                 matches!(other, Self::Integer(to) if !to.is_bool() || from.is_bool())
             },
-            Self::Pointer(_) => matches!(other, Self::Pointer(_) | Self::Integer(_)),
+            Self::Pointer(..) =>   matches!(other, Self::Pointer(..) | Self::Reference(..) | Self::Integer(..)),
+            Self::Reference(..) => matches!(other, Self::Pointer(..) | Self::Reference(..)),
             Self::Struct(..) | Self::Function { .. } | Self::Void => unreachable!(),
         }
     }
@@ -549,8 +577,8 @@ impl ObjType {
                 } else if comp_op.is_equal_op() {
                     true
                 } else {
-                    // reference can't be compared
-                    !matches!(object_type1, Self::Pointer(_))
+                    // pointers can't be compared
+                    !matches!(object_type1, Self::Pointer(_) | Self::Reference(_))
                 };
 
                 if is_allowed {

@@ -487,7 +487,16 @@ impl ParsingState {
             Token::String(string) => Ok(Typee::String(string)),
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => {
                 let typee = self.parse_type(position)?;
-                Ok(Typee::Reference(Box::new(typee)))
+                Ok(Typee::new_pointer(typee))
+            }
+            Token::UnaryOperation(OneSidedOperation::Dereference) => unreachable!(), // lexer make Mul from *
+            Token::Operation(TwoSidedOperation::Number(NumberOperation::BitAnd)) => {
+                let typee = self.parse_type(position)?;
+                Ok(Typee::new_reference(typee))
+            }
+            Token::Operation(TwoSidedOperation::Bool(BoolOperation::And)) => {
+                let typee = self.parse_type(position)?;
+                Ok(Typee::new_reference(Typee::new_reference(typee)))
             }
             _ => Err(CE::SyntacticsError(position, "expected type".to_owned()))
         }

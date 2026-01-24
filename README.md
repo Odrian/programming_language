@@ -82,6 +82,23 @@ foo :: () -> *i32 {
 }
 ```
 
+### Reference
+
+Type &T allow use *T as T.  
+&T and *T are autocast to each other.  
+
+```
+x : i32 = 0;
+
+y : &i32 = &x;
+y = 1;
+// now x == 1
+
+y2 : *i32 = y; // or = &x;
+*y2 = 2;
+// now x == 2
+```
+
 ### Code example
 ```
 swap :: (a: *i32, b: *i32) {
@@ -89,7 +106,15 @@ swap :: (a: *i32, b: *i32) {
     *a = *b;
     *b = temp;
 }
-
+```
+```
+swap :: (a: &i32, b: &i32) {
+    temp : i32 = a;
+    a = b;
+    b = temp;
+}
+```
+```
 fibonachi :: (n: i32) -> i32 {
     f0 := 0;
     f1 := 1;
