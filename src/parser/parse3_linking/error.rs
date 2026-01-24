@@ -10,6 +10,7 @@ pub enum LinkingError {
 
     DotNotOnStruct,
     StructFieldNameCollision { field_name: String },
+    StructFieldNameNotFound { struct_name: String, field_name: String },
     IncorrectType { got: ObjType, expected: ObjType },
     CantDetermineType,
     IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
@@ -49,6 +50,9 @@ impl Display for LinkingError {
             }
             Self::StructFieldNameCollision { field_name } => {
                 write!(f, "struct has two fields with name {field_name}")
+            }
+            Self::StructFieldNameNotFound { struct_name, field_name } => {
+                write!(f, "struct '{struct_name}' hasn't field '{field_name}'")
             }
             Self::IncorrectType { got, expected } => {
                 write!(f, "incorrect type, got {got}, expected {expected}")

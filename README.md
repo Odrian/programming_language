@@ -1,8 +1,7 @@
 # TODO
-* add structs (almost done)
+* add struct methods
 * add export
 * add #import
-* not using cc to link objects?
 
 # Programming language
 
@@ -27,13 +26,20 @@ main :: () -> i32 {
 }
 ```
 
-### Struct declaration
+### Struct
 
 ```
 A :: struct {
     field1: u32,
     field2: *A,
 }
+```
+
+can be created only with garbage
+```
+a: A;
+a.field1 = 0_u32;
+a.field2 = &a;
 ```
 
 ### Variable declaration

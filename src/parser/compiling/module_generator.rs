@@ -216,8 +216,8 @@ mod type_parsing {
         }
 
         fn parse_struct_statement(&mut self, object: Object, statement: GlobalLinkedStatement) {
-            let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
-            
+            let GlobalLinkedStatement::Struct { fields, field_names: _ } = statement else { unreachable!() };
+
             let fields_types: Vec<_> = fields.iter()
                 .map(|obj_type| self.parse_type(obj_type))
                 .collect();
@@ -324,13 +324,6 @@ mod declaration_parsing {
                     }
                     return Ok(true)
                 }
-                LinkedStatement::StructField { what, index } => {
-                    let struct_value = self.parse_expression(what.expr);
-                    let struct_type = what.object_type;
-
-                    // self.builder.build_struct_gep();
-                    unimplemented!()
-                }
                 LinkedStatement::GlobalStatement(_) => unreachable!(),
             }
             Ok(false)
@@ -361,6 +354,14 @@ mod declaration_parsing {
                 LinkedExpression::FunctionCall { object, args } => {
                     Ok(Some(self.call_function(object, args)?.unwrap()))
                 },
+                LinkedExpression::StructField { left, field_index } => {
+                    let struct_value = self.parse_expression(left.expr)?.unwrap().into_pointer_value();
+                    let ObjType::Reference(struct_obj_type) = &left.object_type else { unreachable!() };
+                    let struct_type = self.parse_type(struct_obj_type);
+
+                    let field_pointer = self.builder.build_struct_gep(struct_type, struct_value, field_index, "get_field")?;
+                    Ok(Some(field_pointer.into()))
+                }
                 LinkedExpression::Undefined(obj_type) => {
                     let value_type = self.parse_type(&obj_type);
                     Ok(Some(get_undef(value_type)))

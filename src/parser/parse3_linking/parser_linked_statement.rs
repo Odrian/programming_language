@@ -376,15 +376,28 @@ impl FunctionLinkingContext<'_> {
                     ObjType::Struct(object) => {
                         let statement = self.context.result.type_statements.get(object).unwrap();
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
-                        let Some(index) = field_names.get(&field) else {
-                            unimplemented!(); // TODO: struct field expression
+                        let Some(&index) = field_names.get(&field) else {
+                            LinkingError::StructFieldNameNotFound {
+                                struct_name: self.context.factory.get_name(*object).clone(),
+                                field_name: field,
+                            }.print();
+                            return Err(());
                         };
-                        unimplemented!();
-                        // Self::try_autocast(result, expected_type)
+                        let obj_type = fields.get(index as usize).unwrap().clone();
+
+                        let struct_expr = TypedExpression {
+                            object_type: ObjType::new_reference(left.object_type.clone()),
+                            expr: LinkedExpression::new_unary_operation(left, OneSidedOperation::GetReference)
+                        };
+                        let result = TypedExpression {
+                            object_type: ObjType::new_reference(obj_type),
+                            expr: LinkedExpression::new_struct_field(struct_expr, index)
+                        };
+                        Self::try_autocast(result, expected_type)
                     }
                     _ => {
                         LinkingError::DotNotOnStruct.print();
-                        return Err(())
+                        Err(())
                     }
                 }
             }
@@ -394,12 +407,21 @@ impl FunctionLinkingContext<'_> {
     fn parse_type(&self, typee: &Typee) -> CResult<ObjType> {
         match typee {
             Typee::String(string) => {
-                let primitive_option = parse_primitive_type(&string);
+                let primitive_option = parse_primitive_type(string);
                 if let Some(object_type) = primitive_option {
                     return Ok(object_type)
                 }
 
-                // TODO: get struct type
+                if let Some(type_object) = self.object_context_window.get(string) {
+                    let Some(statement) = self.context.result.type_statements.get(&type_object) else {
+                        LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.object_context_window) }.print();
+                        return Err(());
+                    };
+                    match statement {
+                        GlobalLinkedStatement::Function { .. } | GlobalLinkedStatement::VariableDeclaration { .. } => unreachable!(),
+                        GlobalLinkedStatement::Struct { .. } => return Ok(ObjType::Struct(type_object)),
+                    }
+                };
 
                 LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.object_context_window) }.print();
                 Err(())

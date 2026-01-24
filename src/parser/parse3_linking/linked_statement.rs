@@ -22,7 +22,6 @@ pub enum LinkedStatement {
     GlobalStatement(GlobalLinkedStatement),
     VariableDeclaration { object: Object, value: TypedExpression },
     SetVariable { what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation> },
-    StructField { what: TypedExpression, index: u32 },
 
     Expression(TypedExpression),
     If { condition: TypedExpression, body: Vec<Self> },
@@ -41,6 +40,7 @@ pub enum LinkedExpression {
     Operation(Box<TypedExpression>, Box<TypedExpression>, TwoSidedOperation),
     UnaryOperation(Box<TypedExpression>, OneSidedOperation),
     As(Box<TypedExpression>, ObjType),
+    StructField { left: Box<TypedExpression>, field_index: u32 },
 
     Undefined(ObjType),
     /// `ObjType` always `IntObjType`
@@ -104,6 +104,10 @@ impl LinkedExpression {
     pub const fn new_function_call(object: Object, args: Vec<TypedExpression>) -> Self {
         Self::FunctionCall { object, args }
     }
+    pub fn new_struct_field(left: TypedExpression, field_index: u32) -> Self {
+        let left = Box::new(left);
+        Self::StructField { left, field_index }
+    }
 }
 
 // ----- Display implementation -----
@@ -166,9 +170,6 @@ impl fmt::Display for LinkedStatement {
                     None => write!(f, "return")
                 }
             }
-            Self::StructField { what, index } => {
-                write!(f, "{what}.[{index}]")
-            }
         }
     }
 }
@@ -198,6 +199,9 @@ impl fmt::Display for LinkedExpression {
             Self::FunctionCall { object, args } => {
                 let args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
                 write!(f, "{} ({})", object, args.join(", "))
+            },
+            Self::StructField { left, field_index } => {
+                write!(f, "{left}.[{field_index}]")
             },
         }
     }
