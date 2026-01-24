@@ -5,6 +5,12 @@
 
 # Programming language
 
+
+### Usage
+
+Create directory `src` with flie `main.txt` with code.  
+`./programming_language main` will create executable `main`
+
 ### Function declaration
 ```
 foo :: (argument : i32) -> void {
