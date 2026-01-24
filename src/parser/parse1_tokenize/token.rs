@@ -37,7 +37,8 @@ pub enum Token {
 pub enum TokenKeyword {
     If, While,
     Return,
-    Import
+    Import,
+    Extern,
 }
 
 /// `TwoSidedOperation` must not change type

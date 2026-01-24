@@ -79,9 +79,8 @@ impl ParsingState {
                         Ok(Statement::Return(Some(expression)))
                     }
                 }
-                TokenKeyword::Import => {
-                    self.parse_import(position)
-                }
+                TokenKeyword::Import => self.parse_import(position),
+                TokenKeyword::Extern => self.parse_extern(position),
             },
             Token::String(_) => {
                 let Token::String(string) = token else { unreachable!() };
@@ -549,6 +548,54 @@ impl ParsingState {
 
         Ok(Statement::new_struct(name, fields))
     }
+    fn parse_extern(&mut self, position: PositionInFile) -> Result<Statement, CE> {
+        let Some(TokenWithPos { token: Token::String(name), position: _ }) = self.next() else {
+            return Err(CE::Placeholder)
+        };
+
+        let Some(TokenWithPos { token, position }) = self.next() else {
+            return Err(CE::Placeholder)
+        };
+        
+        if token == Token::Colon {
+            // name : ..
+            let typee = self.parse_type(position)?;
+
+            let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.next() else {
+                return Err(CE::Placeholder)
+            };
+
+            Ok(Statement::ExternStatement { statement: ExternStatement::Variable { name, typee }})
+        } else if token == Token::DoubleColon {
+            // name :: ..
+
+            let Some(TokenWithPos { token: Token::Bracket(vec, BracketType::Round), position: _ }) = self.next() else {
+                return Err(CE::Placeholder)
+            };
+
+            let args = parse_extern_function_arguments(vec)?;
+
+            let Some(TokenWithPos { token, position }) = self.next() else {
+                return Err(CE::Placeholder)
+            };
+            
+            if token == Token::Semicolon {
+                Ok(Statement::ExternStatement { statement: ExternStatement::Function { name, args, returns: None }})
+            } else if token == Token::Arrow {
+                let returns = self.parse_type(position)?;
+
+                let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.next() else {
+                    return Err(CE::Placeholder)
+                };
+
+                Ok(Statement::ExternStatement { statement: ExternStatement::Function { name, args, returns: Some(returns) }})
+            } else {
+                Err(CE::Placeholder)
+            }
+        } else {
+            Err(CE::Placeholder)
+        }
+    }
 }
 
 fn parse_function_declaration_arguments(args: Vec<TokenWithPos>) -> Result<Vec<(String, Typee)>, CE> {
@@ -580,6 +627,30 @@ fn parse_function_declaration_arguments(args: Vec<TokenWithPos>) -> Result<Vec<(
         if token != Token::Comma {
             return Err(CE::SyntacticsError(position, "expected ',' or ')'".to_owned()));
         }
+    }
+
+    Ok(arguments)
+}
+fn parse_extern_function_arguments(args: Vec<TokenWithPos>) -> Result<Vec<Typee>, CE> {
+    if args.is_empty() {
+        return Ok(Vec::new())
+    }
+    let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
+    let mut state = ParsingState::new(args);
+
+    let mut position0 = PositionInFile::new(0, 0);
+    while !state.at_end() {
+        let argument_type = state.parse_type(position0)?;
+
+        arguments.push(argument_type);
+
+        let Some(TokenWithPos { token, position }) = state.next() else {
+            break;
+        };
+        if token != Token::Comma {
+            return Err(CE::SyntacticsError(position, "expected ',' or ')'".to_owned()));
+        }
+        position0 = position
     }
 
     Ok(arguments)

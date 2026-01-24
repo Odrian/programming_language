@@ -15,4 +15,7 @@ mod compile_tests {
 
     #[cfg(test)]
     mod r#struct;
+    
+    #[cfg(test)]
+    mod r#extern;
 }

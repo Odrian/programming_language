@@ -84,7 +84,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
                 FloatObjType::F64 => self.context.f64_type().into(),
             }
             ObjType::Struct(object) => self.struct_context.get(object).copied().unwrap().into(),
-            ObjType::Function { .. } => unimplemented!("function type"),
+            ObjType::Function { .. } => panic!("function type can't be BasicTypeEnum"),
         }
     }
     fn function_from(&self, returns: &ObjType, args: &[BasicMetadataTypeEnum<'ctx>], is_var_args: bool) -> FunctionType<'ctx> {
@@ -117,6 +117,11 @@ mod module_parsing {
             self.context_window.step_in();
 
             self.parse_type_statements();
+
+            let extern_statements = std::mem::take(&mut self.linked_program.extern_statements);
+            for (object, statement) in extern_statements {
+                self.create_extern(object, statement);
+            }
 
             let function_statements = std::mem::take(&mut self.linked_program.function_statement);
             let variable_statements = std::mem::take(&mut self.linked_program.variable_statement);
@@ -195,6 +200,29 @@ mod module_parsing {
             self.context_window.step_out();
             Ok(())
         }
+        fn create_extern(&mut self, object: Object, statement: GlobalLinkedStatement) {
+            let GlobalLinkedStatement::ExternStatement { statement } = statement else { unreachable!() };
+
+            match statement {
+                ExternLinkedStatement::Variable { name, typee } => {
+                    let basic_type = self.parse_type(&typee);
+
+                    let global = self.module.add_global(basic_type, None, &name);
+                    global.set_externally_initialized(true);
+
+                    self.context_window.add(object, global.as_any_value_enum());
+                }
+                ExternLinkedStatement::Function { name, typee } => {
+                    let ObjType::Function { arguments, returns } = typee else { unreachable!() };
+                    let arguments = arguments.iter().map(|a| self.parse_type(a).into()).collect::<Vec<_>>();
+                    let fn_type = self.function_from(returns.as_ref(), &arguments, false);
+                    
+                    let function = self.module.add_function(&name, fn_type, None);
+
+                    self.context_window.add(object, function.into());
+                }
+            }
+        }
     }
 }
 
@@ -210,7 +238,9 @@ mod type_parsing {
                 let statement = type_statements.remove(&object).unwrap();
                 match &statement {
                     GlobalLinkedStatement::Struct { .. } => self.parse_struct_statement(object, statement),
-                    GlobalLinkedStatement::VariableDeclaration { .. } | GlobalLinkedStatement::Function { .. } => unreachable!(),
+                    GlobalLinkedStatement::VariableDeclaration { .. }
+                    | GlobalLinkedStatement::Function { .. }
+                    | GlobalLinkedStatement::ExternStatement { .. } => unreachable!(),
                 }
             }
         }

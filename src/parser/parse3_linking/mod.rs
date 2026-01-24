@@ -23,6 +23,7 @@ struct TypeContext {
 
     // import_statements: HashMap<Object, Statement>,
     type_statements: HashMap<Object, Statement>,
+    extern_statements: HashMap<Object, Statement>,
     function_statement: HashMap<Object, Statement>,
     variable_statement: HashMap<Object, Statement>,
 
@@ -35,6 +36,7 @@ pub struct LinkedProgram {
 
     pub type_statements_order: Vec<Object>,
     pub type_statements: HashMap<Object, GlobalLinkedStatement>,
+    pub extern_statements: HashMap<Object, GlobalLinkedStatement>,
     pub function_statement: HashMap<Object, GlobalLinkedStatement>,
     pub variable_statement: HashMap<Object, GlobalLinkedStatement>,
 }

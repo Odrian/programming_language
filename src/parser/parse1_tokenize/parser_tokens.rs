@@ -242,7 +242,7 @@ pub fn split_text_without_brackets(text: &str, offset_index: usize) -> CResult<V
             _ if char.is_ascii_whitespace() => {
                 state.add(1, None);
             }
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '#' => {
                 state.use_char_in_string(char);
             }
             '.' if state.is_buffer_number => {
@@ -315,6 +315,7 @@ impl TokenizeState {
                     "if" => TokenKeyword::If.into(),
                     "while" => TokenKeyword::While.into(),
                     "import" => TokenKeyword::Import.into(),
+                    "#extern" => TokenKeyword::Extern.into(),
                     _ => Token::String(token_text)
                 }
             };

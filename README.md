@@ -1,10 +1,8 @@
 # TODO
 * add struct methods
-* add export
 * add #import
 
-# Programming language
-
+# My Programming language
 
 ### Usage
 
@@ -30,6 +28,18 @@ You must declare main function with () -> i32 signature
 main :: () -> i32 {
     return 0;
 }
+```
+
+### Extern
+
+`#extern` can be used to declare functions or variable from libc
+
+```
+#extern
+stdio: *u8;
+
+#extern
+abs :: (i32) -> i32;
 ```
 
 ### Struct

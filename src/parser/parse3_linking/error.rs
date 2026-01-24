@@ -7,6 +7,7 @@ pub enum LinkingError {
     DependencyCycle,
     Overloading { name: String },
     NameNotFound { name: String, context: String },
+    CallNotFunction { name: String },
 
     DotNotOnStruct { got: ObjType },
     StructFieldNameCollision { field_name: String },
@@ -43,6 +44,9 @@ impl Display for LinkingError {
             }
             Self::NameNotFound { name, context } => {
                 write!(f, "can't find {name} in {context}")
+            }
+            Self::CallNotFunction { name } => {
+                write!(f, "can't call {name}, it's not a function")
             }
 
             Self::DotNotOnStruct { got } => {

@@ -1,5 +1,5 @@
 use crate::error::CResult;
-use crate::parser::parse2_syntactic::statement::{ComptimeStatement, DeclarationStatement, Statement};
+use crate::parser::parse2_syntactic::statement::{ComptimeStatement, DeclarationStatement, ExternStatement, Statement};
 use crate::parser::parse3_linking::error::LinkingError;
 use crate::parser::parse3_linking::object::ObjType;
 use crate::parser::parse3_linking::TypeContext;
@@ -31,6 +31,19 @@ fn add_name(context: &mut TypeContext, stat: Statement) -> CResult<()> {
                     context.type_statements.insert(object, stat);
                 }
             }
+        }
+        Statement::ExternStatement { statement } => {
+            let name = match statement {
+                ExternStatement::Variable { name, .. } => name,
+                ExternStatement::Function { name, .. } => name,
+            };
+            let object = context.factory.create_object(name.clone(), ObjType::Unknown);
+            let object_option = context.available_names.insert(name.clone(), object);
+            if object_option.is_some() {
+                LinkingError::Overloading { name: name.clone() }.print();
+                return Err(())
+            }
+            context.extern_statements.insert(object, stat);
         }
         Statement::ComptimeStatement(comp_stat) => match comp_stat {
             ComptimeStatement::Import { .. } => {

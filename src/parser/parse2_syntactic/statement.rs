@@ -5,6 +5,7 @@ use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 pub enum Statement {
     ComptimeStatement(ComptimeStatement),
     DeclarationStatement { name: String, statement: DeclarationStatement },
+    ExternStatement { statement: ExternStatement },
 
     SetVariable { what: Expression, value: Expression, op: Option<TwoSidedOperation> },
 
@@ -18,7 +19,7 @@ pub enum Statement {
 pub enum DeclarationStatement {
     VariableDeclaration { typee: Option<Typee>, value: Expression },
     Function { args: Vec<(String, Typee)>, returns: Option<Typee>, body: Vec<Statement> },
-    Struct { fields: Vec<(String, Typee)> }
+    Struct { fields: Vec<(String, Typee)> },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -48,6 +49,12 @@ pub enum Typee {
     String(String),
     Pointer(Box<Typee>),
     Reference(Box<Typee>),
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum ExternStatement {
+    Variable { name: String, typee: Typee },
+    Function { name: String, args: Vec<Typee>, returns: Option<Typee> },
 }
 
 impl Typee {
@@ -160,6 +167,7 @@ impl fmt::Display for Statement {
                     write!(f, "{name} :: struct {{\n{fields}}}")
                 }
             }
+            Self::ExternStatement { statement } => write!(f, "{statement}"),
             Self::ComptimeStatement(statement) => match statement {
                 ComptimeStatement::Import { from, what } => {
                     let from = from.join("::");
@@ -174,6 +182,23 @@ impl fmt::Display for Statement {
                         }
                     };
                     write!(f, "use {from}::{what}")
+                }
+            }
+        }
+    }
+}
+
+impl fmt::Display for ExternStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExternStatement::Variable { name, typee } => {
+                write!(f, "{name}: {typee};")
+            }
+            ExternStatement::Function { name, args, returns } => {
+                let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                match returns {
+                    Some(returns) => write!(f, "{name} : ({args}) -> {returns};"),
+                    None => write!(f, "{name} : ({args});"),
                 }
             }
         }

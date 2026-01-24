@@ -14,7 +14,9 @@ pub struct TypedExpression {
 pub enum GlobalLinkedStatement {
     VariableDeclaration { value: TypedExpression },
     Function { args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement> },
-    Struct { fields: Vec<ObjType>, field_names: HashMap<String, u32> }
+    Struct { fields: Vec<ObjType>, field_names: HashMap<String, u32> },
+
+    ExternStatement { statement: ExternLinkedStatement },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -46,6 +48,12 @@ pub enum LinkedExpression {
     Variable(Object),
     RoundBracket(Box<TypedExpression>),
     FunctionCall { object: Object, args: Vec<TypedExpression> },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ExternLinkedStatement {
+    Variable { name: String, typee: ObjType },
+    Function { name: String, typee: ObjType },
 }
 
 impl TypedExpression {
@@ -128,6 +136,20 @@ impl GlobalLinkedStatement {
             }
             Self::VariableDeclaration { value } => {
                 format!("{object} := {value}")
+            }
+            Self::ExternStatement { statement } => statement.to_string()
+        }
+    }
+}
+
+impl fmt::Display for ExternLinkedStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExternLinkedStatement::Variable { name, typee } => {
+                write!(f, "{name}: {typee};")
+            }
+            ExternLinkedStatement::Function { name, typee } => {
+                write!(f, "{name} :: {typee};")
             }
         }
     }
