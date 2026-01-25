@@ -135,6 +135,21 @@ y2 : *i32 = y; // or = &x;
 ```
 
 ### Code example
+
+```
+FILE :: struct {}
+
+#extern
+stdout: *FILE;
+
+#extern
+fprintf :: (*FILE, *char);
+
+main :: () -> i32 {
+    fprintf(stdout, "Hello world!");
+    return 0;
+}
+```
 ```
 swap :: (a: *i32, b: *i32) {
     temp := *a;
@@ -189,6 +204,7 @@ unary `-`, `!`, `*`, `&`
 
 bool: `true`, `false`  
 char: `'c'` (only ascii chars allowed)  
+string: `"any string"`, will become `*char`  
 integer: `239i32`, `239u128`, `239` - using `i32` by default  
 float: `0.0f32`, `0.0f64`, `0.0` - using `f64` by default  
 

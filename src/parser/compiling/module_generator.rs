@@ -7,7 +7,7 @@ use super::context_window::ValueContextWindow;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue, AnyValue};
+use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue, AnyValue, BasicValue};
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
@@ -418,6 +418,11 @@ mod declaration_parsing {
                 LinkedExpression::CharLiteral(char) => {
                     let int_type = self.parse_type(&ObjType::Char).into_int_type();
                     Ok(Some(int_type.const_int(char as u64, false).into()))
+                }
+                LinkedExpression::StringLiteral(string) => {
+                    // SAFETY: looks like [build_global_string] must be called inside function and that's true here
+                    let string_value = unsafe { self.builder.build_global_string(&string, "string_literal")? };
+                    Ok(Some(string_value.as_basic_value_enum()))
                 }
                 LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed.expr),
                 LinkedExpression::Variable(object) => {

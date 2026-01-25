@@ -236,7 +236,7 @@ pub fn split_text_without_brackets(text: &str, offset_index: usize) -> CResult<V
                 let token = Token::Semicolon;
                 state.add(1, Some(token));
             }
-            '{' | '}' | '(' | ')' => {
+            '{' | '}' | '(' | ')' | '\'' | '"' => {
                 unreachable!()
             }
             _ if char.is_ascii_whitespace() => {

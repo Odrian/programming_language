@@ -44,6 +44,7 @@ pub enum LinkedExpression {
     FloatLiteral(String, ObjType),
     BoolLiteral(bool),
     CharLiteral(u8),
+    StringLiteral(String),
 
     Variable(Object),
     RoundBracket(Box<TypedExpression>),
@@ -208,6 +209,7 @@ impl fmt::Display for LinkedExpression {
                 false => write!(f, "false"),
             }
             Self::CharLiteral(char) => write!(f, "'{}'", *char as char),
+            Self::StringLiteral(str) => write!(f, "\"{str}\""),
             Self::Variable(object) => write!(f, "{object}"),
             Self::RoundBracket(expression) => write!(f, "({expression})"),
             Self::FunctionCall { object, args } => {

@@ -392,8 +392,9 @@ impl ParsingState {
                 let expression = Expression::CharLiteral(char_value);
                 self.parse_expression2_without_ops(expression, was_unary)
             }
-            Token::DoubleQuotes(_string) => { // ".."
-                unimplemented!("string literal")
+            Token::DoubleQuotes(string) => { // ".."
+                let expression = Expression::StringLiteral(string);
+                self.parse_expression2_without_ops(expression, was_unary)
             }
             _ => {
                 Err(CE::SyntacticsError(position, format!("expected expression, got {token:?}")))

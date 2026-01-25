@@ -367,6 +367,13 @@ impl FunctionLinkingContext<'_> {
                 );
                 Self::try_autocast(result, expected_type)
             }
+            Expression::StringLiteral(string) => {
+                let result = TypedExpression::new(
+                    ObjType::new_pointer(ObjType::Char),
+                    LinkedExpression::StringLiteral(string),
+                );
+                Self::try_autocast(result, expected_type)
+            }
             Expression::RoundBracket(ex1) => {
                 let ex1 = self.parse_expression(*ex1, expected_type)?;
                 Ok(TypedExpression::new(
