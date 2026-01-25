@@ -35,11 +35,18 @@ main :: () -> i32 {
 `#extern` can be used to declare functions or variable from libc
 
 ```
-#extern
-stdio: *u8;
+FILE :: struct {}
 
 #extern
-abs :: (i32) -> i32;
+stdout: *FILE;
+
+#extern
+fprintf :: (*FILE, *char);
+
+main :: () -> i32 {
+    fprintf(stdout, "Hello world!");
+    return 0;
+}
 ```
 
 ### Struct
@@ -134,22 +141,8 @@ y2 : *i32 = y; // or = &x;
 // now x == 2
 ```
 
-### Code example
+### Code examples
 
-```
-FILE :: struct {}
-
-#extern
-stdout: *FILE;
-
-#extern
-fprintf :: (*FILE, *char);
-
-main :: () -> i32 {
-    fprintf(stdout, "Hello world!");
-    return 0;
-}
-```
 ```
 swap :: (a: *i32, b: *i32) {
     temp := *a;
