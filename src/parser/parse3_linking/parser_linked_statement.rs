@@ -339,41 +339,6 @@ impl FunctionLinkingContext<'_> {
                 );
                 Self::try_autocast(result, expected_type)
             }
-            Expression::Undefined => {
-                let Some(obj_type) = expected_type else {
-                    LinkingError::CantDetermineType.print();
-                    return Err(())
-                };
-                Ok(TypedExpression::new(
-                    obj_type.clone(),
-                    LinkedExpression::Undefined(obj_type.clone()),
-                ))
-            }
-            Expression::NumberLiteral(string) => {
-                let result = parse_number_literal(string)?;
-                Self::try_autocast(result, expected_type)
-            },
-            Expression::BoolLiteral(value) => {
-                let result = TypedExpression::new(
-                    ObjType::BOOL,
-                    LinkedExpression::BoolLiteral(value),
-                );
-                Self::try_autocast(result, expected_type)
-            }
-            Expression::CharLiteral(value) => {
-                let result = TypedExpression::new(
-                    ObjType::Char,
-                    LinkedExpression::CharLiteral(value),
-                );
-                Self::try_autocast(result, expected_type)
-            }
-            Expression::StringLiteral(string) => {
-                let result = TypedExpression::new(
-                    ObjType::new_pointer(ObjType::Char),
-                    LinkedExpression::StringLiteral(string),
-                );
-                Self::try_autocast(result, expected_type)
-            }
             Expression::RoundBracket(ex1) => {
                 let ex1 = self.parse_expression(*ex1, expected_type)?;
                 Ok(TypedExpression::new(
@@ -476,6 +441,46 @@ impl FunctionLinkingContext<'_> {
                     }
                 }
             }
+            Expression::Literal(literal) => self.parse_literal(literal, expected_type),
+        }
+    }
+    fn parse_literal(&mut self, literal: LiteralExpression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
+        match literal {
+            LiteralExpression::Undefined => {
+                let Some(obj_type) = expected_type else {
+                    LinkingError::CantDetermineType.print();
+                    return Err(())
+                };
+                Ok(TypedExpression::new(
+                    obj_type.clone(),
+                    LinkedLiteralExpression::Undefined(obj_type.clone()).into(),
+                ))
+            }
+            LiteralExpression::NumberLiteral(string) => {
+                let result = parse_number_literal(string)?;
+                Self::try_autocast(result, expected_type)
+            },
+            LiteralExpression::BoolLiteral(value) => {
+                let result = TypedExpression::new(
+                    ObjType::BOOL,
+                    LinkedLiteralExpression::BoolLiteral(value).into(),
+                );
+                Self::try_autocast(result, expected_type)
+            }
+            LiteralExpression::CharLiteral(value) => {
+                let result = TypedExpression::new(
+                    ObjType::Char,
+                    LinkedLiteralExpression::CharLiteral(value).into(),
+                );
+                Self::try_autocast(result, expected_type)
+            }
+            LiteralExpression::StringLiteral(string) => {
+                let result = TypedExpression::new(
+                    ObjType::new_pointer(ObjType::Char),
+                    LinkedLiteralExpression::StringLiteral(string).into(),
+                );
+                Self::try_autocast(result, expected_type)
+            }
         }
     }
 
@@ -551,10 +556,16 @@ fn parse_number_literal(mut string: String) -> CResult<TypedExpression> {
     let Some(index) = string.find(|c: char| !c.is_ascii_digit() && c != '.') else {
         return if has_dot {
             // 12.3
-            Ok(TypedExpression::new(ObjType::DEFAULT_FLOAT, LinkedExpression::FloatLiteral(string, ObjType::DEFAULT_FLOAT)))
+            Ok(TypedExpression::new(
+                ObjType::DEFAULT_FLOAT,
+                LinkedLiteralExpression::FloatLiteral(string, ObjType::DEFAULT_FLOAT).into()
+            ))
         } else {
             // 123
-            Ok(TypedExpression::new(ObjType::DEFAULT_INTEGER, LinkedExpression::IntLiteral(string, ObjType::DEFAULT_INTEGER)))
+            Ok(TypedExpression::new(
+                ObjType::DEFAULT_INTEGER,
+                LinkedLiteralExpression::IntLiteral(string, ObjType::DEFAULT_INTEGER).into()
+            ))
         }
     };
 
@@ -566,8 +577,14 @@ fn parse_number_literal(mut string: String) -> CResult<TypedExpression> {
     };
 
     match object_type {
-        ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(object_type.clone(), LinkedExpression::IntLiteral(string, object_type))),
-        ObjType::Float(_) => Ok(TypedExpression::new(object_type.clone(), LinkedExpression::FloatLiteral(string, object_type))),
+        ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(
+            object_type.clone(),
+            LinkedLiteralExpression::IntLiteral(string, object_type).into()
+        )),
+        ObjType::Float(_) => Ok(TypedExpression::new(
+            object_type.clone(),
+            LinkedLiteralExpression::FloatLiteral(string, object_type).into()
+        )),
         _ => {
             LinkingError::LiteralParseError { what: string + &suffix, error: format!("unexpected suffix {suffix}") }.print();
             Err(())

@@ -228,7 +228,7 @@ fn test_function_with_while() {
     let LinkedExpression::Operation(left, right, op) = condition.expr else { panic!() };
     let LinkedExpression::Variable(condition_var) = left.expr else { panic!() };
     
-    let LinkedExpression::IntLiteral(zero, _) = right.expr else { panic!() };
+    let LinkedExpression::Literal(LinkedLiteralExpression::IntLiteral(zero, _)) = right.expr else { panic!() };
     assert_eq!(zero, "0");
 
     assert_eq!(op, CompareOperator::NotEqual.into());

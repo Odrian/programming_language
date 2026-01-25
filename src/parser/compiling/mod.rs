@@ -1,19 +1,20 @@
 mod context_window;
 mod module_generator;
+mod error;
 
 use std::process::Command;
 use std::path::Path;
 
 use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine}, OptimizationLevel};
 
-use crate::error::CompilationError as CE;
 use crate::Args;
+use error::LLVMError;
 use crate::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
 use crate::parser::parse3_linking::LinkedProgram;
 use crate::parser::parse3_linking::object::{IntObjType, ObjType};
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), CE> {
+pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), LLVMError> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
@@ -26,31 +27,31 @@ pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), C
     module.set_triple(&target_machine.get_triple());
 
     if let Err(err) = module.verify() {
-        return Err(CE::LLVMVerifyModuleError { llvm_error: err.to_string() });
+        return Err(LLVMError::LLVMVerifyModuleError { llvm_error: err.to_string() });
     }
 
     create_executable(args, &target_machine, &module)?;
     Ok(())
 }
 
-fn verify_main_signature(linked_program: &LinkedProgram) -> Result<(), CE> {
+fn verify_main_signature(linked_program: &LinkedProgram) -> Result<(), LLVMError> {
     for (object, statement) in &linked_program.function_statement {
         if let GlobalLinkedStatement::Function { returns, args, body: _body } = statement {
             if linked_program.factory.get_name(*object) == "main" {
                 if returns != &ObjType::Integer(IntObjType::I32) {
-                    return Err(CE::IncorrectMainSignature)
+                    return Err(LLVMError::IncorrectMainSignature)
                 }
                 if args != &vec![] {
-                    return Err(CE::IncorrectMainSignature)
+                    return Err(LLVMError::IncorrectMainSignature)
                 }
                 return Ok(())
             }
         }
     }
-    Err(CE::NoMainFunction)
+    Err(LLVMError::NoMainFunction)
 }
 
-fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result<(), CE> {
+fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result<(), LLVMError> {
     let assembly_name = format!("{}.ll", args.output);
     let object_name = format!("{}.o", args.output);
     let executable_name = args.output.clone();
@@ -58,7 +59,7 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
     // create assembly file
     if args.create_llvm_ir {
         if let Err(err) = module.print_to_file(assembly_name) {
-            return Err(CE::LLVMFailedToCreateAssembly { llvm_error: err.to_string() });
+            return Err(LLVMError::LLVMFailedToCreateAssembly { llvm_error: err.to_string() });
         }
     }
 
@@ -79,7 +80,7 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
 
     if !args.create_object {
         if let Err(err) = std::fs::remove_file(object_name.clone()) {
-            return Err(CE::CantDeleteObjectFile { filepath: object_name, io_error: err.to_string() });
+            return Err(LLVMError::CantDeleteObjectFile { filepath: object_name, io_error: err.to_string() });
         }
     }
 
@@ -89,11 +90,11 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
             Ok(exit_status) => {
                 if !exit_status.success() {
                     let description = format!("exit with code {}", exit_status.code().unwrap());
-                    return Err(CE::FailedToRunLinker { description })
+                    return Err(LLVMError::FailedToRunLinker { description })
                 }
             }
             Err(err) => {
-                return Err(CE::FailedToRunLinker { description: err.to_string() })
+                return Err(LLVMError::FailedToRunLinker { description: err.to_string() })
             }
         }
     }

@@ -3,8 +3,6 @@ pub enum BracketType {
     Curly,
     Round,
     // Square,
-    // Quotes
-    // DoubleQuotes
 }
 
 impl BracketType {

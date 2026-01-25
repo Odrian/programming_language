@@ -1,4 +1,4 @@
-use crate::error::CompilationError as CE;
+use super::error::LLVMError;
 
 use crate::parser::operations::*;
 use crate::parser::parse3_linking::object::*;
@@ -16,7 +16,7 @@ use crate::parser::parse3_linking::LinkedProgram;
 pub fn parse_module<'ctx>(
     context: &'ctx Context, target_data: &'ctx TargetData,
     linked_program: LinkedProgram
-) -> Result<Module<'ctx>, CE> {
+) -> Result<Module<'ctx>, LLVMError> {
     let mut code_module_gen = CodeModuleGen::new(context, target_data, linked_program, "main_module");
     code_module_gen.parse_module()?;
     Ok(code_module_gen.module)
@@ -113,7 +113,7 @@ mod module_parsing {
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx> {
-        pub fn parse_module(&mut self) -> Result<(), CE> {
+        pub fn parse_module(&mut self) -> Result<(), LLVMError> {
             self.context_window.step_in();
 
             self.parse_type_statements();
@@ -143,7 +143,7 @@ mod module_parsing {
             Ok(())
         }
 
-        fn create_global_var(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), CE> {
+        fn create_global_var(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), LLVMError> {
             let GlobalLinkedStatement::VariableDeclaration { value } = statement else { unreachable!() };
 
             let global_type = self.parse_type(&value.object_type);
@@ -157,10 +157,10 @@ mod module_parsing {
             self.context_window.add(object, global_value.as_any_value_enum());
             Ok(())
         }
-        fn get_const_value(&self, object: Object, value: TypedExpression) -> Result<BasicValueEnum<'ctx>, CE> {
+        fn get_const_value(&self, object: Object, value: TypedExpression) -> Result<BasicValueEnum<'ctx>, LLVMError> {
             let TypedExpression { object_type: _, expr } = value;
-            let LinkedExpression::Undefined(obj_type) = expr else {
-                return Err(CE::GlobalWithValue { name: self.get_object_name(object).clone()});
+            let LinkedExpression::Literal(LinkedLiteralExpression::Undefined(obj_type)) = expr else {
+                return Err(LLVMError::GlobalWithValue { name: self.get_object_name(object).clone()});
             };
             Ok(get_undef(self.parse_type(&obj_type)))
         }
@@ -174,7 +174,7 @@ mod module_parsing {
             let function = self.module.add_function(name.as_str(), fn_type, None);
             self.context_window.add(object, function.into());
         }
-        fn parse_function(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), CE> {
+        fn parse_function(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), LLVMError> {
             let GlobalLinkedStatement::Function { args, returns: _, body } = statement else { unreachable!() };
             let function = self.context_window.get_function_unwrap(object);
 
@@ -193,7 +193,7 @@ mod module_parsing {
             self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
-                return Err(CE::LLVMVerifyFunctionError { name: self.linked_program.factory.get_name(object).clone() });
+                return Err(LLVMError::LLVMVerifyFunctionError { name: self.linked_program.factory.get_name(object).clone() });
             }
             self.current_function = None;
 
@@ -263,13 +263,13 @@ mod declaration_parsing {
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx> {
-        pub fn parse_function_body(&mut self, body: Vec<LinkedStatement>) -> Result<(), CE> {
+        pub fn parse_function_body(&mut self, body: Vec<LinkedStatement>) -> Result<(), LLVMError> {
             let is_returned = self.parse_statements(body)?;
             assert!(is_returned);
 
             Ok(())
         }
-        fn parse_statements(&mut self, statements: Vec<LinkedStatement>) -> Result<bool, CE> {
+        fn parse_statements(&mut self, statements: Vec<LinkedStatement>) -> Result<bool, LLVMError> {
             for statement in statements {
                 if self.parse_statement(statement)? {
                     return Ok(true)
@@ -278,7 +278,7 @@ mod declaration_parsing {
             Ok(false)
         }
 
-        fn parse_statement(&mut self, statement: LinkedStatement) -> Result<bool, CE> {
+        fn parse_statement(&mut self, statement: LinkedStatement) -> Result<bool, LLVMError> {
             match statement {
                 LinkedStatement::Expression(expression) => {
                     if expression.object_type.is_void() {
@@ -357,7 +357,7 @@ mod declaration_parsing {
             }
             Ok(false)
         }
-        fn parse_lvalue(&self, expression: TypedExpression) -> Result<PointerValue<'ctx>, CE> {
+        fn parse_lvalue(&self, expression: TypedExpression) -> Result<PointerValue<'ctx>, LLVMError> {
             if let LinkedExpression::UnaryOperation(expr, OneSidedOperation::Dereference) = expression.expr {
                 let value = self.parse_expression(expr.expr)?;
                 Ok(value.unwrap().into_pointer_value())
@@ -367,7 +367,7 @@ mod declaration_parsing {
         }
 
         /// get pointer to local object or None
-        fn get_pointer(&self, expression: &LinkedExpression) -> Result<Option<PointerValue<'ctx>>, CE> {
+        fn get_pointer(&self, expression: &LinkedExpression) -> Result<Option<PointerValue<'ctx>>, LLVMError> {
             match expression {
                 LinkedExpression::RoundBracket(exp) => self.get_pointer(&exp.expr),
                 LinkedExpression::Variable(object) => {
@@ -378,7 +378,7 @@ mod declaration_parsing {
             }
         }
 
-        fn parse_expression(&self, expression: LinkedExpression) -> Result<Option<BasicValueEnum<'ctx>>, CE> {
+        fn parse_expression(&self, expression: LinkedExpression) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
             match expression {
                 LinkedExpression::FunctionCall { object, args } => {
                     Ok(Some(self.call_function(object, args)?.unwrap()))
@@ -391,39 +391,7 @@ mod declaration_parsing {
                     let field_pointer = self.builder.build_struct_gep(struct_type, struct_value, field_index, "get_field")?;
                     Ok(Some(field_pointer.into()))
                 }
-                LinkedExpression::Undefined(obj_type) => {
-                    let value_type = self.parse_type(&obj_type);
-                    Ok(Some(get_undef(value_type)))
-                }
-                LinkedExpression::IntLiteral(literal, object_type) => {
-                    let int_type = self.parse_type(&object_type).into_int_type();
-
-                    // FIXME: can't parse i128. Uncomment test for i128
-                    let value = literal.parse::<u64>().unwrap(); // FIXME: return error
-                    let int_value = int_type.const_int(value, true);
-                    Ok(Some(int_value.into()))
-                }
-                LinkedExpression::FloatLiteral(float, float_type) => {
-                    let float_type = self.parse_type(&float_type).into_float_type();
-
-                    let value = float.parse::<f64>().unwrap(); // FIXME: return error
-                    Ok(Some(float_type.const_float(value).into()))
-                }
-                LinkedExpression::BoolLiteral(bool) => {
-                    let int_type = self.context.bool_type();
-
-                    let number = match bool { true => 1, false => 0 };
-                    Ok(Some(int_type.const_int(number, false).into()))
-                }
-                LinkedExpression::CharLiteral(char) => {
-                    let int_type = self.parse_type(&ObjType::Char).into_int_type();
-                    Ok(Some(int_type.const_int(char as u64, false).into()))
-                }
-                LinkedExpression::StringLiteral(string) => {
-                    // SAFETY: looks like [build_global_string] must be called inside function and that's true here
-                    let string_value = unsafe { self.builder.build_global_string(&string, "string_literal")? };
-                    Ok(Some(string_value.as_basic_value_enum()))
-                }
+                LinkedExpression::Literal(literal) => self.parse_literal(literal),
                 LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed.expr),
                 LinkedExpression::Variable(object) => {
                     let value_type = self.get_object_type(object);
@@ -479,7 +447,44 @@ mod declaration_parsing {
                 }
             }
         }
-        fn parse_as(&self, ex: BasicValueEnum<'ctx>, was_obj_type: ObjType, to_obj_type: ObjType) -> Result<Option<BasicValueEnum<'ctx>>, CE> {
+        fn parse_literal(&self, literal: LinkedLiteralExpression) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
+            match literal {
+                LinkedLiteralExpression::Undefined(obj_type) => {
+                    let value_type = self.parse_type(&obj_type);
+                    Ok(Some(get_undef(value_type)))
+                }
+                LinkedLiteralExpression::IntLiteral(literal, object_type) => {
+                    let int_type = self.parse_type(&object_type).into_int_type();
+
+                    // FIXME: can't parse i128. Uncomment test for i128
+                    let value = literal.parse::<u64>().unwrap(); // FIXME: return error
+                    let int_value = int_type.const_int(value, true);
+                    Ok(Some(int_value.into()))
+                }
+                LinkedLiteralExpression::FloatLiteral(float, float_type) => {
+                    let float_type = self.parse_type(&float_type).into_float_type();
+
+                    let value = float.parse::<f64>().unwrap(); // FIXME: return error
+                    Ok(Some(float_type.const_float(value).into()))
+                }
+                LinkedLiteralExpression::BoolLiteral(bool) => {
+                    let int_type = self.context.bool_type();
+
+                    let number = match bool { true => 1, false => 0 };
+                    Ok(Some(int_type.const_int(number, false).into()))
+                }
+                LinkedLiteralExpression::CharLiteral(char) => {
+                    let int_type = self.parse_type(&ObjType::Char).into_int_type();
+                    Ok(Some(int_type.const_int(char as u64, false).into()))
+                }
+                LinkedLiteralExpression::StringLiteral(string) => {
+                    // SAFETY: looks like [build_global_string] must be called inside function and that's true here
+                    let string_value = unsafe { self.builder.build_global_string(&string, "string_literal").unwrap() };
+                    Ok(Some(string_value.as_basic_value_enum()))
+                }
+            }
+        }
+        fn parse_as(&self, ex: BasicValueEnum<'ctx>, was_obj_type: ObjType, to_obj_type: ObjType) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
             let result = match was_obj_type {
                 ObjType::Char => {
                     let ex_int = ex.into_int_value();
@@ -575,7 +580,7 @@ mod declaration_parsing {
             };
             Ok(Some(result))
         }
-        fn parse_operation(&self, v1: BasicValueEnum<'ctx>, v2: BasicValueEnum<'ctx>, type1: ObjType, op: TwoSidedOperation) -> Result<BasicValueEnum<'ctx>, CE> {
+        fn parse_operation(&self, v1: BasicValueEnum<'ctx>, v2: BasicValueEnum<'ctx>, type1: ObjType, op: TwoSidedOperation) -> Result<BasicValueEnum<'ctx>, LLVMError> {
             let result = match op {
                 TwoSidedOperation::Number(num_op) => match type1 {
                     ObjType::Integer(int) => {
@@ -647,7 +652,7 @@ mod declaration_parsing {
             };
             Ok(result)
         }
-        fn call_function(&self, object: Object, args: Vec<TypedExpression>) -> Result<Option<BasicValueEnum<'ctx>>, CE> {
+        fn call_function(&self, object: Object, args: Vec<TypedExpression>) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
             let args: Vec<_> = args.into_iter().map(|a|
                 self.parse_expression(a.expr)
             ).collect::<Result<_, _>>()?;

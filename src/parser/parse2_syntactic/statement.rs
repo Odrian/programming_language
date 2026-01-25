@@ -34,15 +34,20 @@ pub enum Expression {
     As(Box<Self>, Typee),
     StructField { left: Box<Self>, field: String },
 
+    Literal(LiteralExpression),
+
+    Variable(String),
+    RoundBracket(Box<Self>),
+    FunctionCall { object: String, args: Vec<Self> },
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum LiteralExpression {
     Undefined,
     NumberLiteral(String),
     BoolLiteral(bool),
     CharLiteral(u8),
     StringLiteral(String),
-
-    Variable(String),
-    RoundBracket(Box<Self>),
-    FunctionCall { object: String, args: Vec<Self> },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -112,6 +117,12 @@ impl Expression {
     }
     pub fn new_dot(left: Self, field: String) -> Self {
         Self::StructField { left: Box::new(left), field }
+    }
+}
+
+impl From<LiteralExpression> for Expression {
+    fn from(value: LiteralExpression) -> Self {
+        Self::Literal(value)
     }
 }
 
@@ -221,6 +232,20 @@ impl fmt::Display for Expression {
             Self::As(expression, typee) => {
                 write!(f, "({expression} as {typee})")
             }
+            Self::Literal(literal) => write!(f, "{literal}"),
+            Self::Variable(name) => write!(f, "{name}"),
+            Self::RoundBracket(expression) => write!(f, "({expression})"),
+            Self::FunctionCall { object: name, args } => {
+                let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                write!(f, "{name} ({args})")
+            }
+        }
+    }
+}
+
+impl fmt::Display for LiteralExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
             Self::Undefined => write!(f, "---"),
             Self::NumberLiteral(number) => write!(f, "{number}"),
             Self::BoolLiteral(value) => match value {
@@ -229,12 +254,6 @@ impl fmt::Display for Expression {
             }
             Self::CharLiteral(char) => write!(f, "'{}'", *char as char),
             Self::StringLiteral(str) => write!(f, "\"{str}\""),
-            Self::Variable(name) => write!(f, "{name}"),
-            Self::RoundBracket(expression) => write!(f, "({expression})"),
-            Self::FunctionCall { object: name, args } => {
-                let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
-                write!(f, "{name} ({args})")
-            }
         }
     }
 }

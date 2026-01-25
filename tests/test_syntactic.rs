@@ -254,7 +254,7 @@ fn test_function_with_while() {
         None,
         Expression::new_operation(
             Expression::Variable(arg2.clone()),
-            Expression::NumberLiteral(v_1).clone(),
+            Expression::Literal(LiteralExpression::NumberLiteral(v_1.clone())),
             NumberOperation::Add.into()
         ),
     );
@@ -323,7 +323,7 @@ fn test_function_call() {
         "foo(cat, 5)",
         Ok(vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![
             Expression::Variable(v_cat),
-            Expression::NumberLiteral(v_5),
+            Expression::Literal(LiteralExpression::NumberLiteral(v_5)),
         ]))])
     );
 }

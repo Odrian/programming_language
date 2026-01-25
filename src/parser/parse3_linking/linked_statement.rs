@@ -37,6 +37,15 @@ pub enum LinkedExpression {
     As(Box<TypedExpression>, ObjType),
     StructField { left: Box<TypedExpression>, field_index: u32 },
 
+    Literal(LinkedLiteralExpression),
+
+    Variable(Object),
+    RoundBracket(Box<TypedExpression>),
+    FunctionCall { object: Object, args: Vec<TypedExpression> },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum LinkedLiteralExpression {
     Undefined(ObjType),
     /// `ObjType` always `IntObjType`
     IntLiteral(String, ObjType),
@@ -45,10 +54,6 @@ pub enum LinkedExpression {
     BoolLiteral(bool),
     CharLiteral(u8),
     StringLiteral(String),
-
-    Variable(Object),
-    RoundBracket(Box<TypedExpression>),
-    FunctionCall { object: Object, args: Vec<TypedExpression> },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -109,6 +114,12 @@ impl LinkedExpression {
     pub fn new_struct_field(left: TypedExpression, field_index: u32) -> Self {
         let left = Box::new(left);
         Self::StructField { left, field_index }
+    }
+}
+
+impl From<LinkedLiteralExpression> for LinkedExpression {
+    fn from(value: LinkedLiteralExpression) -> Self {
+        Self::Literal(value)
     }
 }
 
@@ -201,15 +212,7 @@ impl fmt::Display for LinkedExpression {
             Self::As(expression, object_type) => {
                 write!(f, "({expression} as {object_type})")
             }
-            Self::Undefined(_) => write!(f, "---"),
-            Self::IntLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
-            Self::FloatLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
-            Self::BoolLiteral(value) => match value {
-                true => write!(f, "true"),
-                false => write!(f, "false"),
-            }
-            Self::CharLiteral(char) => write!(f, "'{}'", *char as char),
-            Self::StringLiteral(str) => write!(f, "\"{str}\""),
+            Self::Literal(literal) => write!(f, "{literal}"),
             Self::Variable(object) => write!(f, "{object}"),
             Self::RoundBracket(expression) => write!(f, "({expression})"),
             Self::FunctionCall { object, args } => {
@@ -219,6 +222,22 @@ impl fmt::Display for LinkedExpression {
             Self::StructField { left, field_index } => {
                 write!(f, "{left}.[{field_index}]")
             },
+        }
+    }
+}
+
+impl fmt::Display for LinkedLiteralExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Undefined(_) => write!(f, "---"),
+            Self::IntLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
+            Self::FloatLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
+            Self::BoolLiteral(value) => match value {
+                true => write!(f, "true"),
+                false => write!(f, "false"),
+            }
+            Self::CharLiteral(char) => write!(f, "'{}'", *char as char),
+            Self::StringLiteral(str) => write!(f, "\"{str}\""),
         }
     }
 }
