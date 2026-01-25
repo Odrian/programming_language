@@ -23,7 +23,7 @@ bar :: (argument : i32) -> i32 {
 
 You can call functions with ```name(arg1, ...)```, redundant comma allowed.
 
-You must declare main function with () -> i32 signature
+You must declare main function with `() -> i32` signature
 ```
 main :: () -> i32 {
     return 0;
@@ -32,7 +32,8 @@ main :: () -> i32 {
 
 ### Extern
 
-`#extern` can be used to declare functions or variable from libc
+`#extern` can be used to declare functions or variable from libc  
+Only extern function can be Variadic
 
 ```
 FILE :: struct {}
@@ -41,10 +42,13 @@ FILE :: struct {}
 stdout: *FILE;
 
 #extern
-fprintf :: (*FILE, *char);
+abs :: (i32) -> i32;
+
+#extern
+fprintf :: (*FILE, *char, ...);
 
 main :: () -> i32 {
-    fprintf(stdout, "Hello world!");
+    fprintf(stdout, "Hello user %d", abs(-765));
     return 0;
 }
 ```

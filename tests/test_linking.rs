@@ -211,14 +211,15 @@ fn test_function_with_while() {
 
     let function_type = linked_program.factory.get_type(function_object);
     assert!(matches!(function_type, ObjType::Function { .. }));
-    let ObjType::Function { arguments, returns } = function_type else { unreachable!() };
+    let ObjType::Function { arguments, is_vararg, returns } = function_type else { unreachable!() };
+    assert!(!is_vararg);
     assert_eq!(arguments, &vec![ObjType::DEFAULT_INTEGER]);
     assert_eq!(returns.as_ref(), &ObjType::DEFAULT_INTEGER);
 
     assert_eq!(args.len(), 1);
     let arg = args[0];
     assert_eq!(body.len(), 3);
-    
+
     let mut body_iter = body.into_iter();
 
     let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = body_iter.next().unwrap() else { panic!() };

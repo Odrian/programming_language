@@ -15,7 +15,7 @@ pub enum ObjType {
     Pointer(Box<Self>),
     Reference(Box<Self>),
     Struct(Object),
-    Function { arguments: Vec<Self>, returns: Box<Self> },
+    Function { arguments: Vec<Self>, is_vararg: bool, returns: Box<Self> },
 }
 impl ObjType {
     pub const BOOL: Self = Self::Integer(IntObjType::Bool);

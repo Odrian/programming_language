@@ -493,14 +493,14 @@ impl ParsingState {
                 return Err(ExpectedEnum::RoundBracket.err())
             };
 
-            let args = parse_extern_function_arguments(vec)?;
+            let (args, is_vararg) = parse_extern_function_arguments(vec)?;
 
             let Some(TokenWithPos { token, position }) = self.next() else {
                 return Err(ExpectedEnum::Semicolon.err())
             };
 
             if token == Token::Semicolon {
-                Ok(Statement::ExternStatement { statement: ExternStatement::Function { name, args, returns: None }})
+                Ok(Statement::ExternStatement { statement: ExternStatement::Function { name, args, is_vararg, returns: None }})
             } else if token == Token::Arrow {
                 let returns = self.parse_type(position)?;
 
@@ -508,7 +508,7 @@ impl ParsingState {
                     return Err(ExpectedEnum::Semicolon.err())
                 };
 
-                Ok(Statement::ExternStatement { statement: ExternStatement::Function { name, args, returns: Some(returns) }})
+                Ok(Statement::ExternStatement { statement: ExternStatement::Function { name, args, is_vararg, returns: Some(returns) }})
             } else {
                 Err((ExpectedEnum::Arrow | ExpectedEnum::Semicolon).err())
             }
@@ -597,6 +597,14 @@ impl ParsingState {
 
         Ok(Statement::new_import(from, what))
     }
+    fn parse_triple_dot(&mut self, mut position0: PositionInFile) -> Result<(), SyntacticError> {
+        for _ in 0..3 {
+            let Some(TokenWithPos { token: Token::Dot, position }) = self.next() else {
+                return Err(ExpectedEnum::new_string(".").err())
+            };
+        }
+        Ok(())
+    }
 }
 
 fn parse_function_declaration_arguments(args: Vec<TokenWithPos>) -> Result<Vec<(String, Typee)>, SyntacticError> {
@@ -629,15 +637,24 @@ fn parse_function_declaration_arguments(args: Vec<TokenWithPos>) -> Result<Vec<(
 
     Ok(arguments)
 }
-fn parse_extern_function_arguments(args: Vec<TokenWithPos>) -> Result<Vec<Typee>, SyntacticError> {
+fn parse_extern_function_arguments(args: Vec<TokenWithPos>) -> Result<(Vec<Typee>, bool), SyntacticError> {
     if args.is_empty() {
-        return Ok(Vec::new())
+        return Ok((Vec::new(), false))
     }
     let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
     let mut state = ParsingState::new(args);
 
     let mut position0 = PositionInFile::new(0, 0);
     while !state.at_end() {
+        if matches!(state.peek(), Some(TokenWithPos { token: Token::Dot, .. })) {
+            state.parse_triple_dot(position0)?;
+
+            if !state.at_end() {
+                return Err(ExpectedEnum::new_string(")").err())
+            }
+            return Ok((arguments, true))
+        }
+
         let argument_type = state.parse_type(position0)?;
 
         arguments.push(argument_type);
@@ -651,7 +668,7 @@ fn parse_extern_function_arguments(args: Vec<TokenWithPos>) -> Result<Vec<Typee>
         position0 = position
     }
 
-    Ok(arguments)
+    Ok((arguments, false))
 }
 
 fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile) -> Result<Vec<Expression>, SyntacticError> {

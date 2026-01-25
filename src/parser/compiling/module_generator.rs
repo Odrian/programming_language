@@ -213,10 +213,10 @@ mod module_parsing {
                     self.context_window.add(object, global.as_any_value_enum());
                 }
                 ExternLinkedStatement::Function { name, typee } => {
-                    let ObjType::Function { arguments, returns } = typee else { unreachable!() };
+                    let ObjType::Function { arguments, is_vararg, returns } = typee else { unreachable!() };
                     let arguments = arguments.iter().map(|a| self.parse_type(a).into()).collect::<Vec<_>>();
-                    let fn_type = self.function_from(returns.as_ref(), &arguments, false);
-                    
+                    let fn_type = self.function_from(returns.as_ref(), &arguments, is_vararg);
+
                     let function = self.module.add_function(&name, fn_type, None);
 
                     self.context_window.add(object, function.into());

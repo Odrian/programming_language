@@ -64,7 +64,7 @@ impl FunctionLinkingContext<'_> {
                 self.context.result.extern_statements.insert(object, extern_statement);
                 Ok(())
             }
-            ExternStatement::Function { name, args, returns } => {
+            ExternStatement::Function { name, args, is_vararg, returns } => {
                 let arguments_type = args.iter().map(|typee| {
                     let object_type = self.parse_type(typee)?;
                     if object_type.is_void() {
@@ -81,6 +81,7 @@ impl FunctionLinkingContext<'_> {
                 };
                 let func_type = ObjType::Function {
                     arguments: arguments_type,
+                    is_vararg,
                     returns: Box::new(return_type.clone()),
                 };
                 
@@ -145,6 +146,7 @@ impl FunctionLinkingContext<'_> {
         let func_type = ObjType::Function {
             arguments: arguments_type,
             returns: Box::new(return_type.clone()),
+            is_vararg: false
         };
         *self.context.factory.get_type_mut(object) = func_type;
         self.object_context_window.add(name.to_owned(), object);
@@ -158,7 +160,8 @@ impl FunctionLinkingContext<'_> {
         let mut arguments_obj = Vec::with_capacity(args.len());
 
         let func_type = self.context.factory.get_type(object).clone();
-        let ObjType::Function { arguments, returns: return_type } = func_type else { unreachable!() };
+        let ObjType::Function { arguments, is_vararg, returns: return_type } = func_type else { unreachable!() };
+        if is_vararg { unreachable!() }
         let return_type = *return_type;
 
         for (arg_name, _) in args {
@@ -363,20 +366,26 @@ impl FunctionLinkingContext<'_> {
             },
             Expression::FunctionCall { object: name, args: args_values } => {
                 let object = self.object_context_window.get_or_error(&name)?;
-                let ObjType::Function { arguments, returns } = self.context.factory.get_type(object).clone() else {
+                let ObjType::Function { arguments, is_vararg, returns } = self.context.factory.get_type(object).clone() else {
                     LinkingError::CallNotFunction { name }.print();
                     return Err(())
                 };
-                if args_values.len() != arguments.len() {
+                if args_values.len() < arguments.len() || (!is_vararg && args_values.len() > arguments.len()) {
                     let function_name = self.context.factory.get_name(object).clone();
-                    LinkingError::IncorrectArgumentCount { function_name, argument_need: arguments.len(), argument_got: args_values.len() }.print();
+                    LinkingError::IncorrectArgumentCount { function_name, is_vararg, argument_need: arguments.len(), argument_got: args_values.len() }.print();
                     return Err(())
                 }
                 let args = args_values.into_iter().enumerate()
-                    .map(|(index, x)| self.parse_expression(x, Some(&arguments[index])))
+                    .map(|(index, x)| {
+                        if index < arguments.len() {
+                            self.parse_expression(x, Some(&arguments[index]))
+                        } else {
+                            self.parse_expression(x, None)
+                        }
+                    })
                     .collect::<Result<Vec<_>, _>>()?;
 
-                for index in 0..args.len() {
+                for index in 0..arguments.len() {
                     if args[index].object_type != arguments[index] {
                         LinkingError::IncorrectType { got: args[index].object_type.clone(), expected: arguments[index].clone() }.print();
                         return Err(())

@@ -23,7 +23,7 @@ pub enum LinkingError {
     FunctionMustReturn { function_name: String },
 
     LiteralParseError { what: String, error: String },
-    IncorrectArgumentCount { function_name: String, argument_need: usize, argument_got: usize },
+    IncorrectArgumentCount { function_name: String, is_vararg: bool, argument_need: usize, argument_got: usize },
     FunctionAsValue { name: String },
 }
 
@@ -87,8 +87,9 @@ impl Display for LinkingError {
             Self::LiteralParseError { what, error } => {
                 write!(f, "{error} in literal {what}")
             }
-            Self::IncorrectArgumentCount { function_name, argument_need, argument_got } => {
-                write!(f, "incorrect argument count for function {function_name}, need {argument_need}, got {argument_got}")
+            Self::IncorrectArgumentCount { function_name, is_vararg, argument_need, argument_got } => {
+                let at_least = if *is_vararg { " at least" } else { "" };
+                write!(f, "incorrect argument count for function {function_name}, need{at_least} {argument_need}, got {argument_got}")
             }
             Self::FunctionAsValue { name } => {
                 write!(f, "can't use function {name} as variable value")

@@ -275,12 +275,17 @@ impl fmt::Display for ObjType {
             Self::Struct(object) => {
                 write!(f, "struct{object}")
             }
-            Self::Function { arguments, returns } => {
+            Self::Function { arguments, returns, is_vararg } => {
                 if arguments.is_empty() {
+                    if *is_vararg { unreachable!() }
                     write!(f, "() -> {returns}")
                 } else {
                     let arguments = arguments.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
-                    write!(f, "({arguments}) -> {returns}")
+                    if *is_vararg {
+                        write!(f, "({arguments}, ...) -> {returns}")
+                    } else {
+                        write!(f, "({arguments}) -> {returns}")
+                    }
                 }
             }
         }

@@ -60,7 +60,7 @@ pub enum Typee {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ExternStatement {
     Variable { name: String, typee: Typee },
-    Function { name: String, args: Vec<Typee>, returns: Option<Typee> },
+    Function { name: String, args: Vec<Typee>, is_vararg: bool, returns: Option<Typee> },
 }
 
 impl Typee {
@@ -206,11 +206,15 @@ impl fmt::Display for ExternStatement {
             ExternStatement::Variable { name, typee } => {
                 write!(f, "{name}: {typee};")
             }
-            ExternStatement::Function { name, args, returns } => {
-                let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+            ExternStatement::Function { name, args, is_vararg, returns } => {
+                let mut args_str = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                if *is_vararg {
+                    if args.len() == 0 { unreachable!() }
+                    args_str += ", ...";
+                }
                 match returns {
-                    Some(returns) => write!(f, "{name} : ({args}) -> {returns};"),
-                    None => write!(f, "{name} : ({args});"),
+                    Some(returns) => write!(f, "{name} : ({args_str}) -> {returns};"),
+                    None => write!(f, "{name} : ({args_str});"),
                 }
             }
         }

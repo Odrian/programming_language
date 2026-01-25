@@ -14,20 +14,39 @@ main :: () -> i32 {
 
 #[test]
 fn test_fprintf() {
-    let string_num = u64::from_le_bytes([b'H', b'e', b'l', b'l', b'o', b'!', 0, 0]);
-    assert_eq!("Hello!", run_code_stdout(&("\
-#extern
-stdout: *i8;
+    assert_eq!("Hello world!", run_code_stdout("\
+FILE :: struct {}
 
 #extern
-fprintf :: (*i8, *i8);
+stdout: *FILE;
+
+#extern
+fprintf :: (*FILE, *char);
 
 main :: () -> i32 {
-    str: u64 = ".to_string() + &string_num.to_string() + "_u64;
-    fprintf(stdout, &str as *i8);
+    fprintf(stdout, \"Hello world!\");
     return 0;
 }
 
-")).unwrap())
+").unwrap())
+}
+
+#[test]
+fn test_fprintf_with_vararg() {
+    assert_eq!("765", run_code_stdout("\
+FILE :: struct {}
+
+#extern
+stdout: *FILE;
+
+#extern
+fprintf :: (*FILE, *char, ...);
+
+main :: () -> i32 {
+    fprintf(stdout, \"%d\", 765);
+    return 0;
+}
+
+").unwrap())
 }
 
