@@ -53,6 +53,17 @@ main :: () -> i32 {
 }
 ```
 
+`#extern` can be used to curly brackets
+```
+FILE :: struct {}
+
+#extern {
+    stdout: *FILE;
+
+    fprintf :: (*FILE, *char, ...);
+}
+```
+
 ### Struct
 
 ```

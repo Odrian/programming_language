@@ -30,23 +30,22 @@ impl ParsingState {
     pub fn parse_statements(&mut self, is_global: bool) -> Result<Vec<Statement>, SyntacticError> {
         let mut statements = Vec::new();
 
-        // skip all ';'
-        while self.peek().map_or_else(|| false, |t| t.token == Token::Semicolon) {
-            self.next();
-        }
+        self.skip_semicolons();
 
         while !self.at_end() {
-            statements.push(self.parse_statement(is_global)?);
+            self.parse_statement(is_global, &mut statements)?;
 
-            // skip all ';'
-            while self.peek().map_or_else(|| false, |t| t.token == Token::Semicolon) {
-                self.next();
-            }
+            self.skip_semicolons();
         }
 
         Ok(statements)
     }
-    fn parse_statement(&mut self, is_global: bool) -> Result<Statement, SyntacticError> {
+    fn skip_semicolons(&mut self) {
+        while let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.peek() {
+            self.next();
+        }
+    }
+    fn parse_statement(&mut self, is_global: bool, result: &mut Vec<Statement>) -> Result<(), SyntacticError> {
         let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
         match token {
             Token::Keyword(keyword) => match keyword {
@@ -63,39 +62,58 @@ impl ParsingState {
                     let body = ParsingState::new(vec).parse_statements(false)?;
 
                     if keyword == TokenKeyword::If {
-                        Ok(Statement::new_if(condition, body))
+                        result.push(Statement::new_if(condition, body))
                     } else {
-                        Ok(Statement::new_while(condition, body))
+                        result.push(Statement::new_while(condition, body))
                     }
+                    Ok(())
                 }
                 TokenKeyword::Return => {
                     let peek_token = self.peek();
                     if peek_token.is_none() {
-                        Ok(Statement::Return(None))
+                        result.push(Statement::Return(None))
                     } else if let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = peek_token {
-                        Ok(Statement::Return(None))
+                        result.push(Statement::Return(None))
                     } else {
                         let expression = self.parse_expression(position)?;
-                        Ok(Statement::Return(Some(expression)))
+                        result.push(Statement::Return(Some(expression)))
                     }
+                    Ok(())
                 }
                 TokenKeyword::Import => {
                     if !is_global { return Err(SyntacticError::new_local_global("import")) }
-                    self.parse_import(position)
+                    result.push(self.parse_import(position)?);
+                    Ok(())
                 },
                 TokenKeyword::Extern => {
                     if !is_global { return Err(SyntacticError::new_local_global("extern")) }
-                    self.parse_extern(position)
+                    
+                    if matches!(self.peek(), Some(TokenWithPos { token: Token::Bracket(_, BracketType::Curly), position: _ })) {
+                        let Some(TokenWithPos { token: Token::Bracket(vec, _), position }) = self.next() else { unreachable!() };
+
+                        let mut state = Self::new(vec);
+                        while !state.at_end() {
+                            state.skip_semicolons();
+                            result.push(state.parse_extern(position)?)
+                        }
+
+                        Ok(())
+                    } else {
+                        result.push(self.parse_extern(position)?);
+                        Ok(())
+                    }
                 },
             },
             Token::String(_) => {
                 let Token::String(string) = token else { unreachable!() };
-                self.parse_statement2(string, is_global, position)
+                result.push(self.parse_statement2(string, is_global, position)?);
+                Ok(())
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
                 let left_expression = self.parse_expression_without_ops(position, true)?;
                 let left_expression = Expression::new_unary_operation(left_expression, OneSidedOperation::Dereference);
-                self.parse_statement3(left_expression, position)
+                result.push(self.parse_statement3(left_expression, position)?);
+                Ok(())
             }
             Token::Semicolon => unreachable!(),
             _ => Err((ExpectedEnum::new_string("keyword") | ExpectedEnum::Name | ExpectedEnum::new_string("*") | ExpectedEnum::Semicolon).err())
@@ -358,7 +376,8 @@ impl ParsingState {
                 
                 match token {
                     Token::String(field_name) => {
-                        Ok(Expression::new_dot(expression1, field_name))
+                        let expression = Expression::new_dot(expression1, field_name);
+                        self.parse_expression2_without_ops(expression, was_unary)
                     }
                     _ => Err(SyntacticError::new_unexpected("dot operator"))
                 }

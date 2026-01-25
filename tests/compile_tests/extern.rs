@@ -36,11 +36,11 @@ fn test_fprintf_with_vararg() {
     assert_eq!("765", run_code_stdout("\
 FILE :: struct {}
 
-#extern
-stdout: *FILE;
+#extern {
+    stdout: *FILE;
 
-#extern
-fprintf :: (*FILE, *char, ...);
+    fprintf :: (*FILE, *char, ...);
+}
 
 main :: () -> i32 {
     fprintf(stdout, \"%d\", 765);
