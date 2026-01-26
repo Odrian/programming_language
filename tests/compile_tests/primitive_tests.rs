@@ -63,6 +63,8 @@ fn test_literals() {
     assert_eq!(1, get_exit_code_main_return(&format!("('a' as i32 == {}) as i32", 'a' as i32)));
     assert_eq!(1, get_exit_code_main_return(&format!("({}_u8 as char == 'a') as i32", 'a' as i32)));
 
+    assert_eq!(1, get_exit_code_main_return("!false as i32"));
+
     // FIXME: uncomment when fixed
 //     get_exit_code_main("\
 // a := 10000000000000000000000000000000000000000000.0000000000000000000000000000000000001_f32;

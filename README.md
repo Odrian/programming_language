@@ -91,6 +91,7 @@ a2.field2 = &a1;
 You can define variable as follows.  
 ```
 name : type;
+name : type = ---;
 name : type = value;
 name := value;
 ```

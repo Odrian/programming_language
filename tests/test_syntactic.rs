@@ -86,7 +86,7 @@ fn test_minus() {
     assert_no_error("a := 0 - 0; a = a - 0");
 
     assert_no_error("a := -1");
-    assert_no_error("a := --1");
+    assert_has_error("a := --1");
     assert_no_error("a := 0; a = -a");
 }
 

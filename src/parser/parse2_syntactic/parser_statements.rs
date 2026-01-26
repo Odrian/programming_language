@@ -352,26 +352,37 @@ impl ParsingState {
                 let expression1 = Expression::new_round_bracket(expression);
                 self.parse_expression2_without_ops(expression1, was_unary, in_cond)
             }
-            Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)) => { // -.. 
+            Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)) => { // -..
+                if let Some(TokenWithPos { token: Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)), position: _ }) = self.peek() {
+                    self.next();
+                    let Some(TokenWithPos { token: Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)), position: _ }) = self.next() else {
+                        return Err(ExpectedEnum::new_string("---").err())
+                    };
+
+                    let undef_expression = LiteralExpression::Undefined.into();
+                    // return Ok(undef_expression); // no operators on undef value
+                    return self.parse_expression2_without_ops(undef_expression, false, in_cond)
+                }
+                
                 let op = OneSidedOperation::UnaryMinus;
                 let expression = self.parse_expression_without_ops(position, true, in_cond)?;
                 
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression, false, in_cond)?)
+                self.parse_expression2_without_ops(unary_expression, false, in_cond)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
                 let op = OneSidedOperation::Dereference;
                 let expression = self.parse_expression_without_ops(position, true, in_cond)?;
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression, false, in_cond)?)
+                self.parse_expression2_without_ops(unary_expression, false, in_cond)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::BitAnd)) => { // &..
                 let op = OneSidedOperation::GetReference;
                 let expression = self.parse_expression_without_ops(position, true, in_cond)?;
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression, false, in_cond)?)
+                self.parse_expression2_without_ops(unary_expression, false, in_cond)
             }
             Token::Operation(TwoSidedOperation::Bool(BoolOperation::And)) => {
                 let op = OneSidedOperation::GetReference;
@@ -379,12 +390,12 @@ impl ParsingState {
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 let unary_expression2 = Expression::new_unary_operation(unary_expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression2, false, in_cond)?)
+                self.parse_expression2_without_ops(unary_expression2, false, in_cond)
             }
             Token::UnaryOperation(op) => { // `unary`..
                 let expression = self.parse_expression_without_ops(position, true, in_cond)?;
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression, false, in_cond)?)
+                self.parse_expression2_without_ops(unary_expression, false, in_cond)
             }
             Token::Quotes(string) => { // '..'
                 let char_value = parse_quotes(&string)?;
