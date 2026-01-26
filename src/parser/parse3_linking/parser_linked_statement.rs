@@ -299,11 +299,26 @@ impl FunctionLinkingContext<'_> {
         LinkingError::IncorrectType { expected: expected_type.clone(), got: typed_expression.object_type }.print();
         Err(())
     }
+    fn try_deref_reference(expression: TypedExpression) -> TypedExpression {
+        if !matches!(expression.object_type, ObjType::Reference { .. }) {
+            return expression;
+        }
+        let ObjType::Reference { obj_type, is_weak: _ } = &expression.object_type else { unreachable!() };
+        let object_type = obj_type.as_ref().clone();
+
+        TypedExpression {
+            object_type,
+            expr: LinkedExpression::new_unary_operation(expression, OneSidedOperation::Dereference)
+        }
+    }
     fn parse_expression(&mut self, expression: Expression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
         match expression {
             Expression::Operation(expression1, expression2, op) => {
                 let ex1 = self.parse_expression(*expression1, None)?;
-                let ex2 = self.parse_expression(*expression2, None)?;
+                let ex1 = Self::try_deref_reference(ex1);
+                let ex2 = self.parse_expression(*expression2, Some(&ex1.object_type))?;
+                // ex2 will deref if can in [Self::try_autocast]
+
                 let Some(result_type) = ObjType::from_operation(&ex1.object_type, &ex2.object_type, op) else {
                     LinkingError::IncorrectTwoOper { object_type1: ex1.object_type, object_type2: ex2.object_type, op }.print();
                     return Err(())
@@ -330,10 +345,12 @@ impl FunctionLinkingContext<'_> {
                         self.parse_expression(*expression, None)?
                     },
                     OneSidedOperation::BoolNot => {
-                        self.parse_expression(*expression, None)?
+                        let ex = self.parse_expression(*expression, None)?;
+                        Self::try_deref_reference(ex)
                     }
                     OneSidedOperation::UnaryMinus => {
-                        self.parse_expression(*expression, expected_type)?
+                        let ex = self.parse_expression(*expression, expected_type)?;
+                        Self::try_deref_reference(ex)
                     },
                 };
                 let Some(result_type) = ObjType::from_unary_operation(&ex.object_type, op) else {
@@ -348,6 +365,7 @@ impl FunctionLinkingContext<'_> {
             }
             Expression::As(expression, typee) => {
                 let ex = self.parse_expression(*expression, None)?;
+                let ex = Self::try_deref_reference(ex); // FIXME: maybe not do it for * and &?
                 let object_type = self.parse_type(&typee)?;
 
                 let can_cast = ObjType::check_can_cast(&ex.object_type, &object_type);
