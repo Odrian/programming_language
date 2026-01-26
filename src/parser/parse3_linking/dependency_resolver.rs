@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
-use crate::error::CResult;
 use crate::parser::parse3_linking::error::LinkingError;
 
 pub struct DependencyResolver<Key: Eq + Hash + Copy> {
@@ -27,11 +26,10 @@ impl<Key: Eq + Hash + Copy> DependencyResolver<Key> {
         self.waiting_rev.clear();
         self.waiting_for.clear();
     }
-    pub fn next(&mut self) -> CResult<Option<Key>> {
+    pub fn next(&mut self) -> Result<Option<Key>, LinkingError> {
         let result = self.queue.pop_front();
         if result.is_none() && !self.waiting_for.is_empty() {
-            self.get_dependency_cycle_error().print();
-            return Err(())
+            return Err(self.get_dependency_cycle_error())
         }
         Ok(result)
     }

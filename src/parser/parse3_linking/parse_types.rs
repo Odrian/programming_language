@@ -1,4 +1,3 @@
-use crate::error::CResult;
 use crate::parser::parse2_syntactic::statement::{DeclarationStatement, Statement, Typee};
 use crate::parser::parse3_linking::dependency_resolver::DependencyResolver;
 use crate::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
@@ -8,12 +7,15 @@ use std::collections::HashMap;
 use crate::parser::parse3_linking::error::LinkingError;
 use crate::parser::parse3_linking::parser_linked_statement::parse_primitive_type;
 
-pub fn parse_types(context: &mut TypeContext) -> CResult<()> {
+pub fn parse_types(context: &mut TypeContext) -> Result<(), ()> {
     let statements = std::mem::take(&mut context.type_statements);
     let mut resolver = TypeResolver::new(context, statements);
 
     while !resolver.is_end() {
-        resolver.try_parse()?;
+        if let Err(err) = resolver.try_parse() {
+            err.print(&resolver.context.factory);
+            return Err(());
+        }
     }
 
     Ok(())
@@ -41,9 +43,15 @@ impl TypeResolver<'_> {
     fn is_end(&self) -> bool {
         self.dependency_resolver.is_empty()
     }
-    fn try_parse(&mut self) -> CResult<()> {
+    fn try_parse(&mut self) -> Result<(), LinkingError> {
         // .next return error if there is dependency cycle
-        let Some(object) = self.dependency_resolver.next()? else { return Ok(()) };
+        let object_option = match self.dependency_resolver.next() {
+            Ok(v) => v,
+            Err(err) => {
+                return Err(err);
+            }
+        };
+        let Some(object) = object_option else { return Ok(()) };
 
         let statement = self.statements.get(&object).unwrap();
 
@@ -57,8 +65,7 @@ impl TypeResolver<'_> {
             linked_fields.push(obj_type);
             let previous_name = field_names.insert(name.clone(), index as u32);
             if previous_name.is_some() {
-                LinkingError::StructFieldNameCollision { struct_name: struct_name.clone(), field_name: name.clone(), in_construction: false }.print();
-                return Err(())
+                return Err(LinkingError::StructFieldNameCollision { struct_name: struct_name.clone(), field_name: name.clone(), in_construction: false });
             }
         }
 
@@ -76,7 +83,7 @@ impl TypeResolver<'_> {
         Ok(())
     }
     /// return [ObjType::Unknown] if it needs dependency and update [dependencies]
-    fn parse_type(&self, typee: &Typee, dependencies: &mut Vec<Object>, is_ref: bool) -> CResult<ObjType> {
+    fn parse_type(&self, typee: &Typee, dependencies: &mut Vec<Object>, is_ref: bool) -> Result<ObjType, LinkingError> {
         match typee {
             Typee::String(string) => {
                 if let Some(object_type) = parse_primitive_type(string) {
@@ -84,13 +91,11 @@ impl TypeResolver<'_> {
                 }
 
                 let Some(&object) = self.context.available_names.get(string) else {
-                    LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.context.factory) }.print();
-                    return Err(())
+                    return Err(LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.context.factory) });
                 };
 
                 if !self.statements.contains_key(&object) {
-                    LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.context.factory) }.print();
-                    return Err(())
+                    return Err(LinkingError::NameNotFound { name: string.clone(), context: format!("{:?}", self.context.factory) });
                 }
 
                 if !is_ref && !self.context.result.type_statements.contains_key(&object) {

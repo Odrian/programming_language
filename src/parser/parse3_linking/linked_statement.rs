@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::fmt;
 use std::fmt::Debug;
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
-use super::object::{Object, ObjType, FloatObjType, IntObjType};
+use super::object::{Object, ObjType, FloatObjType, IntObjType, ObjectFactory};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypedExpression {
@@ -59,8 +58,8 @@ pub enum LinkedLiteralExpression {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ExternLinkedStatement {
-    Variable { name: String, typee: ObjType },
-    Function { name: String, typee: ObjType },
+    Variable { typee: ObjType },
+    Function { typee: ObjType },
 }
 
 impl TypedExpression {
@@ -129,135 +128,196 @@ impl From<LinkedLiteralExpression> for LinkedExpression {
 
 // ----- Display implementation -----
 
-fn to_string_with_tabs<T: ToString>(statements: &[T]) -> String {
-    let string = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+fn to_string_with_tabs<T>(statements: &[T], to_str: impl Fn(&T) -> String) -> String {
+    let string = statements.iter().map(to_str).collect::<Vec<_>>().join("\n");
     "    ".to_owned() + string.replace('\n', "\n    ").as_str()
 }
 
+impl ObjectFactory {
+    fn get_out_name<const WITH_ID: bool>(&self, object: Object) -> String {
+        if WITH_ID {
+            format!("{}#{}", self.get_name(object), object.id)
+        } else {
+            self.get_name(object).to_string()
+        }
+    }
+}
+
 impl GlobalLinkedStatement {
-    pub fn to_string(&self, object: Object) -> String {
+    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory, object: Object) -> String {
         match self {
             Self::Struct { fields, field_names } => {
                 let fields = fields.iter().enumerate().map(|(index, typee)| {
                     let (name, _) = field_names.iter().find(|(_, index1)| index as u32 == **index1).unwrap();
+                    let typee = typee.to_string::<WITH_ID>(factory);
                     format!("{name}: {typee}")
                 }).collect::<Vec<_>>().join(", ");
 
-                format!("{object} :: struct {{ ({fields}) }}")
+                let name = factory.get_out_name::<WITH_ID>(object);
+                format!("{name} :: struct {{ ({fields}) }}")
             }
             Self::Function { args, returns, body } => {
-                let inside = to_string_with_tabs(body);
-                let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
-                format!("{object} :: ({args}) -> {returns} {{\n{inside}\n}}")
+                let inside = to_string_with_tabs(body, |x| x.to_string::<WITH_ID>(factory));
+                let args = args.iter().map(|x| factory.get_out_name::<WITH_ID>(*x)).collect::<Vec<_>>().join(", ");
+                let name = factory.get_out_name::<WITH_ID>(object);
+                let returns = returns.to_string::<WITH_ID>(factory);
+                format!("{name} :: ({args}) -> {returns} {{\n{inside}\n}}")
             }
             Self::VariableDeclaration { value } => {
-                format!("{object} := {value}")
+                let name = factory.get_out_name::<WITH_ID>(object);
+                let obj_type = value.object_type.to_string::<WITH_ID>(factory);
+                let expr = value.expr.to_string::<WITH_ID>(factory);
+                format!("{name} : {obj_type} = {expr}")
             }
-            Self::ExternStatement { statement } => statement.to_string()
+            Self::ExternStatement { statement } => statement.to_string::<WITH_ID>(factory, object)
         }
     }
 }
 
-impl fmt::Display for ExternLinkedStatement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl ExternLinkedStatement {
+    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory, object: Object) -> String {
         match self {
-            ExternLinkedStatement::Variable { name, typee } => {
-                write!(f, "{name}: {typee};")
+            ExternLinkedStatement::Variable { typee } => {
+                let name = factory.get_out_name::<WITH_ID>(object);
+                let typee = typee.to_string::<WITH_ID>(factory);
+                format!("{name}: {typee};")
             }
-            ExternLinkedStatement::Function { name, typee } => {
-                write!(f, "{name} :: {typee};")
+            ExternLinkedStatement::Function { typee } => {
+                let name = factory.get_out_name::<WITH_ID>(object);
+                let typee = typee.to_string::<WITH_ID>(factory);
+                format!("{name} :: {typee};")
             }
         }
     }
 }
 
-impl fmt::Display for LinkedStatement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl LinkedStatement {
+    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
         match self {
             Self::VariableDeclaration { object, value } => {
-                write!(f, "{object} := {value}")
+                let name = factory.get_out_name::<WITH_ID>(*object);
+                let obj_type = value.object_type.to_string::<WITH_ID>(factory);
+                let expr = value.expr.to_string::<WITH_ID>(factory);
+                format!("{name} : {obj_type} = {expr}")
             }
             Self::SetVariable { what, value, op } => {
+                let what = what.to_string::<WITH_ID>(factory);
+                let value = value.to_string::<WITH_ID>(factory);
                 match op {
-                    Some(op) => write!(f, "{what} {op}= {value}"),
-                    None => write!(f, "{what} = {value}"),
+                    Some(op) => format!("{what} {op}= {value}"),
+                    None => format!("{what} = {value}"),
                 }
             }
             Self::Expression(expression) => {
-                write!(f, "{expression}")
+                expression.to_string::<WITH_ID>(factory)
             }
             Self::If { condition, body } => {
-                let inside = to_string_with_tabs(body);
-                write!(f, "if {condition} {{\n{inside}\n}}")
+                let inside = to_string_with_tabs(body, |x| x.to_string::<WITH_ID>(factory));
+                let condition = condition.to_string::<WITH_ID>(factory);
+                format!("if {condition} {{\n{inside}\n}}")
             }
             Self::While { condition, body } => {
-                let inside = to_string_with_tabs(body);
-                write!(f, "while {condition} {{\n{inside}\n}}")
+                let inside = to_string_with_tabs(body, |x| x.to_string::<WITH_ID>(factory));
+                let condition = condition.to_string::<WITH_ID>(factory);
+                format!("while {condition} {{\n{inside}\n}}")
             }
             Self::Return(exp) => {
                 match exp {
-                    Some(exp) => write!(f, "return {exp}"),
-                    None => write!(f, "return")
+                    Some(exp) => format!("return {}", exp.to_string::<WITH_ID>(factory)),
+                    None => "return".to_string()
                 }
             }
         }
     }
 }
 
-impl fmt::Display for LinkedExpression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl TypedExpression {
+    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
+        self.expr.to_string::<WITH_ID>(factory)
+    }
+}
+
+impl LinkedExpression {
+    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
         match self {
             Self::Operation(a, b, op) => {
-                write!(f, "({a} {op} {b})")
+                let a = a.to_string::<WITH_ID>(factory);
+                let b = b.to_string::<WITH_ID>(factory);
+                format!("({a} {op} {b})")
             },
             Self::UnaryOperation(ex, op) => {
-                write!(f, "{op}({ex})")
+                let ex = ex.to_string::<WITH_ID>(factory);
+                format!("{op}({ex})")
             }
             Self::As(expression, object_type) => {
-                write!(f, "({expression} as {object_type})")
+                let expression = expression.to_string::<WITH_ID>(factory);
+                let object_type = object_type.to_string::<WITH_ID>(factory);
+                format!("({expression} as {object_type})")
             }
-            Self::Literal(literal) => write!(f, "{literal}"),
-            Self::Variable(object) => write!(f, "{object}"),
-            Self::RoundBracket(expression) => write!(f, "({expression})"),
+            Self::Literal(literal) => literal.to_string::<WITH_ID>(factory),
+            Self::Variable(object) => factory.get_out_name::<WITH_ID>(*object),
+            Self::RoundBracket(expression) => {
+                let expression = expression.to_string::<WITH_ID>(factory);
+                format!("({expression})")
+            },
             Self::FunctionCall { object, args } => {
-                let args = args.iter().map(ToString::to_string).collect::<Vec<_>>();
-                write!(f, "{} ({})", object, args.join(", "))
+                let args = args.iter().map(|x| x.to_string::<WITH_ID>(factory)).collect::<Vec<_>>();
+                let name = factory.get_out_name::<WITH_ID>(*object);
+                format!("{name} ({})", args.join(", "))
             },
             Self::StructField { left, field_index } => {
-                write!(f, "{left}.[{field_index}]")
+                let left = left.to_string::<WITH_ID>(factory);
+                format!("{left}.[{field_index}]")
             },
             Self::StructConstruct { object, fields } => {
-                write!(f, "{object} {{\n{}\n}}", to_string_with_tabs(fields))
+                let name = factory.get_out_name::<WITH_ID>(*object);
+                let fields = to_string_with_tabs(fields, |x| x.to_string::<WITH_ID>(factory));
+                format!("{name} {{\n{fields}\n}}")
             }
         }
     }
 }
 
-impl fmt::Display for LinkedLiteralExpression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl LinkedLiteralExpression {
+    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
         match self {
-            Self::Undefined(_) => write!(f, "---"),
-            Self::IntLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
-            Self::FloatLiteral(number, object_type) => write!(f, "{number}_{object_type}"),
+            Self::Undefined(_) => "---".to_string(),
+            Self::IntLiteral(number, object_type) => {
+                let object_type = object_type.to_string::<WITH_ID>(factory);
+                format!("{number}_{object_type}")
+            },
+            Self::FloatLiteral(number, object_type) => {
+                let object_type = object_type.to_string::<WITH_ID>(factory);
+                format!("{number}_{object_type}")
+            },
             Self::BoolLiteral(value) => match value {
-                true => write!(f, "true"),
-                false => write!(f, "false"),
+                true => "true".to_string(),
+                false => "false".to_string(),
             }
-            Self::CharLiteral(char) => write!(f, "'{}'", *char as char),
-            Self::StringLiteral(str) => write!(f, "\"{str}\""),
+            Self::CharLiteral(char) => format!("'{}'", *char as char),
+            Self::StringLiteral(str) => format!("\"{str}\""),
         }
     }
 }
 
-impl fmt::Display for ObjType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl ObjType {
+    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
         match self {
-            Self::Pointer(object_type) => write!(f, "*{object_type}"),
-            Self::Reference { obj_type, is_weak: false } => write!(f, "&{obj_type}"),
-            Self::Reference { obj_type, is_weak: true } => write!(f, "&weak {obj_type}"),
-            Self::Unknown => write!(f, "unknown"),
-            Self::Void => write!(f, "void"),
-            Self::Char => write!(f, "char"),
+            Self::Pointer(obj_type) => {
+                let obj_type = obj_type.to_string::<WITH_ID>(factory);
+                format!("*{obj_type}")
+            }
+            Self::Reference { obj_type, is_weak: false } => {
+                let obj_type = obj_type.to_string::<WITH_ID>(factory);
+                format!("&{obj_type}")
+            },
+            Self::Reference { obj_type, is_weak: true } => {
+                let obj_type = obj_type.to_string::<WITH_ID>(factory);
+                format!("&weak {obj_type}")
+            },
+            Self::Unknown => "unknown".to_string(),
+            Self::Void => "void".to_string(),
+            Self::Char => "char".to_string(),
             Self::Integer(int) => {
                 let string = match int {
                     IntObjType::Bool => "bool",
@@ -274,40 +334,30 @@ impl fmt::Display for ObjType {
                     IntObjType::U128 => "u128",
                     IntObjType::USize => "usize",
                 };
-                write!(f, "{string}")
+                string.to_string()
             }
             Self::Float(float) => match float {
-                FloatObjType::F32 => write!(f, "f32"),
-                FloatObjType::F64 => write!(f, "f64"),
+                FloatObjType::F32 => "f32".to_string(),
+                FloatObjType::F64 => "f64".to_string(),
             }
             Self::Struct(object) => {
-                write!(f, "struct{object}")
+                let name = factory.get_out_name::<WITH_ID>(*object);
+                format!("struct::{name}")
             }
             Self::Function { arguments, returns, is_vararg } => {
+                let returns = returns.to_string::<WITH_ID>(factory);
                 if arguments.is_empty() {
                     if *is_vararg { unreachable!() }
-                    write!(f, "() -> {returns}")
+                    format!("() -> {returns}")
                 } else {
-                    let arguments = arguments.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                    let arguments = arguments.iter().map(|x| x.to_string::<WITH_ID>(factory)).collect::<Vec<_>>().join(", ");
                     if *is_vararg {
-                        write!(f, "({arguments}, ...) -> {returns}")
+                        format!("({arguments}, ...) -> {returns}")
                     } else {
-                        write!(f, "({arguments}) -> {returns}")
+                        format!("({arguments}) -> {returns}")
                     }
                 }
             }
         }
-    }
-}
-
-impl fmt::Display for TypedExpression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.expr)
-    }
-}
-
-impl fmt::Display for Object {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "${}", self.id)
     }
 }

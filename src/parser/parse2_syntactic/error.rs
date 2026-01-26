@@ -81,7 +81,7 @@ impl Display for ExpectedEnum {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Name => write!(f, "string"),
-            Self::String(str) => write!(f, "'{str}'"),
+            Self::String(str) => write!(f, "{str}"),
 
             Self::Comma => write!(f, ","),
             Self::Colon => write!(f, ":"),

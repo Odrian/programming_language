@@ -831,10 +831,10 @@ fn parse_quotes(string: &str) -> Result<u8, SyntacticError> {
     };
 
     if chars.next().is_some() {
-        return Err(SyntacticError::LiteralParseError { what: format!("'{string}'"), error: "incorrect char literal".to_owned() })
+        return Err(SyntacticError::LiteralParseError { what: format!("'{string}'"), error: "incorrect char".to_owned() })
     }
     if !first_char.is_ascii() {
-        return Err(SyntacticError::LiteralParseError { what: format!("'{string}'"), error: "incorrect char literal".to_owned() })
+        return Err(SyntacticError::LiteralParseError { what: format!("'{string}'"), error: "incorrect char".to_owned() })
     }
     let char_value = first_char as u8;
     Ok(char_value)

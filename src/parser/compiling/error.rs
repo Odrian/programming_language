@@ -39,7 +39,7 @@ impl Display for LLVMError {
                 write!(f, "while deleting object file {filepath}. Error: {io_error}")
             }
             Self::NoMainFunction => {
-                write!(f, "Error: No 'main' function")
+                write!(f, "Error: No main function")
             }
             Self::IncorrectMainSignature => {
                 write!(f, "Error: incorrect main signature, only () -> i32 allowed")

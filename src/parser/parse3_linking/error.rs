@@ -1,7 +1,7 @@
-use std::fmt::{Display, Formatter};
 use crate::error::{print_error, ErrKind};
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
-use crate::parser::parse3_linking::object::ObjType;
+use crate::parser::parse3_linking::linked_statement::LinkedExpression;
+use crate::parser::parse3_linking::object::{ObjType, ObjectFactory};
 
 pub enum LinkingError {
     DependencyCycle,
@@ -16,7 +16,7 @@ pub enum LinkingError {
     CantDetermineType,
     IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
     IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
-    IncorrectAs { what: String, from: ObjType, to: ObjType },
+    IncorrectAs { what: Box<LinkedExpression>, from: ObjType, to: ObjType },
     GlobalVariableWithoutType { name: String },
     UnexpectedVoidUse,
 
@@ -27,76 +27,94 @@ pub enum LinkingError {
     FunctionAsValue { name: String },
 }
 
-impl LinkingError {
-    pub fn print(self) {
-        print_error(ErrKind::Error, &self.to_string());
+pub fn collect_errors(factory: &ObjectFactory, iter: impl IntoIterator<Item=Result<(), LinkingError>>) -> Result<(), ()> {
+    let mut ans = Ok(());
+    for result in iter {
+        if let Err(err) = result {
+            err.print(factory);
+            ans = Err(());
+        }
     }
+    ans
 }
 
-impl Display for LinkingError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl LinkingError {
+    pub fn print(&self, factory: &ObjectFactory) {
+        print_error(ErrKind::Error, &self.to_string::<false>(factory));
+    }
+
+    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
         match self {
             Self::DependencyCycle => {
-                write!(f, "dependency cycle")
+                "dependency cycle".to_string()
             }
             Self::Overloading { name } => {
-                write!(f, "overloaded '{name}'")
+                format!("overloaded '{name}'")
             }
             Self::NameNotFound { name, context } => {
-                write!(f, "can't find {name} in {context}")
+                format!("can't find {name} in {context}")
             }
             Self::CallNotFunction { name } => {
-                write!(f, "can't call {name}, it's not a function")
+                format!("can't call {name}, it's not a function")
             }
 
             Self::DotNotOnStruct { got } => {
-                write!(f, "dot operator can't be used on {got}")
+                let got = got.to_string::<WITH_ID>(factory);
+                format!("dot operator can't be used on {got}")
             }
             Self::StructFieldNameCollision { struct_name, field_name, in_construction } => {
                 if *in_construction {
-                    write!(f, "struct '{struct_name}' has two fields with name {field_name}")
+                    format!("struct '{struct_name}' has two fields with name {field_name}")
                 } else {
-                    write!(f, "construction of struct '{struct_name}' has two fields with name {field_name}")
+                    format!("construction of struct '{struct_name}' has two fields with name {field_name}")
                 }
             }
             Self::StructFieldNameNotFound { struct_name, field_name } => {
-                write!(f, "struct '{struct_name}' hasn't field '{field_name}'")
+                format!("struct '{struct_name}' hasn't field '{field_name}'")
             }
             Self::IncorrectType { got, expected } => {
-                write!(f, "incorrect type, got {got}, expected {expected}")
+                let got = got.to_string::<WITH_ID>(factory);
+                let expected = expected.to_string::<WITH_ID>(factory);
+                format!("incorrect type, got {got}, expected {expected}")
             }
             Self::CantDetermineType => {
-                write!(f, "can't determine type")
+                "can't determine type".to_string()
             }
             Self::IncorrectOneOper { object_type, op } => {
-                write!(f, "can't use '{op}' to '{object_type}'")
+                let object_type = object_type.to_string::<WITH_ID>(factory);
+                format!("can't use '{op}' to '{object_type}'")
             }
             Self::IncorrectTwoOper { object_type1, object_type2, op } => {
-                write!(f, "can't use '{op}' between '{object_type1}' and '{object_type2}'")
+                let object_type1 = object_type1.to_string::<WITH_ID>(factory);
+                let object_type2 = object_type2.to_string::<WITH_ID>(factory);
+                format!("can't use '{op}' between '{object_type1}' and '{object_type2}'")
             }
             Self::IncorrectAs { what, from, to } => {
-                write!(f, "can't cast {what}, which has type {from} to {to}")
+                let what = what.to_string::<WITH_ID>(factory);
+                let from = from.to_string::<WITH_ID>(factory);
+                let to = to.to_string::<WITH_ID>(factory);
+                format!("can't cast {what}, which has type {from} to {to}")
             }
             Self::GlobalVariableWithoutType { name } => {
-                write!(f, "global variable '{name}' is declared without type annotation")
+                format!("global variable '{name}' is declared without type annotation")
             }
             Self::UnexpectedVoidUse => {
-                write!(f, "`void` can't be used as actual type")
+                "'void' can't be used as actual type".to_string()
             }
 
             Self::FunctionMustReturn { function_name } => {
-                write!(f, "function {function_name} may not return")
+                format!("function {function_name} may not return")
             }
 
             Self::LiteralParseError { what, error } => {
-                write!(f, "{error} in literal {what}")
+                format!("{error} in literal {what}")
             }
             Self::IncorrectArgumentCount { function_name, is_vararg, argument_need, argument_got } => {
                 let at_least = if *is_vararg { " at least" } else { "" };
-                write!(f, "incorrect argument count for function {function_name}, need{at_least} {argument_need}, got {argument_got}")
+                format!("incorrect argument count for function {function_name}, need{at_least} {argument_need}, got {argument_got}")
             }
             Self::FunctionAsValue { name } => {
-                write!(f, "can't use function {name} as variable value")
+                format!("can't use function {name} as variable value")
             }
         }
     }
