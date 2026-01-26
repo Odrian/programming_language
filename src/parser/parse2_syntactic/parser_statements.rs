@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use crate::parser::{BracketType, PositionInFile};
 
-use crate::parser::operations::{BoolOperation, NumberOperation, OneSidedOperation, TwoSidedOperation};
+use crate::parser::operations::{BoolOperation, CompareOperator, NumberOperation, OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse1_tokenize::token::*;
 use super::statement::*;
 use super::error::{ExpectedEnum, SyntacticError};
@@ -66,6 +66,54 @@ impl ParsingState {
                     } else {
                         result.push(Statement::new_while(condition, body))
                     }
+                    Ok(())
+                }
+                TokenKeyword::For => {
+                    let Some(TokenWithPos { token: Token::String(name), position }) = self.next() else {
+                        return Err(ExpectedEnum::Name.err())
+                    };
+                    let Some(TokenWithPos { token: Token::String(in_str), position }) = self.next() else {
+                        return Err(ExpectedEnum::new_string("'in'").err())
+                    };
+                    if in_str != "in" {
+                        return Err(ExpectedEnum::new_string("'in'").err())
+                    }
+
+                    let from_value = self.parse_expression_without_ops(position, true)?;
+
+                    let Some(TokenWithPos { token: Token::DoubleDot, position }) = self.next() else {
+                        return Err(ExpectedEnum::new_string("..").err())
+                    };
+                    let compare_op = if let Some(TokenWithPos { token: Token::EqualOperation(EqualOperation::Equal), position }) = self.peek() {
+                        self.next();
+                        CompareOperator::LessEqual
+                    } else {
+                        CompareOperator::Less
+                    };
+
+                    let to_value = self.parse_expression_without_ops(position, true)?;
+
+                    let Some(TokenWithPos { token: Token::Bracket(body, BracketType::Curly), position }) = self.next() else {
+                        return Err(ExpectedEnum::CurlyBracket.err())
+                    };
+                    let mut state = Self::new(body);
+                    let body = state.parse_statements(false)?;
+
+                    result.push(Statement::new_for(
+                        Statement::new_variable(name.clone(), None, from_value),
+                        Expression::new_operation(
+                            Expression::Variable(name.clone()),
+                            to_value,
+                            compare_op.into(),
+                        ),
+                        body,
+                        Statement::new_set(
+                            Expression::Variable(name),
+                            LiteralExpression::NumberLiteral("1".to_string()).into(),
+                            Some(NumberOperation::Add.into())
+                        )
+                    ));
+                    
                     Ok(())
                 }
                 TokenKeyword::Return => {
@@ -390,7 +438,7 @@ impl ParsingState {
                     _ => Err(SyntacticError::new_unexpected("dot operator"))
                 }
             }
-            Token::Semicolon | Token::Comma | Token::Bracket(_, _) | Token::EqualOperation(_) => {
+            Token::Semicolon | Token::Comma | Token::Bracket(_, _) | Token::EqualOperation(_) | Token::DoubleDot => {
                 Ok(expression1)
             }
             _ => {
@@ -624,12 +672,13 @@ impl ParsingState {
 
         Ok(Statement::new_import(from, what))
     }
-    fn parse_triple_dot(&mut self, mut position0: PositionInFile) -> Result<(), SyntacticError> {
-        for _ in 0..3 {
-            let Some(TokenWithPos { token: Token::Dot, position }) = self.next() else {
-                return Err(ExpectedEnum::new_string(".").err())
-            };
-        }
+    fn parse_triple_dot(&mut self, mut position: PositionInFile) -> Result<(), SyntacticError> {
+        let Some(TokenWithPos { token: Token::DoubleDot, position: _ }) = self.next() else {
+            return Err(ExpectedEnum::new_string("...").err())
+        };
+        let Some(TokenWithPos { token: Token::Dot, position: _ }) = self.next() else {
+            return Err(ExpectedEnum::new_string("...").err())
+        };
         Ok(())
     }
 }
@@ -673,7 +722,7 @@ fn parse_extern_function_arguments(args: Vec<TokenWithPos>) -> Result<(Vec<Typee
 
     let mut position0 = PositionInFile::new(0, 0);
     while !state.at_end() {
-        if matches!(state.peek(), Some(TokenWithPos { token: Token::Dot, .. })) {
+        if matches!(state.peek(), Some(TokenWithPos { token: Token::DoubleDot, .. })) {
             state.parse_triple_dot(position0)?;
 
             if !state.at_end() {

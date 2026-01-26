@@ -19,6 +19,7 @@ pub enum Token {
     NumberLiteral(String),      // any String starting with a digit
     Semicolon,                  // ;
     Dot,                        // .
+    DoubleDot,                  // ..
     Comma,                      // ,
     Colon,                      // :
     DoubleColon,                // ::
@@ -35,7 +36,7 @@ pub enum Token {
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TokenKeyword {
-    If, While,
+    If, While, For,
     Return,
     Import,
     Extern,

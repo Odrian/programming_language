@@ -101,6 +101,21 @@ impl Statement {
     pub const fn new_brackets(body: Vec<Statement>) -> Self {
         Self::Brackets(body)
     }
+    pub fn new_for(
+        before: Statement,
+        cond: Expression,
+        mut body: Vec<Statement>,
+        inc: Statement,
+    ) -> Self {
+        body.push(inc);
+        Statement::new_brackets(vec![
+            before,
+            Statement::new_while(
+                cond,
+                body,
+            )
+        ])
+    }
 }
 
 impl Expression {

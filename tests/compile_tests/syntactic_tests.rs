@@ -40,3 +40,40 @@ main :: () -> i32 {
 }
 ");
 }
+
+#[test]
+fn test_for() {
+    assert_eq!(8, get_exit_code_main("\
+    a := 0;
+    for i in 0..8 {
+        a += 1;
+    }
+    return a;
+"));
+
+    assert_eq!(9, get_exit_code_main("\
+    a := 0;
+    for i in 0..=8 {
+        a += 1;
+    }
+    return a;
+"));
+
+    assert_eq!(9, get_exit_code_main("\
+    left := 0;
+    right := 8;
+    a := 0;
+    for i in left..=right {
+        a += 1;
+    }
+    return a;
+"));
+
+    assert_eq!(9, get_exit_code_main("\
+    a := 0;
+    for i in (8 - 8)..=(4 + 4) {
+        a += 1;
+    }
+    return a;
+"));
+}

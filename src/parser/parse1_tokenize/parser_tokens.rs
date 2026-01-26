@@ -268,11 +268,24 @@ pub fn split_text_without_brackets(text: &str, offset_index: usize) -> CResult<V
                 state.use_char_in_string(char);
             }
             '.' if state.is_buffer_number => {
-                state.use_char_in_string(char);
+                if state.buffer.ends_with('.') {
+                    state.buffer.pop();
+                    state.buffer_end -= 1;
+                    state.flush_buffer();
+                    state.add(1, Some(Token::DoubleDot));
+                } else {
+                    state.use_char_in_string(char);
+                }
             }
             '.' => {
-                let token = Token::Dot;
-                state.add(1, Some(token));
+                if iter.peek() == Some(&'.') {
+                    iter.next();
+                    let token = Token::DoubleDot;
+                    state.add(2, Some(token));
+                } else {
+                    let token = Token::Dot;
+                    state.add(1, Some(token));
+                }
             }
             _ => {
                 TokenizeError::UnexpectedChar
@@ -335,6 +348,7 @@ impl TokenizeState {
                 match token_text.as_str() {
                     "return" => TokenKeyword::Return.into(),
                     "if" => TokenKeyword::If.into(),
+                    "for" => TokenKeyword::For.into(),
                     "while" => TokenKeyword::While.into(),
                     "import" => TokenKeyword::Import.into(),
                     "#extern" => TokenKeyword::Extern.into(),
