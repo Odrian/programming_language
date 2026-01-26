@@ -50,7 +50,8 @@ fn add_name(context: &mut TypeContext, stat: Statement) -> CResult<()> {
                 unimplemented!()
             }
         }
-        Statement::SetVariable { .. } | Statement::Expression(_) | Statement::If { .. } | Statement::While { .. } | Statement::Return(_) => {
+        Statement::SetVariable { .. } | Statement::Expression(_) | Statement::If { .. }
+        | Statement::While { .. } | Statement::Return(_) | Statement::Brackets(..) => {
             // FIXME: add error
             return Err(())
         }

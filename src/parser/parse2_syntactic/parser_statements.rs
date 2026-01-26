@@ -115,6 +115,14 @@ impl ParsingState {
                 result.push(self.parse_statement3(left_expression, position)?);
                 Ok(())
             }
+            Token::Bracket(body, BracketType::Curly) => {
+                if !is_global { return Err(SyntacticError::new_local_global("brackets")) }
+
+                let mut state = Self::new(body);
+                let body = state.parse_statements(false)?;
+                result.push(Statement::new_brackets(body));
+                Ok(())
+            }
             Token::Semicolon => unreachable!(),
             _ => Err((ExpectedEnum::new_string("keyword") | ExpectedEnum::Name | ExpectedEnum::new_string("*") | ExpectedEnum::Semicolon).err())
         }

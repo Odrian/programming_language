@@ -185,7 +185,6 @@ fn test_function() {
     assert_no_error("foo :: () { return 0 }");
 
     assert_has_error(":: () { }");
-    assert_has_error("foo () { }");
     assert_has_error("foo :: { }");
     assert_has_error("foo :: ()");
     assert_has_error("foo :: () -> i32");

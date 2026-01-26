@@ -193,12 +193,20 @@ impl FunctionLinkingContext<'_> {
     fn link_statements_recursive(&mut self, statements: Vec<Statement>) -> CResult<Vec<LinkedStatement>> {
         let mut result = Vec::with_capacity(statements.len());
         for statement in statements {
-            result.push(self.parse_statement(statement)?);
+            self.parse_statement(statement, &mut result)?;
         }
         Ok(result)
     }
-    fn parse_statement(&mut self, statement: Statement) -> CResult<LinkedStatement> {
+    fn parse_statement(&mut self, statement: Statement, result: &mut Vec<LinkedStatement>) -> CResult<()> {
         match statement {
+            Statement::Brackets(body) => {
+                self.object_context_window.step_in();
+                for statement in body {
+                    self.parse_statement(statement, result)?;
+                }
+                self.object_context_window.step_out();
+                Ok(())
+            }
             Statement::SetVariable { what, value, op } => {
                 let what = self.parse_expression(what, None)?;
                 if let ObjType::Reference { obj_type: what_ref, is_weak: _ } = &what.object_type {
@@ -208,30 +216,35 @@ impl FunctionLinkingContext<'_> {
                         object_type: what_ref.as_ref().clone(),
                         expr: LinkedExpression::new_unary_operation(what, OneSidedOperation::Dereference)
                     };
-                    Ok(LinkedStatement::new_set(new_what, value, op))
+                    result.push(LinkedStatement::new_set(new_what, value, op));
+                    Ok(())
                 } else {
                     // T = T
                     let value = self.parse_expression(value, Some(&what.object_type))?;
-                    Ok(LinkedStatement::new_set(what, value, op))
+                    result.push(LinkedStatement::new_set(what, value, op));
+                    Ok(())
                 }
             }
             Statement::Expression(expression) => {
                 let expression = self.parse_expression(expression, None)?;
-                Ok(LinkedStatement::Expression(expression))
+                result.push(LinkedStatement::Expression(expression));
+                Ok(())
             }
             Statement::If { condition, body } => {
                 let condition = self.parse_expression(condition, Some(&ObjType::BOOL))?;
                 self.object_context_window.step_in();
                 let body = self.link_statements_recursive(body)?;
                 self.object_context_window.step_out();
-                Ok(LinkedStatement::new_if(condition, body))
+                result.push(LinkedStatement::new_if(condition, body));
+                Ok(())
             }
             Statement::While { condition, body } => {
                 let condition = self.parse_expression(condition, Some(&ObjType::BOOL))?;
                 self.object_context_window.step_in();
                 let body = self.link_statements_recursive(body)?;
                 self.object_context_window.step_out();
-                Ok(LinkedStatement::new_while(condition, body))
+                result.push(LinkedStatement::new_while(condition, body));
+                Ok(())
             }
             Statement::Return(option_expression) => {
                 let expression = match option_expression {
@@ -247,11 +260,13 @@ impl FunctionLinkingContext<'_> {
                     LinkingError::IncorrectType { got: expression_type.clone(), expected: expected_type }.print();
                     return Err(())
                 }
-                Ok(LinkedStatement::Return(expression))
+                result.push(LinkedStatement::Return(expression));
+                Ok(())
             }
             Statement::DeclarationStatement { name, statement} => match &statement {
                 DeclarationStatement::VariableDeclaration { .. } => {
-                    self.parse_variable_declaration(name, statement)
+                    self.parse_variable_declaration(name, statement, result)?;
+                    Ok(())
                 },
                 DeclarationStatement::Function { .. } | DeclarationStatement::Struct { .. } => unreachable!(),
             },
@@ -261,7 +276,7 @@ impl FunctionLinkingContext<'_> {
             Statement::ExternStatement { .. } => unimplemented!("local extern"),
         }
     }
-    fn parse_variable_declaration(&mut self, name: String, declaration: DeclarationStatement) -> CResult<LinkedStatement> {
+    fn parse_variable_declaration(&mut self, name: String, declaration: DeclarationStatement, result: &mut Vec<LinkedStatement>) -> CResult<()> {
         let DeclarationStatement::VariableDeclaration { typee, value } = declaration else { unreachable!() };
         let objet_type_option = match typee {
             Some(typee) => Some(self.parse_type(&typee)?),
@@ -275,7 +290,8 @@ impl FunctionLinkingContext<'_> {
 
         let object = self.context.factory.create_object(name.clone(), typed_expr.object_type.clone());
         self.object_context_window.add(name, object);
-        Ok(LinkedStatement::new_variable(object, typed_expr))
+        result.push(LinkedStatement::new_variable(object, typed_expr));
+        Ok(())
     }
     fn try_autocast(mut typed_expression: TypedExpression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
         let Some(expected_type) = expected_type else {

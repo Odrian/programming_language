@@ -9,6 +9,7 @@ pub enum Statement {
 
     SetVariable { what: Expression, value: Expression, op: Option<TwoSidedOperation> },
 
+    Brackets(Vec<Self>),
     Expression(Expression),
     If { condition: Expression, body: Vec<Self> },
     While { condition: Expression, body: Vec<Self> },
@@ -97,6 +98,9 @@ impl Statement {
     pub const fn new_struct(name: String, fields: Vec<(String, Typee)>) -> Self {
         Self::DeclarationStatement { name, statement: DeclarationStatement::Struct { fields } }
     }
+    pub const fn new_brackets(body: Vec<Statement>) -> Self {
+        Self::Brackets(body)
+    }
 }
 
 impl Expression {
@@ -140,6 +144,10 @@ impl fmt::Display for Statement {
                     Some(op) => write!(f, "{what} {op}= {value}"),
                     None => write!(f, "{what} = {value}"),
                 }
+            }
+            Self::Brackets(body) => {
+                let inside = statements_to_string_with_tabs(body);
+                write!(f, "{{\n{inside}\n}}")
             }
             Self::Expression(expression) => {
                 write!(f, "{expression}")
