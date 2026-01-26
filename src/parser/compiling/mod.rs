@@ -73,7 +73,7 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
     }
 
     let status_option = if !args.dont_create_executable {
-        let status = Command::new("cc")
+        let status = Command::new("gcc")
             .args([object_name.as_str(), "-o", executable_name.as_str()]).status();
         Some(status)
     } else { None };
@@ -113,7 +113,7 @@ fn create_target_machine(_args: &Args) -> TargetMachine {
         cpu,
         features,
         OptimizationLevel::None,
-        RelocMode::Default,
+        RelocMode::PIC,
         CodeModel::Default,
     ).expect("Could not create TargetMachine")
 }

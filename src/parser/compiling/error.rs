@@ -58,7 +58,7 @@ impl Display for LLVMError {
                 write!(f, "Error: failed to create assembly file: {llvm_error}")
             }
             Self::FailedToRunLinker { description } => {
-                write!(f, "Error: failed run linked 'cc': {description}")
+                write!(f, "Error: failed to run 'gcc': {description}")
             }
         }
     }

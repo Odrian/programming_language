@@ -479,7 +479,7 @@ mod declaration_parsing {
                 }
                 LinkedLiteralExpression::StringLiteral(string) => {
                     // SAFETY: looks like [build_global_string] must be called inside function and that's true here
-                    let string_value = unsafe { self.builder.build_global_string(&string, "string_literal").unwrap() };
+                    let string_value = unsafe { self.builder.build_global_string(&string, "string_literal")? };
                     Ok(Some(string_value.as_basic_value_enum()))
                 }
             }
