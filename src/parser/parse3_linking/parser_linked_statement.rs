@@ -405,7 +405,7 @@ impl FunctionLinkingContext<'_> {
                     ObjType::Reference(object) if matches!(object.as_ref(), ObjType::Struct(..)) => {
                         let ObjType::Struct(object) = object.as_ref() else { unreachable!() };
 
-                        let statement = self.context.result.type_statements.get(&object).unwrap();
+                        let statement = self.context.result.type_statements.get(object).unwrap();
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
                         let Some(&index) = field_names.get(&field) else {
                             LinkingError::StructFieldNameNotFound {
@@ -466,7 +466,7 @@ impl FunctionLinkingContext<'_> {
                 ))
             }
             LiteralExpression::NumberLiteral(string) => {
-                let result = parse_number_literal(string)?;
+                let result = parse_number_literal(string, expected_type)?;
                 Self::try_autocast(result, expected_type)
             },
             LiteralExpression::BoolLiteral(value) => {
@@ -557,7 +557,7 @@ pub fn parse_primitive_type(string: &str) -> Option<ObjType> {
     }
 }
 
-fn parse_number_literal(mut string: String) -> CResult<TypedExpression> {
+fn parse_number_literal(mut string: String, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
     string = string.replace('_', "");
 
     let has_dot = string.find('.').is_some();
@@ -565,15 +565,23 @@ fn parse_number_literal(mut string: String) -> CResult<TypedExpression> {
     let Some(index) = string.find(|c: char| !c.is_ascii_digit() && c != '.') else {
         return if has_dot {
             // 12.3
+            let mut num_type = ObjType::DEFAULT_FLOAT;
+            if let Some(obj_type) = expected_type && matches!(obj_type, ObjType::Float(..)) {
+                num_type = obj_type.clone();
+            }
             Ok(TypedExpression::new(
-                ObjType::DEFAULT_FLOAT,
-                LinkedLiteralExpression::FloatLiteral(string, ObjType::DEFAULT_FLOAT).into()
+                num_type.clone(),
+                LinkedLiteralExpression::FloatLiteral(string, num_type).into()
             ))
         } else {
             // 123
+            let mut num_type = ObjType::DEFAULT_INTEGER;
+            if let Some(obj_type) = expected_type && matches!(obj_type, ObjType::Integer(..)) {
+                num_type = obj_type.clone();
+            }
             Ok(TypedExpression::new(
-                ObjType::DEFAULT_INTEGER,
-                LinkedLiteralExpression::IntLiteral(string, ObjType::DEFAULT_INTEGER).into()
+                num_type.clone(),
+                LinkedLiteralExpression::IntLiteral(string, num_type).into()
             ))
         }
     };
