@@ -52,18 +52,18 @@ fn verify_main_signature(linked_program: &LinkedProgram) -> Result<(), LLVMError
 }
 
 fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result<(), LLVMError> {
-    let assembly_name = format!("{}.ll", args.output);
-    let object_name = format!("{}.o", args.output);
-    let executable_name = args.output.clone();
+    let assembly_name = format!("{}.ll", args.exe_name);
+    let object_name = format!("{}.o", args.exe_name);
+    let executable_name = args.exe_name.clone();
 
     // create assembly file
-    if args.create_llvm_ir {
+    if args.gen_llvm {
         if let Err(err) = module.print_to_file(assembly_name) {
             return Err(LLVMError::LLVMFailedToCreateAssembly { llvm_error: err.to_string() });
         }
     }
 
-    if !args.create_object && args.dont_create_executable {
+    if !args.gen_object && args.no_exe {
         return Ok(())
     }
 
@@ -72,13 +72,13 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
         panic!("functions and whole module was verified, but got llvm error: {err}")
     }
 
-    let status_option = if !args.dont_create_executable {
+    let status_option = if !args.no_exe {
         let status = Command::new("gcc")
             .args([object_name.as_str(), "-o", executable_name.as_str()]).status();
         Some(status)
     } else { None };
 
-    if !args.create_object {
+    if !args.gen_object {
         if let Err(err) = std::fs::remove_file(object_name.clone()) {
             return Err(LLVMError::CantDeleteObjectFile { filepath: object_name, io_error: err.to_string() });
         }

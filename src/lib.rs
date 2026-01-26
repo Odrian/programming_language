@@ -13,21 +13,33 @@ use crate::parser::parse_to_exe;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    pub output: String,
+    /// Name of generated exe
+    #[arg(value_name = "EXE")]
+    pub exe_name: String,
 
+    /// Don't generate exe
     #[arg(long, default_value_t = false)]
-    pub dont_create_executable: bool,
+    pub no_exe: bool,
 
+    /// Generate .txt with tokens
     #[arg(long, default_value_t = false)]
-    pub write_tokens_to_file: bool,
+    pub gen_tokens: bool,
+
+    /// Generate AST (abstract syntactic tree)
     #[arg(long, default_value_t = false)]
-    pub write_unlinked_syntactic_tree_to_file: bool,
+    pub gen_ast: bool,
+
+    /// Generate linked AST (abstract syntactic tree)
     #[arg(long, default_value_t = false)]
-    pub write_syntactic_tree_to_file: bool,
+    pub gen_last: bool,
+
+    /// Generate .ll files
     #[arg(long, default_value_t = false)]
-    pub create_llvm_ir: bool,
+    pub gen_llvm: bool,
+
+    /// Generate .o files
     #[arg(long, default_value_t = false)]
-    pub create_object: bool,
+    pub gen_object: bool,
 }
 
 pub fn compile_src(args: &Args, path: PathBuf) -> CResult<()> {
