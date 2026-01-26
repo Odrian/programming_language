@@ -11,6 +11,7 @@ pub enum TokenizeError {
         expected_bracket: BracketType,
         actual_bracket: BracketType,
     },
+    IncorrectEscape(char)
 }
 
 impl TokenizeError {
@@ -38,6 +39,9 @@ impl Display for TokenizeError {
                 write!(f, "expected '{}', got '{}' ",
                        expected_bracket.to_close_string(),
                        actual_bracket.to_close_string())
+            }
+            Self::IncorrectEscape(ch) => {
+                write!(f, "unexpected {ch} after \\")
             }
         }
     }

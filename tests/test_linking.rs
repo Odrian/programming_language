@@ -89,14 +89,14 @@ fn test_literals() {
 
     assert_no_error("a := 'a'");
     assert_no_error("a := '/'");
-    assert_no_error("a := '\\'");
-    assert_no_error("a := '\"'");
+    assert_no_error("a := '\\\\'");
+    assert_no_error("a := '\\\"'");
+    assert_no_error("a := '\\''");
 
-    assert_has_error("a := '''");
     assert_has_error("a := '😀'");
 
-    // assert_no_error("a := \"\"");
-    // assert_no_error("a := \"text\"");
+    assert_no_error("a := \"\"");
+    assert_no_error("a := \"text\"");
 }
 
 #[test]

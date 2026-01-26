@@ -38,10 +38,32 @@ fn parse_inside_brackets(
                         .print(index);
                     return Err(());
                 };
-                if next_char == char {
-                    break;
+                if char != '`' && next_char == '\\' {
+                    match text.next() {
+                        Some('\\') => inside_quotes.push('\\'),
+                        Some('0') => inside_quotes.push('\0'),
+                        Some('t') => inside_quotes.push('\t'),
+                        Some('n') => inside_quotes.push('\n'),
+                        Some('r') => inside_quotes.push('\r'),
+                        Some('"') => inside_quotes.push('"'),
+                        Some('\'') => inside_quotes.push('\''),
+                        Some('x') => unimplemented!("8bit escapes"),
+                        Some(ch) => {
+                            TokenizeError::IncorrectEscape(ch).print(index + inside_quotes.len() + 2);
+                            return Err(())
+                        }
+                        None => {
+                            TokenizeError::QuotesNotClosed.print(index + inside_quotes.len() + 2);
+                            return Err(())
+                        }
+                    }
+                    continue
+                } else {
+                    if next_char == char {
+                        break;
+                    }
+                    inside_quotes.push(next_char);
                 }
-                inside_quotes.push(next_char);
             }
 
             let new_index = index + inside_quotes.len() + 2;
