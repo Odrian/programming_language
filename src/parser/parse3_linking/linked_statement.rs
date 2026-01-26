@@ -207,7 +207,7 @@ impl fmt::Display for LinkedExpression {
                 write!(f, "({a} {op} {b})")
             },
             Self::UnaryOperation(ex, op) => {
-                write!(f, "{op}{ex}")
+                write!(f, "{op}({ex})")
             }
             Self::As(expression, object_type) => {
                 write!(f, "({expression} as {object_type})")
@@ -246,7 +246,8 @@ impl fmt::Display for ObjType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Pointer(object_type) => write!(f, "*{object_type}"),
-            Self::Reference(object_type) => write!(f, "&{object_type}"),
+            Self::Reference { obj_type, is_weak: false } => write!(f, "&{obj_type}"),
+            Self::Reference { obj_type, is_weak: true } => write!(f, "&weak {obj_type}"),
             Self::Unknown => write!(f, "unknown"),
             Self::Void => write!(f, "void"),
             Self::Char => write!(f, "char"),

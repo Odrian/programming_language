@@ -13,7 +13,7 @@ pub enum ObjType {
     Integer(IntObjType),
     Float(FloatObjType),
     Pointer(Box<Self>),
-    Reference(Box<Self>),
+    Reference { obj_type: Box<Self>, is_weak: bool },
     Struct(Object),
     Function { arguments: Vec<Self>, is_vararg: bool, returns: Box<Self> },
 }
@@ -26,7 +26,10 @@ impl ObjType {
         Self::Pointer(Box::new(obj_type))
     }
     pub fn new_reference(obj_type: ObjType) -> Self {
-        Self::Reference(Box::new(obj_type))
+        Self::Reference { obj_type: Box::new(obj_type), is_weak: false }
+    }
+    pub fn new_weak_reference(obj_type: ObjType) -> Self {
+        Self::Reference { obj_type: Box::new(obj_type), is_weak: true }
     }
 
     pub fn is_void(&self) -> bool {
@@ -44,27 +47,23 @@ impl ObjType {
     pub fn unwrap_ref(&self) -> &Self {
         match self {
             Self::Pointer(obj_type) => obj_type.as_ref(),
-            Self::Reference(obj_type) => obj_type.as_ref(),
+            Self::Reference { obj_type, is_weak: _ } => obj_type.as_ref(),
             _ => panic!(),
         }
     }
     /// check that self and other are &T and *T or *T and &T
     pub fn is_different_pointers(&self, other: &ObjType) -> bool {
-        match self {
-            Self::Reference(obj_type) => {
-                match other {
-                    Self::Pointer(obj_type2) => obj_type == obj_type2,
-                    _ => false,
-                }
-            }
-            Self::Pointer(obj_type) => {
-                match other {
-                    Self::Reference(obj_type2) => obj_type == obj_type2,
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
+        let left = match self {
+            Self::Reference { obj_type, is_weak: false } => obj_type,
+            Self::Pointer(obj_type) => obj_type,
+            _ => return false,
+        };
+        let right = match other {
+            Self::Reference { obj_type, is_weak: false } => obj_type,
+            Self::Pointer(obj_type) => obj_type,
+            _ => return false,
+        };
+        left == right
     }
 }
 

@@ -109,7 +109,7 @@ fib_new :: () -> Fib {
 
 fib_next :: (fib: &Fib) {
     fib.f0 += fib.f1;
-    swap(fib.f0, fib.f1);
+    swap(&fib.f0, &fib.f1);
 }
 
 get_n_fib :: (i: i32) -> i32 {

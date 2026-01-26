@@ -201,7 +201,7 @@ impl FunctionLinkingContext<'_> {
         match statement {
             Statement::SetVariable { what, value, op } => {
                 let what = self.parse_expression(what, None)?;
-                if let ObjType::Reference(what_ref) = &what.object_type {
+                if let ObjType::Reference { obj_type: what_ref, is_weak: _ } = &what.object_type {
                     // &T = T
                     let value = self.parse_expression(value, Some(what_ref))?;
                     let new_what = TypedExpression {
@@ -289,8 +289,8 @@ impl FunctionLinkingContext<'_> {
             typed_expression.object_type = expected_type.clone();
             return Ok(typed_expression)
         }
-        // &T -> T
-        if let ObjType::Reference(obj_type) = &typed_expression.object_type && expected_type == obj_type.as_ref() {
+        // &T/&weakT -> T
+        if let ObjType::Reference { obj_type, is_weak: _ } = &typed_expression.object_type && expected_type == obj_type.as_ref() {
             return Ok(TypedExpression {
                 object_type: expected_type.clone(),
                 expr: LinkedExpression::new_unary_operation(typed_expression, OneSidedOperation::Dereference)
@@ -315,7 +315,27 @@ impl FunctionLinkingContext<'_> {
                 Self::try_autocast(result, expected_type)
             }
             Expression::UnaryOperation(expression, op) => {
-                let ex = self.parse_expression(*expression, None)?;
+                let ex = match op {
+                    OneSidedOperation::GetReference => {
+                        let mut exp = self.parse_expression(*expression, None)?;
+                        if let ObjType::Reference { obj_type, is_weak: true } = exp.object_type {
+                            // & of &weak T is &T
+                            exp.object_type = ObjType::new_reference(*obj_type);
+                            return Self::try_autocast(exp, expected_type)
+                        } else {
+                            exp
+                        }
+                    }
+                    OneSidedOperation::Dereference => {
+                        self.parse_expression(*expression, None)?
+                    },
+                    OneSidedOperation::BoolNot => {
+                        self.parse_expression(*expression, None)?
+                    }
+                    OneSidedOperation::UnaryMinus => {
+                        self.parse_expression(*expression, expected_type)?
+                    },
+                };
                 let Some(result_type) = ObjType::from_unary_operation(&ex.object_type, op) else {
                     LinkingError::IncorrectOneOper { object_type: ex.object_type, op }.print();
                     return Err(())
@@ -402,7 +422,7 @@ impl FunctionLinkingContext<'_> {
                 let left = self.parse_expression(*left, None)?;
 
                 match &left.object_type {
-                    ObjType::Reference(object) if matches!(object.as_ref(), ObjType::Struct(..)) => {
+                    ObjType::Reference{ obj_type: object, is_weak: _ } if matches!(object.as_ref(), ObjType::Struct(..)) => {
                         let ObjType::Struct(object) = object.as_ref() else { unreachable!() };
 
                         let statement = self.context.result.type_statements.get(object).unwrap();
@@ -417,7 +437,7 @@ impl FunctionLinkingContext<'_> {
                         let obj_type = fields.get(index as usize).unwrap().clone();
 
                         let result = TypedExpression {
-                            object_type: ObjType::new_reference(obj_type),
+                            object_type: ObjType::new_weak_reference(obj_type),
                             expr: LinkedExpression::new_struct_field(left, index)
                         };
                         Self::try_autocast(result, expected_type)
@@ -435,11 +455,11 @@ impl FunctionLinkingContext<'_> {
                         let obj_type = fields.get(index as usize).unwrap().clone();
 
                         let struct_expr = TypedExpression {
-                            object_type: ObjType::new_reference(left.object_type.clone()),
+                            object_type: ObjType::new_weak_reference(left.object_type.clone()),
                             expr: LinkedExpression::new_unary_operation(left, OneSidedOperation::GetReference)
                         };
                         let result = TypedExpression {
-                            object_type: ObjType::new_reference(obj_type),
+                            object_type: ObjType::new_weak_reference(obj_type),
                             expr: LinkedExpression::new_struct_field(struct_expr, index)
                         };
                         Self::try_autocast(result, expected_type)
@@ -637,8 +657,8 @@ impl ObjType {
                 matches!(other, Self::Pointer(_)) ||
                 matches!(other, Self::Integer(to) if !to.is_bool() || from.is_bool())
             },
-            Self::Pointer(..) =>   matches!(other, Self::Pointer(..) | Self::Reference(..) | Self::Integer(..)),
-            Self::Reference(..) => matches!(other, Self::Pointer(..) | Self::Reference(..)),
+            Self::Pointer(..) =>   matches!(other, Self::Pointer(..) | Self::Reference { .. } | Self::Integer(..)),
+            Self::Reference { .. } => matches!(other, Self::Pointer(..) | Self::Reference { .. }),
             Self::Struct(..) | Self::Function { .. } | Self::Void => unreachable!(),
         }
     }
@@ -695,7 +715,7 @@ impl ObjType {
                     true
                 } else {
                     // pointers can't be compared
-                    !matches!(object_type1, Self::Pointer(_) | Self::Reference(_))
+                    !matches!(object_type1, Self::Pointer(_) | Self::Reference { .. })
                 };
 
                 if is_allowed {

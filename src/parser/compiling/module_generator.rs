@@ -61,7 +61,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
         match object_type {
             ObjType::Unknown => unreachable!(),
             ObjType::Void => unimplemented!(),
-            ObjType::Pointer(..) | ObjType::Reference(..) => self.context.ptr_type(AddressSpace::default()).into(),
+            ObjType::Pointer(..) | ObjType::Reference { .. } => self.context.ptr_type(AddressSpace::default()).into(),
             ObjType::Char => self.context.i8_type().into(),
             ObjType::Integer(int) => match int {
                 IntObjType::Bool => self.context.bool_type().into(),
@@ -385,7 +385,7 @@ mod declaration_parsing {
                 },
                 LinkedExpression::StructField { left, field_index } => {
                     let struct_value = self.parse_expression(left.expr)?.unwrap().into_pointer_value();
-                    let ObjType::Reference(struct_obj_type) = &left.object_type else { unreachable!() };
+                    let ObjType::Reference{ obj_type: struct_obj_type, is_weak: _ } = &left.object_type else { unreachable!() };
                     let struct_type = self.parse_type(struct_obj_type);
 
                     let field_pointer = self.builder.build_struct_gep(struct_type, struct_value, field_index, "get_field")?;
@@ -563,7 +563,7 @@ mod declaration_parsing {
                         }
                     }
                 }
-                ObjType::Reference(_) | ObjType::Pointer(_) => {
+                ObjType::Reference { is_weak: false, .. } | ObjType::Pointer(_) => {
                     match &to_obj_type {
                         ObjType::Pointer(_) => ex,
                         ObjType::Integer(_) => {
@@ -576,7 +576,8 @@ mod declaration_parsing {
                         _ => unreachable!()
                     }
                 }
-                ObjType::Struct(..) | ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!()
+                ObjType::Struct(..) | ObjType::Unknown | ObjType::Void
+                | ObjType::Function { .. } | ObjType::Reference { is_weak: true, .. } => unreachable!()
             };
             Ok(Some(result))
         }
@@ -620,7 +621,7 @@ mod declaration_parsing {
                     }
                 }
                 TwoSidedOperation::Compare(comp_op) => match type1 {
-                    ObjType::Reference(..) => unreachable!(),
+                    ObjType::Reference { .. } => unreachable!(),
                     ObjType::Pointer(_) => {
                         let ex1 = v1.into_pointer_value();
                         let ex2 = v2.into_pointer_value();
