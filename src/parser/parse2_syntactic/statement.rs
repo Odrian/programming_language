@@ -36,6 +36,7 @@ pub enum Expression {
     StructField { left: Box<Self>, field: String },
 
     Literal(LiteralExpression),
+    StructConstruct { struct_name: String, fields: Vec<(String, Expression)> },
 
     Variable(String),
     RoundBracket(Box<Self>),
@@ -147,12 +148,14 @@ impl From<LiteralExpression> for Expression {
 
 // ----- Display implementation -----
 
+fn to_string_with_tabs<T: ToString>(statements: &[T]) -> String {
+    let string = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+    "    ".to_owned() + string.replace('\n', "\n    ").as_str()
+}
+
+
 impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn statements_to_string_with_tabs(statements: &[Statement]) -> String {
-            let string = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
-            "    ".to_owned() + string.replace('\n', "\n    ").as_str()
-        }
         match self {
             Self::SetVariable { what, value, op } => {
                 match op {
@@ -161,18 +164,18 @@ impl fmt::Display for Statement {
                 }
             }
             Self::Brackets(body) => {
-                let inside = statements_to_string_with_tabs(body);
+                let inside = to_string_with_tabs(body);
                 write!(f, "{{\n{inside}\n}}")
             }
             Self::Expression(expression) => {
                 write!(f, "{expression}")
             }
             Self::If { condition, body } => {
-                let inside = statements_to_string_with_tabs(body);
+                let inside = to_string_with_tabs(body);
                 write!(f, "if {condition} {{\n{inside}\n}}")
             }
             Self::While { condition, body } => {
-                let inside = statements_to_string_with_tabs(body);
+                let inside = to_string_with_tabs(body);
                 write!(f, "while {condition} {{\n{inside}\n}}")
             }
             Self::Return(exp) => {
@@ -192,7 +195,7 @@ impl fmt::Display for Statement {
                     let args: Vec<String> = args.iter().map(|s| format!("{}: {}", s.0, s.1)).collect();
                     let args = args.join(", ");
                     let returns = returns.as_ref().map_or("()".to_string(), ToString::to_string);
-                    let inside = statements_to_string_with_tabs(body);
+                    let inside = to_string_with_tabs(body);
                     write!(f, "{name} :: ({args}) -> {returns} {{\n{inside}\n}}")
                 }
                 DeclarationStatement::Struct { fields } => {
@@ -265,6 +268,12 @@ impl fmt::Display for Expression {
             Self::FunctionCall { object: name, args } => {
                 let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
                 write!(f, "{name} ({args})")
+            }
+            Self::StructConstruct { struct_name: name, fields } => {
+                let fields = fields.iter().map(|(field_name, field_value)| {
+                    format!("    {field_name}: {field_value},\n")
+                }).collect::<String>();
+                write!(f, "{name} {{\n{fields}}}")
             }
         }
     }

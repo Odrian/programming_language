@@ -327,7 +327,7 @@ impl FunctionLinkingContext<'_> {
             expr: LinkedExpression::new_unary_operation(expression, OneSidedOperation::Dereference)
         }
     }
-    fn parse_expression(&mut self, expression: Expression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
+    fn parse_expression(&self, expression: Expression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
         match expression {
             Expression::Operation(expression1, expression2, op) => {
                 let ex1 = self.parse_expression(*expression1, None)?;
@@ -505,9 +505,60 @@ impl FunctionLinkingContext<'_> {
                 }
             }
             Expression::Literal(literal) => self.parse_literal(literal, expected_type),
+            Expression::StructConstruct { struct_name, fields: fields_values } => {
+                let struct_type = self.parse_type(&Typee::String(struct_name.clone()))?;
+                let ObjType::Struct(object) = &struct_type else {
+                    LinkingError::NameNotFound { name: struct_name, context: format!("{:?}", self.object_context_window) }.print();
+                    return Err(());
+                };
+                let object = *object;
+                
+                let GlobalLinkedStatement::Struct { fields: field_types, field_names } =
+                    self.context.result.type_statements.get(&object).unwrap() else { unreachable!() };
+
+                let bad = fields_values.len() != field_types.len();
+
+                let mut fields = vec![None; field_types.len()];
+                let mut used_fields = vec![false; field_types.len()];
+                for (field_name, value) in fields_values {
+                    let Some(index) = field_names.get(&field_name) else {
+                        LinkingError::StructFieldNameNotFound { struct_name, field_name }.print();
+                        return Err(());
+                    };
+                    let index = *index as usize;
+
+                    let expected_type = &field_types[index];
+                    let value = self.parse_expression(value, Some(expected_type))?;
+                    fields[index] = Some(value);
+
+                    if used_fields[index] {
+                        LinkingError::StructFieldNameCollision { struct_name, field_name, in_construction: true }.print();
+                        return Err(())
+                    }
+                    used_fields[index] = true;
+                }
+                if bad {
+                    let index = used_fields.iter().position(|x| !*x).unwrap();
+                    let (field_name, _) = field_names.iter().find(|(_, i)| **i == index as u32).unwrap();
+                    let field_name = field_name.clone();
+                    LinkingError::StructFieldNameNotFound { struct_name, field_name }.print();
+                    return Err(());
+                }
+
+                let fields = fields.into_iter().map(Option::unwrap).collect::<Vec<_>>();
+
+                let result = TypedExpression::new(
+                    ObjType::new_weak_reference(struct_type),
+                    LinkedExpression::new_struct_construction(
+                        object,
+                        fields,
+                    )
+                );
+                Self::try_autocast(result, expected_type)
+            }
         }
     }
-    fn parse_literal(&mut self, literal: LiteralExpression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
+    fn parse_literal(&self, literal: LiteralExpression, expected_type: Option<&ObjType>) -> CResult<TypedExpression> {
         match literal {
             LiteralExpression::Undefined => {
                 let Some(obj_type) = expected_type else {

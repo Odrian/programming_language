@@ -50,7 +50,7 @@ impl ParsingState {
         match token {
             Token::Keyword(keyword) => match keyword {
                 TokenKeyword::If | TokenKeyword::While => {
-                    let condition = self.parse_expression(position)?;
+                    let condition = self.parse_expression(position, true)?;
 
                     let Some(TokenWithPos { token, position }) = self.next() else {
                         return Err(ExpectedEnum::CurlyBracket.err());
@@ -79,7 +79,7 @@ impl ParsingState {
                         return Err(ExpectedEnum::new_string("'in'").err())
                     }
 
-                    let from_value = self.parse_expression_without_ops(position, true)?;
+                    let from_value = self.parse_expression_without_ops(position, true, true)?;
 
                     let Some(TokenWithPos { token: Token::DoubleDot, position }) = self.next() else {
                         return Err(ExpectedEnum::new_string("..").err())
@@ -91,7 +91,7 @@ impl ParsingState {
                         CompareOperator::Less
                     };
 
-                    let to_value = self.parse_expression_without_ops(position, true)?;
+                    let to_value = self.parse_expression_without_ops(position, true, true)?;
 
                     let Some(TokenWithPos { token: Token::Bracket(body, BracketType::Curly), position }) = self.next() else {
                         return Err(ExpectedEnum::CurlyBracket.err())
@@ -123,7 +123,7 @@ impl ParsingState {
                     } else if let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = peek_token {
                         result.push(Statement::Return(None))
                     } else {
-                        let expression = self.parse_expression(position)?;
+                        let expression = self.parse_expression(position, false)?;
                         result.push(Statement::Return(Some(expression)))
                     }
                     Ok(())
@@ -158,7 +158,7 @@ impl ParsingState {
                 Ok(())
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
-                let left_expression = self.parse_expression_without_ops(position, true)?;
+                let left_expression = self.parse_expression_without_ops(position, true, false)?;
                 let left_expression = Expression::new_unary_operation(left_expression, OneSidedOperation::Dereference);
                 result.push(self.parse_statement3(left_expression, position)?);
                 Ok(())
@@ -220,14 +220,14 @@ impl ParsingState {
                     return Err((ExpectedEnum::Equal | ExpectedEnum::Semicolon).err())
                 }
 
-                let expression = self.parse_expression(position)?;
+                let expression = self.parse_expression(position, false)?;
                 let statement = Statement::new_variable(name, Some(typee), expression);
                 Ok(statement)
             },
             Token::EqualOperation(EqualOperation::ColonEqual) => {
                 self.next();
 
-                let expression2 = self.parse_expression(position)?;
+                let expression2 = self.parse_expression(position, false)?;
                 Ok(Statement::new_variable(name, None, expression2))
             },
             Token::Bracket(_, BracketType::Round) => {
@@ -237,12 +237,12 @@ impl ParsingState {
 
                 let args = parse_function_arguments(vec, position)?;
                 let left = Expression::new_function_call(name, args);
-                let expression = self.parse_expression2_without_ops(left, false)?;
+                let expression = self.parse_expression2_without_ops(left, false, false)?;
                 Ok(Statement::Expression(expression))
             }
             _ => {
                 let left = Expression::Variable(name);
-                let left = self.parse_expression2_without_ops(left, true)?;
+                let left = self.parse_expression2_without_ops(left, true, false)?;
                 self.parse_statement3(left, position)
             }
         }
@@ -258,7 +258,7 @@ impl ParsingState {
             }
             Token::EqualOperation(equal_operation) => {
                 // name _=
-                let expression2 = self.parse_expression(position)?;
+                let expression2 = self.parse_expression(position, false)?;
                 let statement = match equal_operation {
                     EqualOperation::ColonEqual => unreachable!(),
                     EqualOperation::Equal => Statement::new_set(left, expression2, None),
@@ -277,13 +277,13 @@ impl ParsingState {
         }
     }
 
-    fn parse_expression(&mut self, position: PositionInFile) -> Result<Expression, SyntacticError> {
+    fn parse_expression(&mut self, position: PositionInFile, in_cond: bool) -> Result<Expression, SyntacticError> {
         let mut expressions = Vec::<Expression>::new();
         let mut operations = Vec::<TwoSidedOperation>::new();
         let mut position = position;
 
         loop {
-            let next_expression = self.parse_expression_without_ops(position, false)?;
+            let next_expression = self.parse_expression_without_ops(position, false, in_cond)?;
             expressions.push(next_expression);
 
             let Some(TokenWithPos { token, position: _ }) = self.peek() else {
@@ -321,7 +321,12 @@ impl ParsingState {
 
         Ok(result)
     }
-    fn parse_expression_without_ops(&mut self, position: PositionInFile, was_unary: bool) -> Result<Expression, SyntacticError> {
+    fn parse_expression_without_ops(
+        &mut self,
+        position: PositionInFile,
+        was_unary: bool,
+        in_cond: bool,
+    ) -> Result<Expression, SyntacticError> {
         let Some(TokenWithPos { token, position }) = self.next() else {
             return Err(SyntacticError::new_unexpected("EOF"));
         };
@@ -332,63 +337,63 @@ impl ParsingState {
                     "false" => LiteralExpression::BoolLiteral(false).into(),
                     _ => Expression::Variable(string),
                 };
-                self.parse_expression2_without_ops(expression1, was_unary)
+                self.parse_expression2_without_ops(expression1, was_unary, in_cond)
             }
             Token::NumberLiteral(value) => { // 123
                 let expression1 = LiteralExpression::NumberLiteral(value).into();
-                self.parse_expression2_without_ops(expression1, was_unary)
+                self.parse_expression2_without_ops(expression1, was_unary, in_cond)
             }
             Token::Bracket(vec, BracketType::Round) => { // (..)
                 let mut new_state = ParsingState::new(vec);
-                let expression = new_state.parse_expression(position)?;
+                let expression = new_state.parse_expression(position, false)?;
                 if !new_state.at_end() {
                     return Err(ExpectedEnum::new_string(")").err())
                 }
                 let expression1 = Expression::new_round_bracket(expression);
-                self.parse_expression2_without_ops(expression1, was_unary)
+                self.parse_expression2_without_ops(expression1, was_unary, in_cond)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)) => { // -.. 
                 let op = OneSidedOperation::UnaryMinus;
-                let expression = self.parse_expression_without_ops(position, true)?;
+                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
                 
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression, false)?)
+                Ok(self.parse_expression2_without_ops(unary_expression, false, in_cond)?)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
                 let op = OneSidedOperation::Dereference;
-                let expression = self.parse_expression_without_ops(position, true)?;
+                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression, false)?)
+                Ok(self.parse_expression2_without_ops(unary_expression, false, in_cond)?)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::BitAnd)) => { // &..
                 let op = OneSidedOperation::GetReference;
-                let expression = self.parse_expression_without_ops(position, true)?;
+                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression, false)?)
+                Ok(self.parse_expression2_without_ops(unary_expression, false, in_cond)?)
             }
             Token::Operation(TwoSidedOperation::Bool(BoolOperation::And)) => {
                 let op = OneSidedOperation::GetReference;
-                let expression = self.parse_expression_without_ops(position, true)?;
+                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 let unary_expression2 = Expression::new_unary_operation(unary_expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression2, false)?)
+                Ok(self.parse_expression2_without_ops(unary_expression2, false, in_cond)?)
             }
             Token::UnaryOperation(op) => { // `unary`..
-                let expression = self.parse_expression_without_ops(position, true)?;
+                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
                 let unary_expression = Expression::new_unary_operation(expression, op);
-                Ok(self.parse_expression2_without_ops(unary_expression, false)?)
+                Ok(self.parse_expression2_without_ops(unary_expression, false, in_cond)?)
             }
             Token::Quotes(string) => { // '..'
                 let char_value = parse_quotes(&string)?;
                 let expression = LiteralExpression::CharLiteral(char_value).into();
-                self.parse_expression2_without_ops(expression, was_unary)
+                self.parse_expression2_without_ops(expression, was_unary, in_cond)
             }
             Token::DoubleQuotes(string) => { // ".."
                 let expression = LiteralExpression::StringLiteral(string).into();
-                self.parse_expression2_without_ops(expression, was_unary)
+                self.parse_expression2_without_ops(expression, was_unary, in_cond)
             }
             _ => {
                 Err(ExpectedEnum::new_string(&format!("expression, got {token:?}")).err())
@@ -396,7 +401,12 @@ impl ParsingState {
         }
     }
     // parse "expression .."
-    fn parse_expression2_without_ops(&mut self, expression1: Expression, was_unary: bool) -> Result<Expression, SyntacticError> {
+    fn parse_expression2_without_ops(
+        &mut self,
+        expression1: Expression,
+        was_unary: bool,
+        in_cond: bool
+    ) -> Result<Expression, SyntacticError> {
         let Some(TokenWithPos { token, position }) = self.peek() else {
             return Ok(expression1);
         };
@@ -406,14 +416,14 @@ impl ParsingState {
             }
             Token::Bracket(_, BracketType::Round) => { // exp(..)
                 let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
-                let Token::Bracket(vec, BracketType::Round) = token else { unreachable!() };
+                let Token::Bracket(vec, _) = token else { unreachable!() };
 
                 // FIXME: allow function variables
                 let Expression::Variable(name) = expression1 else {
                     return Err(SyntacticError::new_unexpected("round brackets after expression"));
                 };
                 let args = parse_function_arguments(vec, position)?;
-                self.parse_expression2_without_ops(Expression::new_function_call(name, args), was_unary)
+                self.parse_expression2_without_ops(Expression::new_function_call(name, args), was_unary, false)
             }
             Token::String(string) if string == "as" => { // exp as
                 if was_unary {
@@ -424,7 +434,7 @@ impl ParsingState {
 
                 let typee = self.parse_type(position)?;
                 let expression = Expression::new_as(expression1, typee);
-                self.parse_expression2_without_ops(expression, false)
+                self.parse_expression2_without_ops(expression, false, in_cond)
             }
             Token::Dot => {
                 let Some(TokenWithPos { token: _, position: _ }) = self.next() else { unreachable!() };
@@ -433,10 +443,22 @@ impl ParsingState {
                 match token {
                     Token::String(field_name) => {
                         let expression = Expression::new_dot(expression1, field_name);
-                        self.parse_expression2_without_ops(expression, was_unary)
+                        self.parse_expression2_without_ops(expression, was_unary, in_cond)
                     }
                     _ => Err(SyntacticError::new_unexpected("dot operator"))
                 }
+            }
+            Token::Bracket(_, BracketType::Curly) if !in_cond && matches!(&expression1, Expression::Variable(..)) => {
+                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
+                let Token::Bracket(vec, _) = token else { unreachable!() };
+                let Expression::Variable(name) = expression1 else { unreachable!() };
+
+                let fields = parse_struct_construction(vec, position)?;
+ 
+                Ok(Expression::StructConstruct {
+                    struct_name: name,
+                    fields
+                })
             }
             Token::Semicolon | Token::Comma | Token::Bracket(_, _) | Token::EqualOperation(_) | Token::DoubleDot => {
                 Ok(expression1)
@@ -752,7 +774,7 @@ fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile)
     let mut args = Vec::new();
 
     while !state.at_end() {
-        let expression = state.parse_expression(position)?;
+        let expression = state.parse_expression(position, false)?;
         args.push(expression);
 
         if !state.at_end() {
@@ -764,6 +786,31 @@ fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile)
     }
 
     Ok(args)
+}
+
+fn parse_struct_construction(tokens: Vec<TokenWithPos>, position: PositionInFile) -> Result<Vec<(String, Expression)>, SyntacticError> {
+    let mut fields = Vec::new();
+    let mut state = ParsingState::new(tokens);
+
+    while !state.at_end() {
+        let Some(TokenWithPos { token: Token::String(field_name), position }) = state.next() else {
+            return Err(ExpectedEnum::Name.err())
+        };
+        let Some(TokenWithPos { token: Token::Colon, position }) = state.next() else {
+            return Err(ExpectedEnum::Colon.err())
+        };
+        let field_value = state.parse_expression(position, false)?;
+        fields.push((field_name, field_value));
+        if state.at_end() {
+            break
+        }
+
+        let Some(TokenWithPos { token: Token::Comma, position }) = state.next() else {
+            return Err(ExpectedEnum::Comma.err())
+        };
+    }
+
+    Ok(fields)
 }
 
 fn parse_quotes(string: &str) -> Result<u8, SyntacticError> {

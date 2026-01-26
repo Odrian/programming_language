@@ -445,6 +445,18 @@ mod declaration_parsing {
                     let ex = self.parse_expression(linked_expr)?.unwrap();
                     self.parse_as(ex, was_obj_type, to_obj_type)
                 }
+                LinkedExpression::StructConstruct { object, fields } => {
+                    let struct_type = *self.struct_context.get(&object).unwrap();
+
+                    let struct_value = self.builder.build_alloca(struct_type, "new_struct")?;
+                    for (i, field) in fields.into_iter().enumerate() {
+                        let field_ptr = self.builder.build_struct_gep(struct_type, struct_value, i as u32, "get_field")?;
+                        let field_value = self.parse_expression(field.expr)?.unwrap();
+                        self.builder.build_store(field_ptr, field_value)?;
+                    }
+
+                    Ok(Some(struct_value.into()))
+                }
             }
         }
         fn parse_literal(&self, literal: LinkedLiteralExpression) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {

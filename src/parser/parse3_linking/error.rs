@@ -10,7 +10,7 @@ pub enum LinkingError {
     CallNotFunction { name: String },
 
     DotNotOnStruct { got: ObjType },
-    StructFieldNameCollision { field_name: String },
+    StructFieldNameCollision { struct_name: String, field_name: String, in_construction: bool },
     StructFieldNameNotFound { struct_name: String, field_name: String },
     IncorrectType { got: ObjType, expected: ObjType },
     CantDetermineType,
@@ -52,8 +52,12 @@ impl Display for LinkingError {
             Self::DotNotOnStruct { got } => {
                 write!(f, "dot operator can't be used on {got}")
             }
-            Self::StructFieldNameCollision { field_name } => {
-                write!(f, "struct has two fields with name {field_name}")
+            Self::StructFieldNameCollision { struct_name, field_name, in_construction } => {
+                if *in_construction {
+                    write!(f, "struct '{struct_name}' has two fields with name {field_name}")
+                } else {
+                    write!(f, "construction of struct '{struct_name}' has two fields with name {field_name}")
+                }
             }
             Self::StructFieldNameNotFound { struct_name, field_name } => {
                 write!(f, "struct '{struct_name}' hasn't field '{field_name}'")

@@ -38,6 +38,7 @@ pub enum LinkedExpression {
     StructField { left: Box<TypedExpression>, field_index: u32 },
 
     Literal(LinkedLiteralExpression),
+    StructConstruct { object: Object, fields: Vec<TypedExpression> },
 
     Variable(Object),
     RoundBracket(Box<TypedExpression>),
@@ -114,6 +115,9 @@ impl LinkedExpression {
     pub fn new_struct_field(left: TypedExpression, field_index: u32) -> Self {
         let left = Box::new(left);
         Self::StructField { left, field_index }
+    }
+    pub fn new_struct_construction(object: Object, fields: Vec<TypedExpression>) -> Self {
+        Self::StructConstruct { object, fields }
     }
 }
 
@@ -222,6 +226,9 @@ impl fmt::Display for LinkedExpression {
             Self::StructField { left, field_index } => {
                 write!(f, "{left}.[{field_index}]")
             },
+            Self::StructConstruct { object, fields } => {
+                write!(f, "{object} {{\n{}\n}}", to_string_with_tabs(fields))
+            }
         }
     }
 }

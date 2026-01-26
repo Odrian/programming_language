@@ -101,10 +101,10 @@ Fib :: struct {
 }
 
 fib_new :: () -> Fib {
-    fib: Fib;
-    fib.f0 = 0;
-    fib.f1 = 1;
-    return fib;
+    return Fib {
+        f0: 0,
+        f1: 1,
+    };
 }
 
 fib_next :: (fib: &Fib) {

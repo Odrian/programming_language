@@ -47,7 +47,7 @@ impl TypeResolver<'_> {
 
         let statement = self.statements.get(&object).unwrap();
 
-        let Statement::DeclarationStatement { name: _, statement: DeclarationStatement::Struct { fields }} = statement else { unreachable!() };
+        let Statement::DeclarationStatement { name: struct_name, statement: DeclarationStatement::Struct { fields }} = statement else { unreachable!() };
 
         let mut dependencies = Vec::new();
         let mut linked_fields = Vec::with_capacity(fields.len());
@@ -57,7 +57,7 @@ impl TypeResolver<'_> {
             linked_fields.push(obj_type);
             let previous_name = field_names.insert(name.clone(), index as u32);
             if previous_name.is_some() {
-                LinkingError::StructFieldNameCollision { field_name: name.clone() }.print();
+                LinkingError::StructFieldNameCollision { struct_name: struct_name.clone(), field_name: name.clone(), in_construction: false }.print();
                 return Err(())
             }
         }

@@ -73,13 +73,17 @@ A :: struct {
 }
 ```
 
-`struct.field` works as reference to T
-
-struct can be created only with garbage
+struct can be created from constructor or with garbage
 ```
-a: A;
-a.field1 = 0_u32;
-a.field2 = &a;
+a1 = A {
+    field1: 5,
+    field2: 0 as *A,
+}
+
+a2: A;
+a2.field1 = 0_u32;
+a2.field2 = &a1;
+
 ```
 
 ### Variable declaration
