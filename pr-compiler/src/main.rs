@@ -1,6 +1,6 @@
-use std::path::PathBuf;
 use clap::Parser;
-use pr_core::{Args, compile_src};
+use pr_compiler::{compile_src, Args};
+use std::path::PathBuf;
 
 fn main() {
     let args = Args::parse();

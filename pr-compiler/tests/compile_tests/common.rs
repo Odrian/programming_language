@@ -1,9 +1,8 @@
 use std::process::{Command, Stdio};
 use clap::builder::OsStr;
 use clap::Parser;
-use pr_core::Args;
+use pr_compiler::{Args, compile_src};
 use pr_core::error::CResult;
-use pr_core::compile_src;
 
 use tempfile::TempDir;
 

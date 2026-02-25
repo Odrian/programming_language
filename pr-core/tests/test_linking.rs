@@ -1,18 +1,14 @@
-use clap::builder::OsStr;
-use clap::Parser;
 use pr_core::error::CResult;
 use pr_core::parser::operations::*;
 use pr_core::parser::parse3_linking::linked_statement::*;
 use pr_core::parser::parse3_linking::object::*;
 use pr_core::parser::parse3_linking::LinkedProgram;
 use pr_core::parser::*;
-use pr_core::Args;
 
 fn parse(text: &str) -> CResult<LinkedProgram> {
     let tokens = parse1_tokenize::tokenize(&text)?;
     let statements = parse2_syntactic::parse_statements(tokens)?;
-    let args = Args::parse_from([&OsStr::from("test_binary.exe"), &OsStr::from("test.exe")]);
-    let linked_program = parse3_linking::link_all(&args, statements)?;
+    let linked_program = parse3_linking::link_all(statements)?;
     Ok(linked_program)
 }
 fn assert_has_error_global(str: &str) {

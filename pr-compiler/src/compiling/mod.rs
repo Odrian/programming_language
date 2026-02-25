@@ -9,9 +9,9 @@ use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, I
 
 use crate::Args;
 use error::LLVMError;
-use crate::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
-use crate::parser::parse3_linking::LinkedProgram;
-use crate::parser::parse3_linking::object::{IntObjType, ObjType};
+use pr_core::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
+use pr_core::parser::parse3_linking::LinkedProgram;
+use pr_core::parser::parse3_linking::object::{IntObjType, ObjType};
 
 /// previous steps guarantees that every used variables is valid
 pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), LLVMError> {

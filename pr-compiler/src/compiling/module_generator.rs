@@ -1,8 +1,8 @@
 use super::error::LLVMError;
 
-use crate::parser::operations::*;
-use crate::parser::parse3_linking::object::*;
-use crate::parser::parse3_linking::linked_statement::*;
+use pr_core::parser::operations::*;
+use pr_core::parser::parse3_linking::object::*;
+use pr_core::parser::parse3_linking::linked_statement::*;
 use super::context_window::ValueContextWindow;
 
 use std::cmp::Ordering;
@@ -11,7 +11,7 @@ use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, Poi
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
-use crate::parser::parse3_linking::LinkedProgram;
+use pr_core::parser::parse3_linking::LinkedProgram;
 
 pub fn parse_module<'ctx>(
     context: &'ctx Context, target_data: &'ctx TargetData,
@@ -639,26 +639,26 @@ mod declaration_parsing {
                     ObjType::Pointer(_) => {
                         let ex1 = v1.into_pointer_value();
                         let ex2 = v2.into_pointer_value();
-                        let predicate = comp_op.to_int_compare(false);
+                        let predicate = compare_to_int_compare(comp_op, false);
 
                         self.builder.build_int_compare(predicate, ex1, ex2, "ptr_compare")?.into()
                     }
                     ObjType::Char => {
                         let ex1 = v1.into_int_value();
                         let ex2 = v2.into_int_value();
-                        let predicate = comp_op.to_int_compare(false);
+                        let predicate = compare_to_int_compare(comp_op, false);
                         self.builder.build_int_compare(predicate, ex1, ex2, "compare_char")?.into()
                     }
                     ObjType::Integer(int) => {
                         let ex1 = v1.into_int_value();
                         let ex2 = v2.into_int_value();
-                        let predicate = comp_op.to_int_compare(int.is_signed());
+                        let predicate = compare_to_int_compare(comp_op, int.is_signed());
                         self.builder.build_int_compare(predicate, ex1, ex2, "compare_int")?.into()
                     }
                     ObjType::Float(_) => {
                         let ex1 = v1.into_float_value();
                         let ex2 = v2.into_float_value();
-                        let predicate = comp_op.to_float_compare();
+                        let predicate = compare_to_float_compare(comp_op);
                         self.builder.build_float_compare(predicate, ex1, ex2, "compare_float")?.into()
                     }
                     ObjType::Struct(..) => unimplemented!(),
@@ -681,37 +681,35 @@ mod declaration_parsing {
     }
 }
 
-impl CompareOperator {
-    const fn to_int_compare(self, signed: bool) -> IntPredicate {
-        if signed {
-            match self {
-                Self::Equal =>           IntPredicate::EQ,
-                Self::NotEqual =>        IntPredicate::NE,
-                Self::Greater =>         IntPredicate::SGT,
-                Self::GreaterEqual =>    IntPredicate::SGE,
-                Self::Less =>            IntPredicate::SLT,
-                Self::LessEqual =>       IntPredicate::SLE,
-            }
-        } else {
-            match self {
-                Self::Equal =>           IntPredicate::EQ,
-                Self::NotEqual =>        IntPredicate::NE,
-                Self::Greater =>         IntPredicate::UGT,
-                Self::GreaterEqual =>    IntPredicate::UGE,
-                Self::Less =>            IntPredicate::ULT,
-                Self::LessEqual =>       IntPredicate::ULE,
-            }
+const fn compare_to_int_compare(co: CompareOperator, signed: bool) -> IntPredicate {
+    if signed {
+        match co {
+            CompareOperator::Equal =>           IntPredicate::EQ,
+            CompareOperator::NotEqual =>        IntPredicate::NE,
+            CompareOperator::Greater =>         IntPredicate::SGT,
+            CompareOperator::GreaterEqual =>    IntPredicate::SGE,
+            CompareOperator::Less =>            IntPredicate::SLT,
+            CompareOperator::LessEqual =>       IntPredicate::SLE,
+        }
+    } else {
+        match co {
+            CompareOperator::Equal =>           IntPredicate::EQ,
+            CompareOperator::NotEqual =>        IntPredicate::NE,
+            CompareOperator::Greater =>         IntPredicate::UGT,
+            CompareOperator::GreaterEqual =>    IntPredicate::UGE,
+            CompareOperator::Less =>            IntPredicate::ULT,
+            CompareOperator::LessEqual =>       IntPredicate::ULE,
         }
     }
+}
 
-    const fn to_float_compare(self) -> FloatPredicate {
-        match self {
-            Self::Equal =>           FloatPredicate::OEQ,
-            Self::NotEqual =>        FloatPredicate::ONE,
-            Self::Greater =>         FloatPredicate::OGT,
-            Self::GreaterEqual =>    FloatPredicate::OGE,
-            Self::Less =>            FloatPredicate::OLT,
-            Self::LessEqual =>       FloatPredicate::OLE,
-        }
+const fn compare_to_float_compare(co: CompareOperator) -> FloatPredicate {
+    match co {
+        CompareOperator::Equal =>           FloatPredicate::OEQ,
+        CompareOperator::NotEqual =>        FloatPredicate::ONE,
+        CompareOperator::Greater =>         FloatPredicate::OGT,
+        CompareOperator::GreaterEqual =>    FloatPredicate::OGE,
+        CompareOperator::Less =>            FloatPredicate::OLT,
+        CompareOperator::LessEqual =>       FloatPredicate::OLE,
     }
 }

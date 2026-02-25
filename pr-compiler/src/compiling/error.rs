@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use inkwell::builder::BuilderError;
-use crate::error::{print_error, ErrKind};
+use pr_core::error::{print_error, ErrKind};
 
 pub enum LLVMError {
     LLVMError(BuilderError),

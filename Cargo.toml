@@ -1,5 +1,10 @@
 [workspace]
 resolver = "3"
 members = [
-    "pr-core"
+    "pr-core",
+    "pr-compiler",
 ]
+
+[profile.dev]
+opt-level = 0
+debug = "full"

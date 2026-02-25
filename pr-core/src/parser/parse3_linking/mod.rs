@@ -9,7 +9,6 @@ mod parse_available_names;
 mod parse_types;
 
 use std::collections::HashMap;
-use crate::Args;
 use crate::error::CResult;
 use crate::parser::parse2_syntactic::statement::Statement;
 use linked_statement::{GlobalLinkedStatement};
@@ -41,7 +40,7 @@ pub struct LinkedProgram {
     pub variable_statement: HashMap<Object, GlobalLinkedStatement>,
 }
 
-pub fn link_all(args: &Args, statements: Vec<Statement>) -> CResult<LinkedProgram> {
+pub fn link_all(statements: Vec<Statement>) -> CResult<LinkedProgram> {
     let mut context = TypeContext::default();
 
     parse_available_names::parse_available_names(&mut context, statements)?;
