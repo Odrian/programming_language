@@ -235,7 +235,7 @@ impl fmt::Display for ExternStatement {
             ExternStatement::Function { name, args, is_vararg, returns } => {
                 let mut args_str = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
                 if *is_vararg {
-                    if args.len() == 0 { unreachable!() }
+                    if args.is_empty() { unreachable!() }
                     args_str += ", ...";
                 }
                 match returns {

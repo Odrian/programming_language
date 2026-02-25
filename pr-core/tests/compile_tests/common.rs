@@ -1,8 +1,9 @@
 use std::process::{Command, Stdio};
 use clap::builder::OsStr;
 use clap::Parser;
-use programming_language::Args;
-use programming_language::error::CResult;
+use pr_core::Args;
+use pr_core::error::CResult;
+use pr_core::compile_src;
 
 use tempfile::TempDir;
 
@@ -18,7 +19,7 @@ fn compile_text(text: &str) -> CResult<(TempDir, Command)> {
     let out_path = temp_dir.path().join(name);
 
     let args = Args::parse_from([&OsStr::from("binary.exe"), out_path.as_os_str()]);
-    let result = programming_language::compile_src(&args, src_path);
+    let result = compile_src(&args, src_path);
     
     match result {
         Ok(()) => {

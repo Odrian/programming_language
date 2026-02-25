@@ -1,7 +1,7 @@
-use programming_language::error::CResult;
-use programming_language::parser::parse1_tokenize::{token::*, tokenize};
-use programming_language::parser::*;
-use programming_language::parser::operations::*;
+use pr_core::error::CResult;
+use pr_core::parser::parse1_tokenize::{token::*, tokenize};
+use pr_core::parser::*;
+use pr_core::parser::operations::*;
 
 fn map_remove_place(vec: Vec<TokenWithPos>) -> Vec<Token> {
     vec.into_iter().map(|x| x.token).collect()

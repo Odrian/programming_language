@@ -234,21 +234,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "pr-core"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "inkwell",
+ "tempfile",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02b3e5e68a3a1a02aad3ec490a98007cbc13c37cbe84a3cd7b8e406d76e7f778"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "programming_language"
-version = "0.1.0"
-dependencies = [
- "clap",
- "inkwell",
- "tempfile",
 ]
 
 [[package]]

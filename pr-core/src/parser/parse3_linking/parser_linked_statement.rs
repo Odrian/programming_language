@@ -746,10 +746,10 @@ impl ObjType {
                 Some(Self::Pointer(Box::new(object_type.clone())))
             }
             OneSidedOperation::Dereference => {
-                if let Self::Pointer(reference_object_type) = object_type {
-                    Some(*reference_object_type.clone())
-                } else {
-                    None
+                match object_type {
+                    Self::Pointer(obj_type) => Some(obj_type.as_ref().clone()),
+                    Self::Reference { obj_type, is_weak: false } => Some(obj_type.as_ref().clone()),
+                    _ => None
                 }
             }
         }

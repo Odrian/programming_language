@@ -1,7 +1,7 @@
-use programming_language::error::CResult;
-use programming_language::parser::*;
-use programming_language::parser::operations::*;
-use programming_language::parser::parse2_syntactic::statement::*;
+use pr_core::error::CResult;
+use pr_core::parser::*;
+use pr_core::parser::operations::*;
+use pr_core::parser::parse2_syntactic::statement::*;
 
 fn parse(text: &str) -> CResult<Vec<Statement>> {
     let tokens = parse1_tokenize::tokenize(text)?;

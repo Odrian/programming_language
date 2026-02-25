@@ -1,12 +1,12 @@
 use clap::builder::OsStr;
 use clap::Parser;
-use programming_language::error::CResult;
-use programming_language::parser::operations::*;
-use programming_language::parser::parse3_linking::linked_statement::*;
-use programming_language::parser::parse3_linking::object::*;
-use programming_language::parser::parse3_linking::LinkedProgram;
-use programming_language::parser::*;
-use programming_language::Args;
+use pr_core::error::CResult;
+use pr_core::parser::operations::*;
+use pr_core::parser::parse3_linking::linked_statement::*;
+use pr_core::parser::parse3_linking::object::*;
+use pr_core::parser::parse3_linking::LinkedProgram;
+use pr_core::parser::*;
+use pr_core::Args;
 
 fn parse(text: &str) -> CResult<LinkedProgram> {
     let tokens = parse1_tokenize::tokenize(&text)?;
