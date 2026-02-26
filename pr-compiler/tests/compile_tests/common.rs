@@ -11,7 +11,7 @@ fn compile_text(text: &str) -> CResult<(TempDir, Command)> {
 
     let src_path = temp_dir.path().join("src");
     std::fs::create_dir(&src_path).expect("can't create src dir");
-    let main_txt_path = src_path.join("main.txt");
+    let main_txt_path = src_path.join("main.pr");
     std::fs::write(main_txt_path, text).expect("can't write to temp file");
 
     let name = "main";

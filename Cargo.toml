@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "pr-core",
     "pr-compiler",
+    "pr-lsp",
 ]
 
 [profile.dev]

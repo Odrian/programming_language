@@ -6,7 +6,7 @@
 
 ### Usage
 
-Create directory `src` with flie `main.txt` with code.  
+Create directory `src` with flie `main.pr` with code.  
 `./programming_language main` will create executable `main`
 
 ### Function declaration

@@ -40,7 +40,7 @@ pub struct Args {
 }
 
 pub fn compile_src(args: &Args, path: PathBuf) -> CResult<()> {
-    let file_path = path.join("main.txt");
+    let file_path = path.join("main.pr");
 
     parse_to_exe(args, file_path)?;
 
