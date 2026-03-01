@@ -618,6 +618,9 @@ dependencies = [
 [[package]]
 name = "pr-core"
 version = "0.1.0"
+dependencies = [
+ "lsp-types",
+]
 
 [[package]]
 name = "pr-lsp"

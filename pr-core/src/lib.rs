@@ -1,6 +1,5 @@
 pub mod parser;
 
-pub mod file_span;
 pub mod module_tree;
 pub mod error;
 pub mod io_error;

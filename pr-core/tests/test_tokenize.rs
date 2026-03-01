@@ -1,9 +1,10 @@
+use lsp_types::{Position, Range};
 use pr_core::error::CResult;
 use pr_core::parser::parse1_tokenize::{token::*, tokenize};
 use pr_core::parser::*;
 use pr_core::parser::operations::*;
 
-fn map_remove_place(vec: Vec<TokenWithPos>) -> Vec<Token> {
+fn map_remove_place(vec: Vec<RangedToken>) -> Vec<Token> {
     vec.into_iter().map(|x| x.token).collect()
 }
 fn parse(text: &str) -> CResult<Vec<Token>> {
@@ -51,7 +52,7 @@ fn token_equality(token1: &CResult<Vec<Token>>, token2: &CResult<Vec<Token>>) ->
 fn bracket_token(bracket_type: BracketType, vec: Vec<Token>) -> Token {
     let vec = vec
         .into_iter()
-        .map(|x| TokenWithPos::new(x, PositionInFile::new(0, 0)))
+        .map(|x| RangedToken::new(x, Range::default()))
         .collect();
     Token::Bracket(vec, bracket_type)
 }
@@ -164,4 +165,26 @@ fn test_correct_names() {
     assert_no_error("name");
     assert_no_error("_name");
     assert_no_error("_");
+}
+
+#[test]
+fn test_correct_token_position() {
+    assert_eq!(
+        tokenize("a b\nc"),
+        Ok(vec![
+            RangedToken::new(Token::String("a".to_string()), Range::new(Position::new(0, 0), Position::new(0, 1))),
+            RangedToken::new(Token::String("b".to_string()), Range::new(Position::new(0, 2), Position::new(0, 3))),
+            RangedToken::new(Token::String("c".to_string()), Range::new(Position::new(1, 0), Position::new(1, 1))),
+        ]),
+    );
+
+    assert_eq!(
+        tokenize("\"a\nbb\""),
+        Ok(vec![
+            RangedToken::new(
+                Token::DoubleQuotes("a\nbb".to_string()),
+                Range::new(Position::new(0, 0), Position::new(1, 3))
+            ),
+        ]),
+    );
 }

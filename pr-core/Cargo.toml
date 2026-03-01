@@ -4,3 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+lsp-types = "0.94.1" # as in tower-lsp 0.20.0

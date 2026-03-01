@@ -1,10 +1,10 @@
 use std::fmt::{Display, Formatter};
 use std::ops::BitOr;
-use crate::error::{print_error, ErrKind};
-use crate::parser::PositionInFile;
+use lsp_types::Range;
+use crate::error::{range_to_str, print_error, ErrKind};
 
 pub enum SyntacticError {
-    Syntactic(PositionInFile, String),
+    Syntactic(Range, String),
     LiteralParseError { what: String, error: String },
     LocalGlobalStatement { name: String },
     Expected(ExpectedError),
@@ -100,6 +100,7 @@ impl Display for SyntacticError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Syntactic(place_info, description) => {
+                let place_info = range_to_str(*place_info);
                 write!(f, "{description} at {place_info}")
             }
 

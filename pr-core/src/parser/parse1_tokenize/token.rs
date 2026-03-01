@@ -1,14 +1,16 @@
-use crate::parser::{BracketType, PositionInFile};
+use lsp_types::Range;
+use crate::parser::BracketType;
 use crate::parser::operations::*;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct TokenWithPos {
+pub struct RangedToken {
     pub token: Token,
-    pub position: PositionInFile,
+    pub range: Range,
 }
-impl TokenWithPos {
-    pub const fn new(token: Token, position: PositionInFile) -> Self {
-        Self { token, position }
+
+impl RangedToken {
+    pub fn new(token: Token, range: Range) -> Self {
+        Self { token, range }
     }
 }
 
@@ -29,7 +31,7 @@ pub enum Token {
     Operation(TwoSidedOperation),
     UnaryOperation(OneSidedOperation),
 
-    Bracket(Vec<TokenWithPos>, BracketType),
+    Bracket(Vec<RangedToken>, BracketType),
     Quotes(String),
     DoubleQuotes(String),
 }

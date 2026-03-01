@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use lsp_types::Position;
 use crate::error::{print_error, ErrKind};
 use crate::parser::BracketType;
 
@@ -15,7 +16,7 @@ pub enum TokenizeError {
 }
 
 impl TokenizeError {
-    pub fn print(self, position: usize) {
+    pub fn print(self, position: Position) {
         print_error(ErrKind::Error, &self.to_string());
     }
 }

@@ -1,27 +1,28 @@
 use std::collections::VecDeque;
-use crate::parser::{BracketType, PositionInFile};
+use lsp_types::Range;
+use crate::parser::BracketType;
 
 use crate::parser::operations::{BoolOperation, CompareOperator, NumberOperation, OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse1_tokenize::token::*;
 use super::statement::*;
 use super::error::{ExpectedEnum, SyntacticError};
 
-pub fn parse_statements(tokens: Vec<TokenWithPos>) -> Result<Vec<Statement>, SyntacticError> {
+pub fn parse_statements(tokens: Vec<RangedToken>) -> Result<Vec<Statement>, SyntacticError> {
     ParsingState::new(tokens).parse_statements(true)
 }
 
 struct ParsingState {
-    tokens: VecDeque<TokenWithPos>,
+    tokens: VecDeque<RangedToken>,
 }
 
 impl ParsingState {
-    pub fn new(tokens: Vec<TokenWithPos>) -> Self {
+    pub fn new(tokens: Vec<RangedToken>) -> Self {
         Self { tokens: tokens.into() }
     }
-    fn next(&mut self) -> Option<TokenWithPos> {
+    fn next(&mut self) -> Option<RangedToken> {
         self.tokens.pop_front()
     }
-    fn peek(&self) -> Option<&TokenWithPos> {
+    fn peek(&self) -> Option<&RangedToken> {
         self.tokens.front()
     }
     fn at_end(&self) -> bool {
@@ -41,18 +42,18 @@ impl ParsingState {
         Ok(statements)
     }
     fn skip_semicolons(&mut self) {
-        while let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.peek() {
+        while let Some(RangedToken { token: Token::Semicolon, range: _ }) = self.peek() {
             self.next();
         }
     }
     fn parse_statement(&mut self, is_global: bool, result: &mut Vec<Statement>) -> Result<(), SyntacticError> {
-        let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
+        let Some(RangedToken { token, range }) = self.next() else { unreachable!() };
         match token {
             Token::Keyword(keyword) => match keyword {
                 TokenKeyword::If | TokenKeyword::While => {
-                    let condition = self.parse_expression(position, true)?;
+                    let condition = self.parse_expression(range, true)?;
 
-                    let Some(TokenWithPos { token, position }) = self.next() else {
+                    let Some(RangedToken { token, range }) = self.next() else {
                         return Err(ExpectedEnum::CurlyBracket.err());
                     };
 
@@ -69,31 +70,31 @@ impl ParsingState {
                     Ok(())
                 }
                 TokenKeyword::For => {
-                    let Some(TokenWithPos { token: Token::String(name), position }) = self.next() else {
+                    let Some(RangedToken { token: Token::String(name), range }) = self.next() else {
                         return Err(ExpectedEnum::Name.err())
                     };
-                    let Some(TokenWithPos { token: Token::String(in_str), position }) = self.next() else {
+                    let Some(RangedToken { token: Token::String(in_str), range }) = self.next() else {
                         return Err(ExpectedEnum::new_string("'in'").err())
                     };
                     if in_str != "in" {
                         return Err(ExpectedEnum::new_string("'in'").err())
                     }
 
-                    let from_value = self.parse_expression_without_ops(position, true, true)?;
+                    let from_value = self.parse_expression_without_ops(range, true, true)?;
 
-                    let Some(TokenWithPos { token: Token::DoubleDot, position }) = self.next() else {
+                    let Some(RangedToken { token: Token::DoubleDot, range }) = self.next() else {
                         return Err(ExpectedEnum::new_string("..").err())
                     };
-                    let compare_op = if let Some(TokenWithPos { token: Token::EqualOperation(EqualOperation::Equal), position }) = self.peek() {
+                    let compare_op = if let Some(RangedToken { token: Token::EqualOperation(EqualOperation::Equal), range }) = self.peek() {
                         self.next();
                         CompareOperator::LessEqual
                     } else {
                         CompareOperator::Less
                     };
 
-                    let to_value = self.parse_expression_without_ops(position, true, true)?;
+                    let to_value = self.parse_expression_without_ops(range, true, true)?;
 
-                    let Some(TokenWithPos { token: Token::Bracket(body, BracketType::Curly), position }) = self.next() else {
+                    let Some(RangedToken { token: Token::Bracket(body, BracketType::Curly), range }) = self.next() else {
                         return Err(ExpectedEnum::CurlyBracket.err())
                     };
                     let mut state = Self::new(body);
@@ -120,47 +121,47 @@ impl ParsingState {
                     let peek_token = self.peek();
                     if peek_token.is_none() {
                         result.push(Statement::Return(None))
-                    } else if let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = peek_token {
+                    } else if let Some(RangedToken { token: Token::Semicolon, range: _ }) = peek_token {
                         result.push(Statement::Return(None))
                     } else {
-                        let expression = self.parse_expression(position, false)?;
+                        let expression = self.parse_expression(range, false)?;
                         result.push(Statement::Return(Some(expression)))
                     }
                     Ok(())
                 }
                 TokenKeyword::Import => {
                     if !is_global { return Err(SyntacticError::new_local_global("import")) }
-                    result.push(self.parse_import(position)?);
+                    result.push(self.parse_import(range)?);
                     Ok(())
                 },
                 TokenKeyword::Extern => {
                     if !is_global { return Err(SyntacticError::new_local_global("extern")) }
                     
-                    if matches!(self.peek(), Some(TokenWithPos { token: Token::Bracket(_, BracketType::Curly), position: _ })) {
-                        let Some(TokenWithPos { token: Token::Bracket(vec, _), position }) = self.next() else { unreachable!() };
+                    if matches!(self.peek(), Some(RangedToken { token: Token::Bracket(_, BracketType::Curly), range: _ })) {
+                        let Some(RangedToken { token: Token::Bracket(vec, _), range }) = self.next() else { unreachable!() };
 
                         let mut state = Self::new(vec);
                         while !state.at_end() {
                             state.skip_semicolons();
-                            result.push(state.parse_extern(position)?)
+                            result.push(state.parse_extern(range)?)
                         }
 
                         Ok(())
                     } else {
-                        result.push(self.parse_extern(position)?);
+                        result.push(self.parse_extern(range)?);
                         Ok(())
                     }
                 },
             },
             Token::String(_) => {
                 let Token::String(string) = token else { unreachable!() };
-                result.push(self.parse_statement2(string, is_global, position)?);
+                result.push(self.parse_statement2(string, is_global, range)?);
                 Ok(())
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
-                let left_expression = self.parse_expression_without_ops(position, true, false)?;
+                let left_expression = self.parse_expression_without_ops(range, true, false)?;
                 let left_expression = Expression::new_unary_operation(left_expression, OneSidedOperation::Dereference);
-                result.push(self.parse_statement3(left_expression, position)?);
+                result.push(self.parse_statement3(left_expression, range)?);
                 Ok(())
             }
             Token::Bracket(body, BracketType::Curly) => {
@@ -176,29 +177,29 @@ impl ParsingState {
         }
     }
     /// parse "name .." as definition
-    fn parse_statement2(&mut self, name: String, is_global: bool, position: PositionInFile) -> Result<Statement, SyntacticError> {
-        let Some(TokenWithPos { token, position: _ }) = self.peek() else {
+    fn parse_statement2(&mut self, name: String, is_global: bool, range: Range) -> Result<Statement, SyntacticError> {
+        let Some(RangedToken { token, range: _ }) = self.peek() else {
             return Err(SyntacticError::new_unexpected("EOF"));
         };
         match token {
             Token::DoubleColon => {
                 // name ::
-                let Some(TokenWithPos { token: _, position }) = self.next() else { unreachable!() };
+                let Some(RangedToken { token: _, range }) = self.next() else { unreachable!() };
 
-                let Some(TokenWithPos { token, position: _ }) = self.peek() else {
+                let Some(RangedToken { token, range: _ }) = self.peek() else {
                     return Err((ExpectedEnum::RoundBracket | ExpectedEnum::new_string("struct")).err())
                 };
                 match token {
                     Token::Bracket(_, BracketType::Round) => {
                         if !is_global { return Err(SyntacticError::new_local_global("function")) }
 
-                        self.parse_function(name, position)
+                        self.parse_function(name, range)
                     },
                     Token::String(string) if string == "struct" => {
                         if !is_global { return Err(SyntacticError::new_local_global("struct")) }
 
-                        let Some(TokenWithPos { token: _, position }) = self.next() else { unreachable!() };
-                        self.parse_struct(name, position)
+                        let Some(RangedToken { token: _, range }) = self.next() else { unreachable!() };
+                        self.parse_struct(name, range)
                     }
                     _ => Err((ExpectedEnum::RoundBracket | ExpectedEnum::new_string("struct")).err())
                 }
@@ -206,36 +207,36 @@ impl ParsingState {
             Token::Colon => {
                 // name :
                 self.next();
-                let typee = self.parse_type(position)?;
+                let typee = self.parse_type(range)?;
 
-                let Some(TokenWithPos { token, position }) = self.next() else {
+                let Some(RangedToken { token, range }) = self.next() else {
                     return Err((ExpectedEnum::Equal | ExpectedEnum::Semicolon).err())
                 };
                 if token == Token::Semicolon {
-                    let value = LiteralExpression::Undefined.into();
-                    let statement = Statement::new_variable(name, Some(typee), value);
+                    let token = LiteralExpression::Undefined.into();
+                    let statement = Statement::new_variable(name, Some(typee), token);
                     return Ok(statement)
                 }
                 if token != Token::EqualOperation(EqualOperation::Equal) {
                     return Err((ExpectedEnum::Equal | ExpectedEnum::Semicolon).err())
                 }
 
-                let expression = self.parse_expression(position, false)?;
+                let expression = self.parse_expression(range, false)?;
                 let statement = Statement::new_variable(name, Some(typee), expression);
                 Ok(statement)
             },
             Token::EqualOperation(EqualOperation::ColonEqual) => {
                 self.next();
 
-                let expression2 = self.parse_expression(position, false)?;
+                let expression2 = self.parse_expression(range, false)?;
                 Ok(Statement::new_variable(name, None, expression2))
             },
             Token::Bracket(_, BracketType::Round) => {
                 // name(..)
-                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
+                let Some(RangedToken { token, range }) = self.next() else { unreachable!() };
                 let Token::Bracket(vec, _) = token else { unreachable!() };
 
-                let args = parse_function_arguments(vec, position)?;
+                let args = parse_function_arguments(vec, range)?;
                 let left = Expression::new_function_call(name, args);
                 let expression = self.parse_expression2_without_ops(left, false, false)?;
                 Ok(Statement::Expression(expression))
@@ -243,13 +244,13 @@ impl ParsingState {
             _ => {
                 let left = Expression::Variable(name);
                 let left = self.parse_expression2_without_ops(left, true, false)?;
-                self.parse_statement3(left, position)
+                self.parse_statement3(left, range)
             }
         }
     }
     /// parse left .. ;
-    fn parse_statement3(&mut self, left: Expression, position: PositionInFile) -> Result<Statement, SyntacticError> {
-        let Some(TokenWithPos { token, position }) = self.next() else {
+    fn parse_statement3(&mut self, left: Expression, range: Range) -> Result<Statement, SyntacticError> {
+        let Some(RangedToken { token, range }) = self.next() else {
             return Err(SyntacticError::new_unexpected("EOF"));
         };
         match token {
@@ -258,7 +259,7 @@ impl ParsingState {
             }
             Token::EqualOperation(equal_operation) => {
                 // name _=
-                let expression2 = self.parse_expression(position, false)?;
+                let expression2 = self.parse_expression(range, false)?;
                 let statement = match equal_operation {
                     EqualOperation::ColonEqual => unreachable!(),
                     EqualOperation::Equal => Statement::new_set(left, expression2, None),
@@ -277,27 +278,27 @@ impl ParsingState {
         }
     }
 
-    fn parse_expression(&mut self, position: PositionInFile, in_cond: bool) -> Result<Expression, SyntacticError> {
+    fn parse_expression(&mut self, range: Range, in_cond: bool) -> Result<Expression, SyntacticError> {
         let mut expressions = Vec::<Expression>::new();
         let mut operations = Vec::<TwoSidedOperation>::new();
-        let mut position = position;
+        let mut range = range;
 
         loop {
-            let next_expression = self.parse_expression_without_ops(position, false, in_cond)?;
+            let next_expression = self.parse_expression_without_ops(range, false, in_cond)?;
             expressions.push(next_expression);
 
-            let Some(TokenWithPos { token, position: _ }) = self.peek() else {
+            let Some(RangedToken { token, range: _ }) = self.peek() else {
                 break;
             };
             if matches!(token, Token::Semicolon | Token::Comma | Token::Bracket(_, _) | Token::EqualOperation(_)) {
                 break
             }
 
-            let Some(TokenWithPos { token, position: position2 }) = self.next() else { unreachable!() };
+            let Some(RangedToken { token, range: range2 }) = self.next() else { unreachable!() };
             let Token::Operation(op) = token else {
                 return Err(ExpectedEnum::new_string("operation").err())
             };
-            position = position2;
+            range = range2;
             operations.push(op);
         }
 
@@ -323,11 +324,11 @@ impl ParsingState {
     }
     fn parse_expression_without_ops(
         &mut self,
-        position: PositionInFile,
+        range: Range,
         was_unary: bool,
         in_cond: bool,
     ) -> Result<Expression, SyntacticError> {
-        let Some(TokenWithPos { token, position }) = self.next() else {
+        let Some(RangedToken { token, range }) = self.next() else {
             return Err(SyntacticError::new_unexpected("EOF"));
         };
         match token {
@@ -339,13 +340,13 @@ impl ParsingState {
                 };
                 self.parse_expression2_without_ops(expression1, was_unary, in_cond)
             }
-            Token::NumberLiteral(value) => { // 123
-                let expression1 = LiteralExpression::NumberLiteral(value).into();
+            Token::NumberLiteral(token) => { // 123
+                let expression1 = LiteralExpression::NumberLiteral(token).into();
                 self.parse_expression2_without_ops(expression1, was_unary, in_cond)
             }
             Token::Bracket(vec, BracketType::Round) => { // (..)
                 let mut new_state = ParsingState::new(vec);
-                let expression = new_state.parse_expression(position, false)?;
+                let expression = new_state.parse_expression(range, false)?;
                 if !new_state.at_end() {
                     return Err(ExpectedEnum::new_string(")").err())
                 }
@@ -353,47 +354,47 @@ impl ParsingState {
                 self.parse_expression2_without_ops(expression1, was_unary, in_cond)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)) => { // -..
-                if let Some(TokenWithPos { token: Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)), position: _ }) = self.peek() {
+                if let Some(RangedToken { token: Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)), range: _ }) = self.peek() {
                     self.next();
-                    let Some(TokenWithPos { token: Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)), position: _ }) = self.next() else {
+                    let Some(RangedToken { token: Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)), range: _ }) = self.next() else {
                         return Err(ExpectedEnum::new_string("---").err())
                     };
 
                     let undef_expression = LiteralExpression::Undefined.into();
-                    // return Ok(undef_expression); // no operators on undef value
+                    // return Ok(undef_expression); // no operators on undef token
                     return self.parse_expression2_without_ops(undef_expression, false, in_cond)
                 }
                 
                 let op = OneSidedOperation::UnaryMinus;
-                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
+                let expression = self.parse_expression_without_ops(range, true, in_cond)?;
                 
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 self.parse_expression2_without_ops(unary_expression, false, in_cond)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => { // *..
                 let op = OneSidedOperation::Dereference;
-                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
+                let expression = self.parse_expression_without_ops(range, true, in_cond)?;
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 self.parse_expression2_without_ops(unary_expression, false, in_cond)
             }
             Token::Operation(TwoSidedOperation::Number(NumberOperation::BitAnd)) => { // &..
                 let op = OneSidedOperation::GetReference;
-                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
+                let expression = self.parse_expression_without_ops(range, true, in_cond)?;
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 self.parse_expression2_without_ops(unary_expression, false, in_cond)
             }
             Token::Operation(TwoSidedOperation::Bool(BoolOperation::And)) => {
                 let op = OneSidedOperation::GetReference;
-                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
+                let expression = self.parse_expression_without_ops(range, true, in_cond)?;
 
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 let unary_expression2 = Expression::new_unary_operation(unary_expression, op);
                 self.parse_expression2_without_ops(unary_expression2, false, in_cond)
             }
             Token::UnaryOperation(op) => { // `unary`..
-                let expression = self.parse_expression_without_ops(position, true, in_cond)?;
+                let expression = self.parse_expression_without_ops(range, true, in_cond)?;
                 let unary_expression = Expression::new_unary_operation(expression, op);
                 self.parse_expression2_without_ops(unary_expression, false, in_cond)
             }
@@ -418,7 +419,7 @@ impl ParsingState {
         was_unary: bool,
         in_cond: bool
     ) -> Result<Expression, SyntacticError> {
-        let Some(TokenWithPos { token, position }) = self.peek() else {
+        let Some(RangedToken { token, range }) = self.peek() else {
             return Ok(expression1);
         };
         match token {
@@ -426,14 +427,14 @@ impl ParsingState {
                 Ok(expression1)
             }
             Token::Bracket(_, BracketType::Round) => { // exp(..)
-                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
+                let Some(RangedToken { token, range }) = self.next() else { unreachable!() };
                 let Token::Bracket(vec, _) = token else { unreachable!() };
 
                 // FIXME: allow function variables
                 let Expression::Variable(name) = expression1 else {
                     return Err(SyntacticError::new_unexpected("round brackets after expression"));
                 };
-                let args = parse_function_arguments(vec, position)?;
+                let args = parse_function_arguments(vec, range)?;
                 self.parse_expression2_without_ops(Expression::new_function_call(name, args), was_unary, false)
             }
             Token::String(string) if string == "as" => { // exp as
@@ -441,15 +442,15 @@ impl ParsingState {
                     return Ok(expression1)
                 }
 
-                let position = self.next().unwrap().position;
+                let range = self.next().unwrap().range;
 
-                let typee = self.parse_type(position)?;
+                let typee = self.parse_type(range)?;
                 let expression = Expression::new_as(expression1, typee);
                 self.parse_expression2_without_ops(expression, false, in_cond)
             }
             Token::Dot => {
-                let Some(TokenWithPos { token: _, position: _ }) = self.next() else { unreachable!() };
-                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
+                let Some(RangedToken { token: _, range: _ }) = self.next() else { unreachable!() };
+                let Some(RangedToken { token, range }) = self.next() else { unreachable!() };
                 
                 match token {
                     Token::String(field_name) => {
@@ -460,11 +461,11 @@ impl ParsingState {
                 }
             }
             Token::Bracket(_, BracketType::Curly) if !in_cond && matches!(&expression1, Expression::Variable(..)) => {
-                let Some(TokenWithPos { token, position }) = self.next() else { unreachable!() };
+                let Some(RangedToken { token, range }) = self.next() else { unreachable!() };
                 let Token::Bracket(vec, _) = token else { unreachable!() };
                 let Expression::Variable(name) = expression1 else { unreachable!() };
 
-                let fields = parse_struct_construction(vec, position)?;
+                let fields = parse_struct_construction(vec, range)?;
  
                 Ok(Expression::StructConstruct {
                     struct_name: name,
@@ -475,13 +476,13 @@ impl ParsingState {
                 Ok(expression1)
             }
             _ => {
-                Err(SyntacticError::Syntactic(*position, format!("unexpected token {token:?}")))
+                Err(SyntacticError::Syntactic(*range, format!("unexpected token {token:?}")))
             }
         }
     }
 
-    fn parse_function(&mut self, name: String, position: PositionInFile) -> Result<Statement, SyntacticError> {
-        let Some(TokenWithPos { token, position }) = self.next() else {
+    fn parse_function(&mut self, name: String, range: Range) -> Result<Statement, SyntacticError> {
+        let Some(RangedToken { token, range }) = self.next() else {
             return Err(ExpectedEnum::RoundBracket.err());
         };
 
@@ -499,7 +500,7 @@ impl ParsingState {
         let mut token_with_pos = token_with_pos;
         let return_type = {
             if token_with_pos.token == Token::Arrow {
-                let return_type = self.parse_type(token_with_pos.position)?;
+                let return_type = self.parse_type(token_with_pos.range)?;
                 let Some(new_token_with_pos) = self.next() else {
                     return Err(ExpectedEnum::CurlyBracket.err());
                 };
@@ -510,7 +511,7 @@ impl ParsingState {
             }
         };
 
-        let TokenWithPos { token, position } = token_with_pos;
+        let RangedToken { token, range } = token_with_pos;
         // parse inside
         let Token::Bracket(body, BracketType::Curly) = token else {
             return Err(ExpectedEnum::CurlyBracket.err());
@@ -521,75 +522,75 @@ impl ParsingState {
         Ok(statement)
     }
 
-    fn parse_type(&mut self, position: PositionInFile) -> Result<Typee, SyntacticError> {
-        let Some(TokenWithPos { token, position }) = self.next() else {
+    fn parse_type(&mut self, range: Range) -> Result<Typee, SyntacticError> {
+        let Some(RangedToken { token, range }) = self.next() else {
             return Err(ExpectedEnum::new_string("type").err());
         };
 
         match token {
             Token::String(string) => Ok(Typee::String(string)),
             Token::Operation(TwoSidedOperation::Number(NumberOperation::Mul)) => {
-                let typee = self.parse_type(position)?;
+                let typee = self.parse_type(range)?;
                 Ok(Typee::new_pointer(typee))
             }
             Token::UnaryOperation(OneSidedOperation::Dereference) => unreachable!(), // lexer make Mul from *
             Token::Operation(TwoSidedOperation::Number(NumberOperation::BitAnd)) => {
-                let typee = self.parse_type(position)?;
+                let typee = self.parse_type(range)?;
                 Ok(Typee::new_reference(typee))
             }
             Token::Operation(TwoSidedOperation::Bool(BoolOperation::And)) => {
-                let typee = self.parse_type(position)?;
+                let typee = self.parse_type(range)?;
                 Ok(Typee::new_reference(Typee::new_reference(typee)))
             }
             _ => Err(ExpectedEnum::new_string("type").err())
         }
     }
 
-    fn parse_struct(&mut self, name: String, _position: PositionInFile) -> Result<Statement, SyntacticError> {
-        let Some(TokenWithPos { token: Token::Bracket(tokens, BracketType::Curly), position: _ }) = self.next() else {
+    fn parse_struct(&mut self, name: String, _range: Range) -> Result<Statement, SyntacticError> {
+        let Some(RangedToken { token: Token::Bracket(tokens, BracketType::Curly), range: _ }) = self.next() else {
             return Err(ExpectedEnum::CurlyBracket.err())
         };
         let mut fields = Vec::new();
         let mut state = ParsingState::new(tokens);
         while !state.at_end() {
             // name
-            let Some(TokenWithPos { token: Token::String(field_name), position: _ }) = state.next() else {
+            let Some(RangedToken { token: Token::String(field_name), range: _ }) = state.next() else {
                 return Err(ExpectedEnum::Name.err())
             };
 
             // :
-            let Some(TokenWithPos { token: Token::Colon, position }) = state.next() else {
+            let Some(RangedToken { token: Token::Colon, range }) = state.next() else {
                 return Err(ExpectedEnum::Colon.err())
             };
 
             // typee
-            let field_typee = state.parse_type(position)?;
+            let field_typee = state.parse_type(range)?;
             fields.push((field_name, field_typee));
 
             if state.at_end() { break }
 
             // ,
-            let Some(TokenWithPos { token: Token::Comma, position: _ }) = state.next() else {
+            let Some(RangedToken { token: Token::Comma, range: _ }) = state.next() else {
                 return Err(ExpectedEnum::Comma.err())
             };
         }
 
         Ok(Statement::new_struct(name, fields))
     }
-    fn parse_extern(&mut self, position: PositionInFile) -> Result<Statement, SyntacticError> {
-        let Some(TokenWithPos { token: Token::String(name), position: _ }) = self.next() else {
+    fn parse_extern(&mut self, range: Range) -> Result<Statement, SyntacticError> {
+        let Some(RangedToken { token: Token::String(name), range: _ }) = self.next() else {
             return Err(ExpectedEnum::Name.err())
         };
 
-        let Some(TokenWithPos { token, position }) = self.next() else {
+        let Some(RangedToken { token, range }) = self.next() else {
             return Err((ExpectedEnum::Colon | ExpectedEnum::DoubleColon).err())
         };
 
         if token == Token::Colon {
             // name : ..
-            let typee = self.parse_type(position)?;
+            let typee = self.parse_type(range)?;
 
-            let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.next() else {
+            let Some(RangedToken { token: Token::Semicolon, range: _ }) = self.next() else {
                 return Err(ExpectedEnum::Colon.err())
             };
 
@@ -597,22 +598,22 @@ impl ParsingState {
         } else if token == Token::DoubleColon {
             // name :: ..
 
-            let Some(TokenWithPos { token: Token::Bracket(vec, BracketType::Round), position: _ }) = self.next() else {
+            let Some(RangedToken { token: Token::Bracket(vec, BracketType::Round), range: _ }) = self.next() else {
                 return Err(ExpectedEnum::RoundBracket.err())
             };
 
             let (args, is_vararg) = parse_extern_function_arguments(vec)?;
 
-            let Some(TokenWithPos { token, position }) = self.next() else {
+            let Some(RangedToken { token, range }) = self.next() else {
                 return Err(ExpectedEnum::Semicolon.err())
             };
 
             if token == Token::Semicolon {
                 Ok(Statement::ExternStatement { statement: ExternStatement::Function { name, args, is_vararg, returns: None }})
             } else if token == Token::Arrow {
-                let returns = self.parse_type(position)?;
+                let returns = self.parse_type(range)?;
 
-                let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.next() else {
+                let Some(RangedToken { token: Token::Semicolon, range: _ }) = self.next() else {
                     return Err(ExpectedEnum::Semicolon.err())
                 };
 
@@ -624,14 +625,14 @@ impl ParsingState {
             Err((ExpectedEnum::Colon | ExpectedEnum::DoubleColon).err())
         }
     }
-    fn parse_import(&mut self, mut position0: PositionInFile) -> Result<Statement, SyntacticError> {
-        let Some(TokenWithPos { token: Token::String(string), position }) = self.next() else {
+    fn parse_import(&mut self, mut range0: Range) -> Result<Statement, SyntacticError> {
+        let Some(RangedToken { token: Token::String(string), range }) = self.next() else {
             return Err(ExpectedEnum::Name.err())
         };
 
         let mut from = vec![string];
         loop {
-            let Some(TokenWithPos { token, position }) = self.next() else {
+            let Some(RangedToken { token, range }) = self.next() else {
                 return Err((ExpectedEnum::DoubleColon | ExpectedEnum::Semicolon | ExpectedEnum::As).err())
             };
             match token {
@@ -641,11 +642,11 @@ impl ParsingState {
                     return Ok(Statement::new_import(from, what))
                 }
                 Token::String(as_string) if as_string == "as" => { // ::x as x;
-                    let Some(TokenWithPos { token: Token::String(as_name), position }) = self.next() else {
+                    let Some(RangedToken { token: Token::String(as_name), range }) = self.next() else {
                         return Err(ExpectedEnum::Name.err())
                     };
 
-                    let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.next() else {
+                    let Some(RangedToken { token: Token::Semicolon, range: _ }) = self.next() else {
                         return Err(ExpectedEnum::Semicolon.err())
                     };
 
@@ -655,29 +656,29 @@ impl ParsingState {
                 _ => return Err((ExpectedEnum::DoubleColon | ExpectedEnum::Semicolon | ExpectedEnum::As).err())
             }
 
-            let Some(TokenWithPos { token: Token::String(_), position: _ }) = self.peek() else {
+            let Some(RangedToken { token: Token::String(_), range: _ }) = self.peek() else {
                 break
             };
 
-            let Some(TokenWithPos { token: Token::String(string), position }) = self.next() else { unreachable!() };
+            let Some(RangedToken { token: Token::String(string), range }) = self.next() else { unreachable!() };
             from.push(string);
-            position0 = position;
+            range0 = range;
         }
 
         // ::{x, .., x as x, ..};
-        let Some(TokenWithPos { token: Token::Bracket(whats, BracketType::Curly), position }) = self.next() else {
+        let Some(RangedToken { token: Token::Bracket(whats, BracketType::Curly), range }) = self.next() else {
             return Err((ExpectedEnum::Name | ExpectedEnum::CurlyBracket).err())
         };
 
         let mut what = Vec::with_capacity(whats.len());
         let mut state = ParsingState::new(whats);
         while !state.at_end() {
-            let Some(TokenWithPos { token: Token::String(name), position }) = state.next() else {
+            let Some(RangedToken { token: Token::String(name), range }) = state.next() else {
                 return Err(ExpectedEnum::Name.err())
             };
 
             if state.peek().is_none() { break }
-            let Some(TokenWithPos { token, position }) = state.next() else {
+            let Some(RangedToken { token, range }) = state.next() else {
                 return Err((ExpectedEnum::Comma | ExpectedEnum::As).err())
             };
             if token == Token::Comma {
@@ -688,55 +689,55 @@ impl ParsingState {
                 return Err((ExpectedEnum::Comma | ExpectedEnum::As).err())
             }
 
-            let Some(TokenWithPos { token: Token::String(as_name), position }) = state.next() else {
+            let Some(RangedToken { token: Token::String(as_name), range }) = state.next() else {
                 return Err(ExpectedEnum::Name.err())
             };
             what.push((name, Some(as_name)));
 
             if state.at_end() { break }
-            let Some(TokenWithPos { token: Token::Comma, position }) = state.next() else {
+            let Some(RangedToken { token: Token::Comma, range }) = state.next() else {
                 return Err(ExpectedEnum::Comma.err())
             };
-            position0 = position;
+            range0 = range;
         }
-        let Some(TokenWithPos { token: Token::Semicolon, position: _ }) = self.next() else {
+        let Some(RangedToken { token: Token::Semicolon, range: _ }) = self.next() else {
             return Err(ExpectedEnum::Semicolon.err())
         };
 
         Ok(Statement::new_import(from, what))
     }
-    fn parse_triple_dot(&mut self, mut position: PositionInFile) -> Result<(), SyntacticError> {
-        let Some(TokenWithPos { token: Token::DoubleDot, position: _ }) = self.next() else {
+    fn parse_triple_dot(&mut self, mut range: Range) -> Result<(), SyntacticError> {
+        let Some(RangedToken { token: Token::DoubleDot, range: _ }) = self.next() else {
             return Err(ExpectedEnum::new_string("...").err())
         };
-        let Some(TokenWithPos { token: Token::Dot, position: _ }) = self.next() else {
+        let Some(RangedToken { token: Token::Dot, range: _ }) = self.next() else {
             return Err(ExpectedEnum::new_string("...").err())
         };
         Ok(())
     }
 }
 
-fn parse_function_declaration_arguments(args: Vec<TokenWithPos>) -> Result<Vec<(String, Typee)>, SyntacticError> {
+fn parse_function_declaration_arguments(args: Vec<RangedToken>) -> Result<Vec<(String, Typee)>, SyntacticError> {
     if args.is_empty() {
         return Ok(Vec::new())
     }
     let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
     let mut state = ParsingState::new(args);
 
-    while let Some(TokenWithPos { token, position }) = state.next() {
+    while let Some(RangedToken { token, range }) = state.next() {
         let Token::String(arg_i) = token else {
             return Err(ExpectedEnum::Name.err());
         };
 
-        let Some(TokenWithPos { token: Token::Colon, position }) = state.next() else {
+        let Some(RangedToken { token: Token::Colon, range }) = state.next() else {
             return Err(ExpectedEnum::Semicolon.err())
         };
 
-        let argument_type = state.parse_type(position)?;
+        let argument_type = state.parse_type(range)?;
 
         arguments.push((arg_i, argument_type));
 
-        let Some(TokenWithPos { token, position }) = state.next() else {
+        let Some(RangedToken { token, range }) = state.next() else {
             break;
         };
         if token != Token::Comma {
@@ -746,17 +747,17 @@ fn parse_function_declaration_arguments(args: Vec<TokenWithPos>) -> Result<Vec<(
 
     Ok(arguments)
 }
-fn parse_extern_function_arguments(args: Vec<TokenWithPos>) -> Result<(Vec<Typee>, bool), SyntacticError> {
+fn parse_extern_function_arguments(args: Vec<RangedToken>) -> Result<(Vec<Typee>, bool), SyntacticError> {
     if args.is_empty() {
         return Ok((Vec::new(), false))
     }
     let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
     let mut state = ParsingState::new(args);
 
-    let mut position0 = PositionInFile::new(0, 0);
+    let mut range0 = Range::default();
     while !state.at_end() {
-        if matches!(state.peek(), Some(TokenWithPos { token: Token::DoubleDot, .. })) {
-            state.parse_triple_dot(position0)?;
+        if matches!(state.peek(), Some(RangedToken { token: Token::DoubleDot, .. })) {
+            state.parse_triple_dot(range0)?;
 
             if !state.at_end() {
                 return Err(ExpectedEnum::new_string(")").err())
@@ -764,32 +765,32 @@ fn parse_extern_function_arguments(args: Vec<TokenWithPos>) -> Result<(Vec<Typee
             return Ok((arguments, true))
         }
 
-        let argument_type = state.parse_type(position0)?;
+        let argument_type = state.parse_type(range0)?;
 
         arguments.push(argument_type);
 
-        let Some(TokenWithPos { token, position }) = state.next() else {
+        let Some(RangedToken { token, range }) = state.next() else {
             break;
         };
         if token != Token::Comma {
             return Err(ExpectedEnum::Comma.err());
         }
-        position0 = position
+        range0 = range
     }
 
     Ok((arguments, false))
 }
 
-fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile) -> Result<Vec<Expression>, SyntacticError> {
+fn parse_function_arguments(tokens: Vec<RangedToken>, range: Range) -> Result<Vec<Expression>, SyntacticError> {
     let mut state = ParsingState::new(tokens);
     let mut args = Vec::new();
 
     while !state.at_end() {
-        let expression = state.parse_expression(position, false)?;
+        let expression = state.parse_expression(range, false)?;
         args.push(expression);
 
         if !state.at_end() {
-            let TokenWithPos { token, position } = state.next().unwrap();
+            let RangedToken { token, range } = state.next().unwrap();
             if token != Token::Comma {
                 return Err(ExpectedEnum::Comma.err());
             }
@@ -799,24 +800,24 @@ fn parse_function_arguments(tokens: Vec<TokenWithPos>, position: PositionInFile)
     Ok(args)
 }
 
-fn parse_struct_construction(tokens: Vec<TokenWithPos>, position: PositionInFile) -> Result<Vec<(String, Expression)>, SyntacticError> {
+fn parse_struct_construction(tokens: Vec<RangedToken>, range: Range) -> Result<Vec<(String, Expression)>, SyntacticError> {
     let mut fields = Vec::new();
     let mut state = ParsingState::new(tokens);
 
     while !state.at_end() {
-        let Some(TokenWithPos { token: Token::String(field_name), position }) = state.next() else {
+        let Some(RangedToken { token: Token::String(field_name), range }) = state.next() else {
             return Err(ExpectedEnum::Name.err())
         };
-        let Some(TokenWithPos { token: Token::Colon, position }) = state.next() else {
+        let Some(RangedToken { token: Token::Colon, range }) = state.next() else {
             return Err(ExpectedEnum::Colon.err())
         };
-        let field_value = state.parse_expression(position, false)?;
+        let field_value = state.parse_expression(range, false)?;
         fields.push((field_name, field_value));
         if state.at_end() {
             break
         }
 
-        let Some(TokenWithPos { token: Token::Comma, position }) = state.next() else {
+        let Some(RangedToken { token: Token::Comma, range }) = state.next() else {
             return Err(ExpectedEnum::Comma.err())
         };
     }

@@ -11,6 +11,17 @@
 //     }
 // }
 
+use lsp_types::{Position, Range};
+
+pub fn pos_to_str(position: Position) -> String {
+    format!("{}:{}", position.line, position.character)
+}
+pub fn range_to_str(range: Range) -> String {
+    let start = pos_to_str(range.start);
+    let end = pos_to_str(range.end);
+    format!("{start} - {end}")
+}
+
 pub type CResult<T> = Result<T, ()>;
 
 pub fn print_error(kind: ErrKind, error_string: &str) {
