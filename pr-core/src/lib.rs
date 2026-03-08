@@ -3,6 +3,9 @@ pub mod parser;
 pub mod module_tree;
 pub mod error;
 pub mod io_error;
+pub mod ranged;
+
+pub use ranged::{Ranged, RString};
 
 /*
 /// @returns Vec<ModuleId> of files

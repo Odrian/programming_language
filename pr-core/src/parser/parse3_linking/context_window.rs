@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use super::object::Object;
 use crate::parser::parse3_linking::error::LinkingError;
+use crate::RString;
 
 #[derive(Debug, Default)]
 struct ObjectsContext(HashMap<String, Object>);
 
 impl ObjectsContext {
-    fn add(&mut self, name: String, object: Object) {
-        self.0.insert(name, object);
+    fn add(&mut self, name: RString, object: Object) {
+        self.0.insert(name.value, object);
     }
     fn get(&self, name: &String) -> Option<Object> {
         self.0.get(name).copied()
@@ -34,13 +35,13 @@ impl ObjectContextWindow {
         self.contexts.iter().rev()
             .find_map(|obj_con|obj_con.get(name))
     }
-    pub fn get_or_error(&self, name: &String) -> Result<Object, LinkingError> {
-        match self.get(name) {
+    pub fn get_or_error(&self, name: &RString) -> Result<Object, LinkingError> {
+        match self.get(&name.value) {
             Some(obj) => Ok(obj),
             None => Err(LinkingError::NameNotFound { name: name.clone(), context: format!("{self:?}") })
         }
     }
-    pub fn add(&mut self, name: String, object: Object) {
+    pub fn add(&mut self, name: RString, object: Object) {
         self.contexts.last_mut().unwrap().add(name, object);
     }
 }

@@ -1,3 +1,4 @@
+use crate::RString;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 #[non_exhaustive]
@@ -95,11 +96,11 @@ impl IntObjType {
 pub struct ObjectFactory {
     next_id: u32,
     array_type: Vec<ObjType>,
-    array_name: Vec<String>,
+    array_name: Vec<RString>,
 }
 
 impl ObjectFactory {
-    pub fn create_object(&mut self, name: String, object_type: ObjType) -> Object {
+    pub fn create_object(&mut self, name: RString, object_type: ObjType) -> Object {
         let object = Object { id: self.next_id };
         self.next_id += 1;
         self.array_type.push(object_type);
@@ -112,7 +113,7 @@ impl ObjectFactory {
     pub fn get_type_mut(&mut self, object: Object) -> &mut ObjType {
         &mut self.array_type[object.id as usize]
     }
-    pub fn get_name(&self, object: Object) -> &String {
+    pub fn get_name(&self, object: Object) -> &RString {
         &self.array_name[object.id as usize]
     }
 }

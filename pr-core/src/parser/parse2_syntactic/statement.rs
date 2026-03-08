@@ -1,46 +1,71 @@
 use std::fmt;
-use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
+use lsp_types::Range;
+use crate::parser::operations::{ROneSidedOperation, RTwoSidedOperation};
+use crate::{RString, Ranged};
+
+pub type RStatement = Ranged<Statement>;
+pub type RTypee = Ranged<Typee>;
+pub type RExpression = Ranged<Expression>;
+
+impl Statement {
+    pub fn add_range(self, range: Range) -> RStatement { RStatement { value: self, range } }
+    pub fn add_no_range(self) -> RStatement { self.add_range(Range::default()) }
+}
+impl Typee {
+    pub fn add_range(self, range: Range) -> RTypee { RTypee { value: self, range } }
+    pub fn add_no_range(self) -> RTypee { self.add_range(Range::default()) }
+}
+impl Expression {
+    pub fn add_range(self, range: Range) -> RExpression { RExpression { value: self, range } }
+    pub fn add_no_range(self) -> RExpression { self.add_range(Range::default()) }
+}
+
+pub fn new_unary_expr(expression: RExpression, op: ROneSidedOperation) -> RExpression {
+    let range = Range::new(op.range.start, expression.range.end);
+    Expression::new_unary_operation(expression, op).add_range(range)
+}
+
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Statement {
     ComptimeStatement(ComptimeStatement),
-    DeclarationStatement { name: String, statement: DeclarationStatement },
+    DeclarationStatement { name: RString, statement: DeclarationStatement },
     ExternStatement { statement: ExternStatement },
 
-    SetVariable { what: Expression, value: Expression, op: Option<TwoSidedOperation> },
+    SetVariable { what: RExpression, value: RExpression, op: Option<RTwoSidedOperation> },
 
-    Brackets(Vec<Self>),
+    Brackets(Vec<RStatement>),
     Expression(Expression),
-    If { condition: Expression, body: Vec<Self> },
-    While { condition: Expression, body: Vec<Self> },
-    Return(Option<Expression>),
+    If { condition: RExpression, body: Vec<RStatement> },
+    While { condition: RExpression, body: Vec<RStatement> },
+    Return(Option<RExpression>),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum DeclarationStatement {
-    VariableDeclaration { typee: Option<Typee>, value: Expression },
-    Function { args: Vec<(String, Typee)>, returns: Option<Typee>, body: Vec<Statement> },
-    Struct { fields: Vec<(String, Typee)> },
+    VariableDeclaration { typee: Option<RTypee>, value: RExpression },
+    Function { args: Vec<(RString, RTypee)>, returns: Option<RTypee>, body: Vec<RStatement> },
+    Struct { fields: Vec<(RString, RTypee)> },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ComptimeStatement {
-    Import { from: Vec<String>, what: Vec<(String, Option<String>)> },
+    Import { from: Vec<RString>, what: Vec<(RString, Option<RString>)> },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Expression {
-    Operation(Box<Self>, Box<Self>, TwoSidedOperation),
-    UnaryOperation(Box<Self>, OneSidedOperation),
-    As(Box<Self>, Typee),
-    StructField { left: Box<Self>, field: String },
+    Operation(Box<RExpression>, Box<RExpression>, RTwoSidedOperation),
+    UnaryOperation(Box<RExpression>, ROneSidedOperation),
+    As(Box<RExpression>, RTypee),
+    StructField { left: Box<RExpression>, field: RString },
 
     Literal(LiteralExpression),
-    StructConstruct { struct_name: String, fields: Vec<(String, Expression)> },
+    StructConstruct { struct_name: RString, fields: Vec<(RString, RExpression)> },
 
-    Variable(String),
-    RoundBracket(Box<Self>),
-    FunctionCall { object: String, args: Vec<Self> },
+    Variable(RString),
+    RoundBracket(Box<RExpression>),
+    FunctionCall { object: RString, args: Vec<RExpression> },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -55,58 +80,62 @@ pub enum LiteralExpression {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Typee {
     String(String),
-    Pointer(Box<Typee>),
-    Reference(Box<Typee>),
+    Pointer(Box<RTypee>),
+    Reference(Box<RTypee>),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ExternStatement {
-    Variable { name: String, typee: Typee },
-    Function { name: String, args: Vec<Typee>, is_vararg: bool, returns: Option<Typee> },
+    Variable { name: RString, typee: RTypee },
+    Function { name: RString, args: Vec<RTypee>, is_vararg: bool, returns: Option<RTypee> },
 }
 
 impl Typee {
     pub fn new_string(string: String) -> Self {
         Self::String(string)
     }
-    pub fn new_pointer(typee: Typee) -> Self {
+    pub fn new_pointer(typee: RTypee) -> Self {
         Self::Pointer(Box::new(typee))
     }
-    pub fn new_reference(typee: Typee) -> Self {
+    pub fn new_reference(typee: RTypee) -> Self {
         Self::Reference(Box::new(typee))
     }
 }
 
+
 impl Statement {
-    pub const fn new_variable(name: String, typee: Option<Typee>, value: Expression) -> Self {
+    pub const fn new_extern(statement: ExternStatement) -> Self {
+        Self::ExternStatement { statement }
+    }
+    pub const fn new_variable(name: RString, typee: Option<RTypee>, value: RExpression) -> Self {
         Self::DeclarationStatement { name, statement: DeclarationStatement::VariableDeclaration { typee, value } }
     }
-    pub const fn new_set(what: Expression, value: Expression, op: Option<TwoSidedOperation>) -> Self {
+    pub const fn new_set(what: RExpression, value: RExpression, op: Option<RTwoSidedOperation>) -> Self {
         Self::SetVariable { what, value, op }
     }
-    pub const fn new_if(condition: Expression, body: Vec<Self>) -> Self {
+    pub const fn new_if(condition: RExpression, body: Vec<RStatement>) -> Self {
         Self::If { condition, body }
     }
-    pub const fn new_while(condition: Expression, body: Vec<Self>) -> Self {
+    pub const fn new_while(condition: RExpression, body: Vec<RStatement>) -> Self {
         Self::While { condition, body }
     }
-    pub const fn new_function(name: String, args: Vec<(String, Typee)>, returns: Option<Typee>, body: Vec<Self>) -> Self {
+    pub const fn new_function(name: RString, args: Vec<(RString, RTypee)>, returns: Option<RTypee>, body: Vec<RStatement>) -> Self {
         Self::DeclarationStatement { name, statement: DeclarationStatement::Function { args, returns, body } }
     }
-    pub const fn new_import(from: Vec<String>, what: Vec<(String, Option<String>)>) -> Self {
+    pub const fn new_import(from: Vec<RString>, what: Vec<(RString, Option<RString>)>) -> Self {
         Self::ComptimeStatement(ComptimeStatement::Import { from, what })
     }
-    pub const fn new_struct(name: String, fields: Vec<(String, Typee)>) -> Self {
+    pub const fn new_struct(name: RString, fields: Vec<(RString, RTypee)>) -> Self {
         Self::DeclarationStatement { name, statement: DeclarationStatement::Struct { fields } }
     }
-    pub const fn new_brackets(body: Vec<Statement>) -> Self {
+    pub const fn new_brackets(body: Vec<RStatement>) -> Self {
         Self::Brackets(body)
     }
     pub fn new_for(
-        before: Statement,
-        cond: Expression,
-        mut body: Vec<Statement>,
-        inc: Statement,
+        before: RStatement,
+        cond: RExpression,
+        mut body: Vec<RStatement>,
+        inc: RStatement,
     ) -> Self {
         body.push(inc);
         Statement::new_brackets(vec![
@@ -114,28 +143,28 @@ impl Statement {
             Statement::new_while(
                 cond,
                 body,
-            )
+            ).add_no_range()
         ])
     }
 }
 
 impl Expression {
-    pub fn new_operation(expression1: Self, expression2: Self, op: TwoSidedOperation) -> Self {
+    pub fn new_operation(expression1: RExpression, expression2: RExpression, op: RTwoSidedOperation) -> Self {
         Self::Operation(Box::new(expression1), Box::new(expression2), op)
     }
-    pub fn new_unary_operation(expression: Self, op: OneSidedOperation) -> Self {
+    pub fn new_unary_operation(expression: RExpression, op: ROneSidedOperation) -> Self {
         Self::UnaryOperation(Box::new(expression), op)
     }
-    pub fn new_as(expression: Expression, typee: Typee) -> Self {
+    pub fn new_as(expression: RExpression, typee: RTypee) -> Self {
         Self::As(Box::new(expression), typee)
     }
-    pub fn new_round_bracket(expression: Self) -> Self {
+    pub fn new_round_bracket(expression: RExpression) -> Self {
         Self::RoundBracket(Box::new(expression))
     }
-    pub const fn new_function_call(object: String, args: Vec<Self>) -> Self {
+    pub const fn new_function_call(object: RString, args: Vec<RExpression>) -> Self {
         Self::FunctionCall { object, args }
     }
-    pub fn new_dot(left: Self, field: String) -> Self {
+    pub fn new_dot(left: RExpression, field: RString) -> Self {
         Self::StructField { left: Box::new(left), field }
     }
 }
@@ -208,7 +237,7 @@ impl fmt::Display for Statement {
             Self::ExternStatement { statement } => write!(f, "{statement}"),
             Self::ComptimeStatement(statement) => match statement {
                 ComptimeStatement::Import { from, what } => {
-                    let from = from.join("::");
+                    let from = from.iter().map(|x| x.value.clone()).collect::<Vec<_>>().join("::");
                     let what = what.iter().map(|(name, as_name)| {
                         format!("{name}{}", as_name.as_ref().map_or("".to_string(), |s| format!(" as {s}")))
                     }).collect::<Vec<_>>();

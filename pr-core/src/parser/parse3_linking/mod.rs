@@ -10,7 +10,7 @@ mod parse_types;
 
 use std::collections::HashMap;
 use crate::error::CResult;
-use crate::parser::parse2_syntactic::statement::Statement;
+use crate::parser::parse2_syntactic::statement::RStatement;
 use linked_statement::{GlobalLinkedStatement};
 use object::Object;
 use crate::parser::parse3_linking::object::ObjectFactory;
@@ -20,11 +20,11 @@ struct TypeContext {
     factory: ObjectFactory,
     available_names: HashMap<String, Object>,
 
-    // import_statements: HashMap<Object, Statement>,
-    type_statements: HashMap<Object, Statement>,
-    extern_statements: HashMap<Object, Statement>,
-    function_statement: HashMap<Object, Statement>,
-    variable_statement: HashMap<Object, Statement>,
+    // import_statements: HashMap<Object, RStatement>,
+    type_statements: HashMap<Object, RStatement>,
+    extern_statements: HashMap<Object, RStatement>,
+    function_statement: HashMap<Object, RStatement>,
+    variable_statement: HashMap<Object, RStatement>,
 
     result: LinkedProgram,
 }
@@ -40,7 +40,7 @@ pub struct LinkedProgram {
     pub variable_statement: HashMap<Object, GlobalLinkedStatement>,
 }
 
-pub fn link_all(statements: Vec<Statement>) -> CResult<LinkedProgram> {
+pub fn link_all(statements: Vec<RStatement>) -> CResult<LinkedProgram> {
     let mut context = TypeContext::default();
 
     parse_available_names::parse_available_names(&mut context, statements)?;

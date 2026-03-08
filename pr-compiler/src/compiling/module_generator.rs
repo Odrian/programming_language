@@ -12,6 +12,7 @@ use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, 
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
 use pr_core::parser::parse3_linking::LinkedProgram;
+use pr_core::RString;
 
 pub fn parse_module<'ctx>(
     context: &'ctx Context, target_data: &'ctx TargetData,
@@ -51,7 +52,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
 }
 
 impl<'ctx> CodeModuleGen<'ctx> {
-    fn get_object_name(&self, object: Object) -> &String {
+    fn get_object_name(&self, object: Object) -> &RString {
         self.linked_program.factory.get_name(object)
     }
     fn get_object_type(&self, object: Object) -> BasicTypeEnum<'ctx> {
@@ -149,7 +150,7 @@ mod module_parsing {
             let global_type = self.parse_type(&value.object_type);
 
             let name = self.get_object_name(object);
-            let global_value = self.module.add_global(global_type, None, name);
+            let global_value = self.module.add_global(global_type, None, &name.value);
 
             let global_const_value = self.get_const_value(object, value)?;
             global_value.set_initializer(&global_const_value);
@@ -160,7 +161,7 @@ mod module_parsing {
         fn get_const_value(&self, object: Object, value: TypedExpression) -> Result<BasicValueEnum<'ctx>, LLVMError> {
             let TypedExpression { object_type: _, expr } = value;
             let LinkedExpression::Literal(LinkedLiteralExpression::Undefined(obj_type)) = expr else {
-                return Err(LLVMError::GlobalWithValue { name: self.get_object_name(object).clone()});
+                return Err(LLVMError::GlobalWithValue { name: self.get_object_name(object).value.clone()});
             };
             Ok(get_undef(self.parse_type(&obj_type)))
         }
@@ -171,7 +172,7 @@ mod module_parsing {
             let fn_type = self.function_from(returns, &arguments_types, false);
 
             let name = self.get_object_name(object);
-            let function = self.module.add_function(name.as_str(), fn_type, None);
+            let function = self.module.add_function(name.value.as_str(), fn_type, None);
             self.context_window.add(object, function.into());
         }
         fn parse_function(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), LLVMError> {
@@ -193,7 +194,7 @@ mod module_parsing {
             self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
-                return Err(LLVMError::LLVMVerifyFunctionError { name: self.linked_program.factory.get_name(object).clone() });
+                return Err(LLVMError::LLVMVerifyFunctionError { name: self.linked_program.factory.get_name(object).value.clone() });
             }
             self.current_function = None;
 
@@ -208,7 +209,7 @@ mod module_parsing {
                     let basic_type = self.parse_type(&typee);
 
                     let name = self.get_object_name(object);
-                    let global = self.module.add_global(basic_type, None, name);
+                    let global = self.module.add_global(basic_type, None, &name.value);
                     global.set_externally_initialized(true);
 
                     self.context_window.add(object, global.as_any_value_enum());
@@ -219,7 +220,7 @@ mod module_parsing {
                     let fn_type = self.function_from(returns.as_ref(), &arguments, is_vararg);
 
                     let name = self.get_object_name(object);
-                    let function = self.module.add_function(name, fn_type, None);
+                    let function = self.module.add_function(&name.value, fn_type, None);
 
                     self.context_window.add(object, function.into());
                 }
@@ -332,7 +333,7 @@ mod declaration_parsing {
                         let pointer = self.parse_lvalue(what)?;
                         let rvalue = self.parse_expression(value.expr)?.unwrap();
                         let value0 = self.builder.build_load(what_ty, pointer, "load for op-set")?;
-                        let rvalue = self.parse_operation(value0, rvalue, obj_ty, op)?;
+                        let rvalue = self.parse_operation(value0, rvalue, obj_ty, op.value)?;
                         self.builder.build_store(pointer, rvalue)?;
                     } else {
                         let pointer = self.parse_lvalue(what)?;
@@ -343,7 +344,7 @@ mod declaration_parsing {
                 LinkedStatement::VariableDeclaration { object, value } => {
                     let value = self.parse_expression(value.expr)?.unwrap();
                     let var_type = self.get_object_type(object);
-                    let pointer = self.builder.build_alloca(var_type, self.get_object_name(object).as_str())?;
+                    let pointer = self.builder.build_alloca(var_type, &self.get_object_name(object).value)?;
                     self.builder.build_store(pointer, value)?;
                     self.context_window.add(object, pointer.into());
                 }

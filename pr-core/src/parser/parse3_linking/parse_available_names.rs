@@ -1,20 +1,20 @@
-use crate::parser::parse2_syntactic::statement::{ComptimeStatement, DeclarationStatement, ExternStatement, Statement};
+use crate::parser::parse2_syntactic::statement::{ComptimeStatement, DeclarationStatement, ExternStatement, RStatement, Statement};
 use crate::parser::parse3_linking::error::{collect_errors, LinkingError};
 use crate::parser::parse3_linking::object::ObjType;
 use crate::parser::parse3_linking::TypeContext;
 
-pub fn parse_available_names(context: &mut TypeContext, statements: Vec<Statement>) -> Result<(), ()> {
+pub fn parse_available_names(context: &mut TypeContext, statements: Vec<RStatement>) -> Result<(), ()> {
     let errors = statements.into_iter().map(|stat|
         add_name(context, stat)
     ).collect::<Vec<_>>();
     collect_errors(&context.factory, errors)
 }
 
-fn add_name(context: &mut TypeContext, stat: Statement) -> Result<(), LinkingError> {
-    match &stat {
+fn add_name(context: &mut TypeContext, stat: RStatement) -> Result<(), LinkingError> {
+    match &stat.value {
         Statement::DeclarationStatement { name, statement } => {
             let object = context.factory.create_object(name.clone(), ObjType::Unknown);
-            let object_option = context.available_names.insert(name.clone(), object);
+            let object_option = context.available_names.insert(name.value.clone(), object);
             if object_option.is_some() {
                 return Err(LinkingError::Overloading { name: name.clone() });
             }
@@ -36,7 +36,7 @@ fn add_name(context: &mut TypeContext, stat: Statement) -> Result<(), LinkingErr
                 ExternStatement::Function { name, .. } => name,
             };
             let object = context.factory.create_object(name.clone(), ObjType::Unknown);
-            let object_option = context.available_names.insert(name.clone(), object);
+            let object_option = context.available_names.insert(name.value.clone(), object);
             if object_option.is_some() {
                 return Err(LinkingError::Overloading { name: name.clone() });
             }

@@ -232,7 +232,7 @@ fn test_function_with_while() {
 
     let LinkedStatement::Return(option_return) = body_iter.next().unwrap() else { panic!() };
     let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().expr else { panic!() };
-    assert_eq!(linked_program.factory.get_name(c_var), "c");
+    assert_eq!(linked_program.factory.get_name(c_var).value, "c");
 
     assert_eq!(while_body.len(), 1);
     let LinkedStatement::SetVariable { what, value: value2, op: None } = while_body.pop().unwrap() else { panic!() };

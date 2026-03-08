@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
+use crate::parser::operations::{OneSidedOperation, RTwoSidedOperation, TwoSidedOperation};
 use super::object::{Object, ObjType, FloatObjType, IntObjType, ObjectFactory};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -21,7 +21,7 @@ pub enum GlobalLinkedStatement {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedStatement {
     VariableDeclaration { object: Object, value: TypedExpression },
-    SetVariable { what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation> },
+    SetVariable { what: TypedExpression, value: TypedExpression, op: Option<RTwoSidedOperation> },
 
     Expression(TypedExpression),
     If { condition: TypedExpression, body: Vec<Self> },
@@ -84,7 +84,7 @@ impl LinkedStatement {
     pub const fn new_variable(object: Object, value: TypedExpression) -> Self {
         Self::VariableDeclaration { object, value }
     }
-    pub const fn new_set(what: TypedExpression, value: TypedExpression, op: Option<TwoSidedOperation>) -> Self {
+    pub const fn new_set(what: TypedExpression, value: TypedExpression, op: Option<RTwoSidedOperation>) -> Self {
         Self::SetVariable { what, value, op }
     }
     pub const fn new_if(condition: TypedExpression, body: Vec<Self>) -> Self {

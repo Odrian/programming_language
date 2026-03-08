@@ -2,10 +2,12 @@ use pr_core::error::CResult;
 use pr_core::parser::*;
 use pr_core::parser::operations::*;
 use pr_core::parser::parse2_syntactic::statement::*;
+use pr_core::RString;
 
 fn parse(text: &str) -> CResult<Vec<Statement>> {
     let tokens = parse1_tokenize::tokenize(text)?;
     let statements = parse2_syntactic::parse_statements(tokens)?;
+    let statements = statements.into_iter().map(|x| x.value).collect();
     Ok(statements)
 }
 fn assert_has_error(str: &str) {
@@ -18,7 +20,7 @@ fn assert_result(str: &str, result: CResult<Vec<Statement>>) {
     assert_eq!(parse(str), result);
 }
 
-fn add_type(typee: Typee, args: Vec<String>) -> Vec<(String, Typee)> {
+fn add_type(typee: RTypee, args: Vec<RString>) -> Vec<(RString, RTypee)> {
     args.into_iter().map(|a| (a, typee.clone())).collect()
 }
 
@@ -62,19 +64,23 @@ fn test_set_with_brackets() {
     assert_has_error("(4 + 4) = 4");
     assert_has_error("(4 + 4) := 4");
 
-    let variable = Expression::Variable("cat".to_owned());
+    let variable = Expression::Variable(RString::new_no_range("cat".to_owned()));
     assert_result(
         "cat := cat + (cat + cat)",
         Ok(vec![Statement::new_variable(
-            "cat".to_owned(),
+            RString::new_no_range("cat".to_owned()),
             None,
             Expression::new_operation(
-                variable.clone(),
+                variable.clone().add_no_range(),
                 Expression::new_round_bracket(
-                    Expression::new_operation(variable.clone(), variable.clone(), NumberOperation::Add.into())
-                ),
-                NumberOperation::Add.into()
-            )
+                    Expression::new_operation(
+                        variable.clone().add_no_range(),
+                        variable.clone().add_no_range(),
+                        TwoSidedOperation::from(NumberOperation::Add).add_no_range()
+                    ).add_no_range()
+                ).add_no_range(),
+                TwoSidedOperation::from(NumberOperation::Add).add_no_range()
+            ).add_no_range()
         )])
     );
 }
@@ -113,7 +119,8 @@ fn test_equal_set() {
 
 #[test]
 fn test_if_while() {
-    let variable = Expression::Variable("cat".to_owned());
+    let string_cat = RString::new_no_range("cat".to_owned());
+    let variable = Expression::Variable(string_cat.clone()).add_no_range();
 
     assert_result(
         "if cat { }",
@@ -122,14 +129,14 @@ fn test_if_while() {
     assert_result(
         "if cat { cat := cat }",
         Ok(vec![Statement::new_if(variable.clone(), vec![
-            Statement::new_variable("cat".to_owned(), None, variable.clone())
+            Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range()
         ], )])
     );
     assert_result(
         "if cat { cat := cat; cat := cat }",
         Ok(vec![Statement::new_if(variable.clone(), vec![
-            Statement::new_variable("cat".to_owned(), None, variable.clone()),
-            Statement::new_variable("cat".to_owned(), None, variable.clone())
+            Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range(),
+            Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range(),
         ])])
     );
     assert_result(
@@ -141,7 +148,7 @@ fn test_if_while() {
     assert_result(
         "while cat { cat := cat }",
         Ok(vec![Statement::new_while(variable.clone(), vec![
-            Statement::new_variable("cat".to_owned(), None, variable.clone())
+            Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range()
         ])])
     );
 
@@ -189,15 +196,15 @@ fn test_function() {
     assert_has_error("foo :: ()");
     assert_has_error("foo :: () -> i32");
 
-    let name = "foo".to_owned();
-    let arg1 = "arg1".to_owned();
-    let arg2 = "arg2".to_owned();
-    let v_cat = "cat".to_owned();
-    let v_dog = "dog".to_owned();
-    let v_kitten = "kitten".to_owned();
-    let v_owl = "owl".to_owned();
+    let name = RString::new_no_range("foo".to_owned());
+    let arg1 = RString::new_no_range("arg1".to_owned());
+    let arg2 = RString::new_no_range("arg2".to_owned());
+    let v_cat = RString::new_no_range("cat".to_owned());
+    let v_dog = RString::new_no_range("dog".to_owned());
+    let v_kitten = RString::new_no_range("kitten".to_owned());
+    let v_owl = RString::new_no_range("owl".to_owned());
 
-    let number_typee = Typee::String("i32".to_owned());
+    let number_typee = Typee::String("i32".to_owned()).add_no_range();
 
     assert_result(
         "foo :: () { }",
@@ -211,7 +218,7 @@ fn test_function() {
         "foo :: (arg1: i32, arg2: i32) { }",
         Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![])])
     );
-    let set_expr = Statement::new_variable(v_cat, None, Expression::Variable(v_dog.clone()));
+    let set_expr = Statement::new_variable(v_cat, None, Expression::Variable(v_dog.clone()).add_no_range()).add_no_range();
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { cat := dog }",
         Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
@@ -227,8 +234,8 @@ fn test_function() {
             ])])
     );
     let another_set_expr = Statement::new_variable(v_owl.clone(), None, Expression::new_operation(
-        Expression::Variable(v_dog.clone()), Expression::Variable(v_kitten), NumberOperation::Add.into()
-    ));
+        Expression::Variable(v_dog.clone()).add_no_range(), Expression::Variable(v_kitten).add_no_range(), TwoSidedOperation::from(NumberOperation::Add).add_no_range()
+    ).add_no_range()).add_no_range();
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { owl := dog + kitten; cat := dog; owl := dog + kitten }",
         Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
@@ -241,26 +248,26 @@ fn test_function() {
 
 #[test]
 fn test_function_with_while() {
-    let name = "foo".to_owned();
-    let arg1 = "arg1".to_owned();
-    let arg2 = "arg2".to_owned();
+    let name = RString::new_no_range("foo".to_owned());
+    let arg1 = RString::new_no_range("arg1".to_owned());
+    let arg2 = RString::new_no_range("arg2".to_owned());
     let v_1 = "1".to_owned();
 
-    let number_typee = Typee::String("i32".to_owned());
+    let number_typee = Typee::String("i32".to_owned()).add_no_range();
 
     let set_statement = Statement::new_variable(
         arg2.clone(),
         None,
         Expression::new_operation(
-            Expression::Variable(arg2.clone()),
-            Expression::Literal(LiteralExpression::NumberLiteral(v_1.clone())),
-            NumberOperation::Add.into()
-        ),
-    );
+            Expression::Variable(arg2.clone()).add_no_range(),
+            Expression::Literal(LiteralExpression::NumberLiteral(v_1.clone())).add_no_range(),
+            TwoSidedOperation::from(NumberOperation::Add).add_no_range()
+        ).add_no_range(),
+    ).add_no_range();
     let while_statement = Statement::new_while(
-        Expression::Variable(arg1.clone()),
+        Expression::Variable(arg1.clone()).add_no_range(),
         vec![set_statement.clone()]
-    );
+    ).add_no_range();
     let create_function_statement = |body| {
         Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, body)
     };
@@ -311,8 +318,8 @@ fn test_function_call() {
 
     assert_has_error("foo(cat := cat)");
 
-    let v_foo = "foo".to_owned();
-    let v_cat = "cat".to_owned();
+    let v_foo = RString::new_no_range("foo".to_owned());
+    let v_cat = RString::new_no_range("cat".to_owned());
     let v_5 = "5".to_owned();
     assert_result(
         "foo()",
@@ -321,8 +328,8 @@ fn test_function_call() {
     assert_result(
         "foo(cat, 5)",
         Ok(vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![
-            Expression::Variable(v_cat),
-            Expression::Literal(LiteralExpression::NumberLiteral(v_5)),
+            Expression::Variable(v_cat).add_no_range(),
+            Expression::Literal(LiteralExpression::NumberLiteral(v_5)).add_no_range(),
         ]))])
     );
 }

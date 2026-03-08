@@ -1,3 +1,5 @@
+use crate::Ranged;
+use lsp_types::Range;
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -7,6 +9,19 @@ pub enum OneSidedOperation {
     GetReference,
     Dereference,
 }
+
+pub type ROneSidedOperation = Ranged<OneSidedOperation>;
+pub type RTwoSidedOperation = Ranged<TwoSidedOperation>;
+
+impl OneSidedOperation {
+    pub fn add_range(self, range: Range) -> ROneSidedOperation { ROneSidedOperation { value: self, range } }
+    pub fn add_no_range(self) -> ROneSidedOperation { self.add_range(Range::default()) }
+}
+impl TwoSidedOperation {
+    pub fn add_range(self, range: Range) -> RTwoSidedOperation { RTwoSidedOperation { value: self, range } }
+    pub fn add_no_range(self) -> RTwoSidedOperation { self.add_range(Range::default()) }
+}
+
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TwoSidedOperation {

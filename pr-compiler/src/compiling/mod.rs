@@ -37,7 +37,7 @@ pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), L
 fn verify_main_signature(linked_program: &LinkedProgram) -> Result<(), LLVMError> {
     for (object, statement) in &linked_program.function_statement {
         if let GlobalLinkedStatement::Function { returns, args, body: _body } = statement {
-            if linked_program.factory.get_name(*object) == "main" {
+            if linked_program.factory.get_name(*object).value == "main" {
                 if returns != &ObjType::Integer(IntObjType::I32) {
                     return Err(LLVMError::IncorrectMainSignature)
                 }

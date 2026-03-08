@@ -2,29 +2,30 @@ use crate::error::{print_error, ErrKind};
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse3_linking::linked_statement::LinkedExpression;
 use crate::parser::parse3_linking::object::{ObjType, ObjectFactory};
+use crate::RString;
 
 pub enum LinkingError {
     DependencyCycle,
-    Overloading { name: String },
-    NameNotFound { name: String, context: String },
-    CallNotFunction { name: String },
+    Overloading { name: RString },
+    NameNotFound { name: RString, context: String },
+    CallNotFunction { name: RString },
 
     DotNotOnStruct { got: ObjType },
-    StructFieldNameCollision { struct_name: String, field_name: String, in_construction: bool },
-    StructFieldNameNotFound { struct_name: String, field_name: String },
+    StructFieldNameCollision { struct_name: RString, field_name: String, in_construction: bool },
+    StructFieldNameNotFound { struct_name: RString, field_name: String },
     IncorrectType { got: ObjType, expected: ObjType },
     CantDetermineType,
     IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
     IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
     IncorrectAs { what: Box<LinkedExpression>, from: ObjType, to: ObjType },
-    GlobalVariableWithoutType { name: String },
+    GlobalVariableWithoutType { name: RString },
     UnexpectedVoidUse,
 
-    FunctionMustReturn { function_name: String },
+    FunctionMustReturn { function_name: RString },
 
     LiteralParseError { what: String, error: String },
-    IncorrectArgumentCount { function_name: String, is_vararg: bool, argument_need: usize, argument_got: usize },
-    FunctionAsValue { name: String },
+    IncorrectArgumentCount { function_name: RString, is_vararg: bool, argument_need: usize, argument_got: usize },
+    FunctionAsValue { name: RString },
 }
 
 pub fn collect_errors(factory: &ObjectFactory, iter: impl IntoIterator<Item=Result<(), LinkingError>>) -> Result<(), ()> {
