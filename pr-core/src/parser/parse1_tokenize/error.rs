@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
-use lsp_types::Position;
-use crate::error::{print_error, ErrKind};
+use lsp_types::{Position, Range};
+use crate::error::Diagnostic;
 use crate::parser::BracketType;
 
 pub enum TokenizeError {
@@ -12,12 +12,15 @@ pub enum TokenizeError {
         expected_bracket: BracketType,
         actual_bracket: BracketType,
     },
-    IncorrectEscape(char)
+    IncorrectEscape(Option<char>)
 }
 
 impl TokenizeError {
-    pub fn print(self, position: Position) {
-        print_error(ErrKind::Error, &self.to_string());
+    pub fn diagnostic(self, position: Position) -> Diagnostic {
+        Diagnostic::new_error(
+            Range::new(position, position),
+            self.to_string(),
+        )
     }
 }
 
@@ -42,7 +45,11 @@ impl Display for TokenizeError {
                        actual_bracket.to_close_string())
             }
             Self::IncorrectEscape(ch) => {
-                write!(f, "unexpected {ch} after \\")
+                if let Some(ch) = ch {
+                    write!(f, "unexpected {ch} after \\")
+                } else {
+                    write!(f, "unexpected EOF after \\")
+                }
             }
         }
     }

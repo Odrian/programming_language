@@ -1,18 +1,19 @@
 use std::str::Chars;
 use lsp_types::{Position, Range};
 
-use crate::error::CResult;
+use crate::error::ErrorQueue;
 use crate::parser::{operations::*, BracketType};
 
 use super::error::TokenizeError;
 use super::token::*;
 
-pub fn parse_tokens(text: &str) -> CResult<Vec<RangedToken>> {
-    let (token, _) = parse_inside_brackets(&mut text.chars(), Position::default(), None)?;
+pub fn parse_tokens(errors: &mut ErrorQueue, text: &str) -> Vec<RangedToken> {
+    let (token, _) = parse_inside_brackets(errors, &mut text.chars(), Position::default(), None);
     let Token::Bracket(vec, _) = token.token else { unreachable!() };
-    Ok(vec)
+    vec
 }
 
+#[inline]
 fn add_one(next: Option<char>, position: &mut Position) {
     let Some(next) = next else { return; };
 
@@ -25,20 +26,22 @@ fn add_one(next: Option<char>, position: &mut Position) {
 }
 
 fn parse_inside_brackets(
+    errors: &mut ErrorQueue,
     text: &mut Chars,
     start_position: Position,
     open_bracket_type: Option<BracketType>
-) -> CResult<(RangedToken, Position)> {
+) -> (RangedToken, Position) {
     let mut result_tokens = Vec::new();
 
     let mut buffer = String::new();
     let mut start_buffer_index = start_position;
     let mut index = start_position; // map to char in start of loop
 
+    let mut text_was = text.clone();
     while let Some(char) = text.next() {
         if char == '"' || char == '\'' || char == '`' {
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(&buffer, start_buffer_index)?;
+                let mut tokens = split_text_without_brackets(errors, &buffer, start_buffer_index);
                 buffer = String::new();
                 result_tokens.append(&mut tokens);
             }
@@ -47,9 +50,11 @@ fn parse_inside_brackets(
             let start_index = index;
             loop { // here index map to previous char in start of loop
                 let Some(next_char) = text.next() else {
-                    TokenizeError::QuotesNotClosed
-                        .print(start_index);
-                    return Err(());
+                    errors.add_diag(
+                        TokenizeError::QuotesNotClosed
+                            .diagnostic(start_index)
+                    );
+                    break
                 };
                 add_one(Some(next_char), &mut index);
                 if char != '`' && next_char == '\\' {
@@ -63,12 +68,17 @@ fn parse_inside_brackets(
                         Some('\'') => inside_quotes.push('\''),
                         Some('x') => unimplemented!("8bit escapes"),
                         Some(ch) => {
-                            TokenizeError::IncorrectEscape(ch).print(index);
-                            return Err(())
+                            errors.add_diag(
+                                TokenizeError::IncorrectEscape(Some(ch))
+                                    .diagnostic(index)
+                            );
+                            inside_quotes.push(ch);
                         }
                         None => {
-                            TokenizeError::QuotesNotClosed.print(index);
-                            return Err(())
+                            errors.add_diag(
+                                TokenizeError::IncorrectEscape(None)
+                                    .diagnostic(index)
+                            );
                         }
                     }
                     continue
@@ -93,62 +103,72 @@ fn parse_inside_brackets(
         } else if let Some(bracket_type) = is_open_bracket(char) {
             // open bracket
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(&buffer, start_buffer_index)?;
+                let mut tokens = split_text_without_brackets(errors, &buffer, start_buffer_index);
                 buffer = String::new();
                 result_tokens.append(&mut tokens);
             }
 
             add_one(text.clone().next(), &mut index);
             let (new_token, new_index) =
-                parse_inside_brackets(text, index, Some(bracket_type))?;
+                parse_inside_brackets(errors, text, index, Some(bracket_type));
             result_tokens.push(new_token);
             index = new_index;
             start_buffer_index = new_index;
         } else if let Some(bracket_type) = is_close_bracket(char) {
             // close bracket
             let Some(open_bracket_type) = open_bracket_type else {
-                TokenizeError::BracketNotOpened(bracket_type)
-                    .print(index);
-                return Err(());
+                errors.add_diag(
+                    TokenizeError::BracketNotOpened(bracket_type)
+                        .diagnostic(index)
+                );
+                buffer.push(char);
+                add_one(Some('a'), &mut index);
+                todo!("skip that char");
             };
 
             if bracket_type != open_bracket_type {
-                TokenizeError::WrongBracketClosed { expected_bracket: open_bracket_type, actual_bracket: bracket_type }
-                    .print(index);
-                return Err(());
+                errors.add_diag(
+                    TokenizeError::WrongBracketClosed { expected_bracket: open_bracket_type, actual_bracket: bracket_type }
+                        .diagnostic(index)
+                );
+
+                // expect {  [  }, so unconsume close bracket and step out
+                *text = text_was;
             }
 
             if index != start_buffer_index {
-                let mut tokens = split_text_without_brackets(&buffer, start_buffer_index)?;
+                let mut tokens = split_text_without_brackets(errors, &buffer, start_buffer_index);
                 result_tokens.append(&mut tokens);
             }
 
             let result_token = Token::Bracket(result_tokens, open_bracket_type);
             let range = Range::new(start_position, index);
             add_one(text.clone().next(), &mut index);
-            return Ok((RangedToken::new(result_token, range), index));
+            return (RangedToken::new(result_token, range), index);
         } else {
             buffer.push(char);
             add_one(Some(char), &mut index);
         }
+        text_was = text.clone();
     }
     if index != start_buffer_index {
-        let mut tokens = split_text_without_brackets(&buffer, start_buffer_index)?;
+        let mut tokens = split_text_without_brackets(errors, &buffer, start_buffer_index);
         result_tokens.append(&mut tokens);
     }
 
     if let Some(open_bracket_type) = open_bracket_type {
-        TokenizeError::BracketNotClosed(open_bracket_type)
-            .print(start_position);
-        Err(())
-    } else {
-        let unused_bracket_type = BracketType::Round;
-        let unused_position = Position::default();
-
-        let result_token = Token::Bracket(result_tokens, unused_bracket_type);
-        let range = Range::new(start_position, index);
-        Ok((RangedToken::new(result_token, range), unused_position))
+        errors.add_diag(
+            TokenizeError::BracketNotClosed(open_bracket_type)
+                .diagnostic(start_position)
+        );
     }
+
+    let unused_bracket_type = BracketType::Round;
+    let unused_position = Position::default();
+
+    let result_token = Token::Bracket(result_tokens, unused_bracket_type);
+    let range = Range::new(start_position, index);
+    (RangedToken::new(result_token, range), unused_position)
 }
 
 const fn is_open_bracket(char: char) -> Option<BracketType> {
@@ -167,7 +187,11 @@ const fn is_close_bracket(char: char) -> Option<BracketType> {
     }
 }
 
-pub fn split_text_without_brackets(text: &str, offset_position: Position) -> CResult<Vec<RangedToken>> {
+pub fn split_text_without_brackets(
+    errors: &mut ErrorQueue,
+    text: &str,
+    offset_position: Position
+) -> Vec<RangedToken> {
     let mut iter = text.chars().peekable();
     let mut state = TokenizeState::new(offset_position);
 
@@ -306,14 +330,16 @@ pub fn split_text_without_brackets(text: &str, offset_position: Position) -> CRe
                 }
             }
             _ => {
-                TokenizeError::UnexpectedChar
-                    .print(state.buffer_end);
-                return Err(())
+                errors.add_diag(
+                    TokenizeError::UnexpectedChar
+                        .diagnostic(state.buffer_end)
+                );
+                state.use_char_in_string(char);
             }
         }
     }
     state.flush_buffer();
-    Ok(state.tokens)
+    state.tokens
 }
 
 /// guarantees that `buffer_start <= buffer_end <= text.len()`

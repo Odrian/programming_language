@@ -1,17 +1,43 @@
-// enum FilePath {
-//     ReadFile(String),
-//     TestFile,
-// }
-// impl Display for FilePath {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Self::ReadFile(file) => write!(f, "{file}"),
-//             Self::TestFile => write!(f, "TEST_FILE"),
-//         }
-//     }
-// }
+use lsp_types::{DiagnosticSeverity, Position, Range};
 
-use lsp_types::{Position, Range};
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Diagnostic {
+    pub range: Range,
+    pub severity: DiagnosticSeverity,
+    pub message: String,
+}
+
+impl Diagnostic {
+    fn new(range: Range, message: String, severity: DiagnosticSeverity) -> Self {
+        Self { range, severity, message }
+    }
+    pub fn new_error(range: Range, message: String) -> Self {
+        Self::new(range, message, DiagnosticSeverity::ERROR)
+    }
+    pub fn print(&self) {
+        println!("error: {}", self.message)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ErrorQueue {
+    pub vec: Vec<Diagnostic>,
+}
+
+impl Default for ErrorQueue {
+    fn default() -> Self {
+        Self { vec: Vec::new() }
+    }
+}
+
+impl ErrorQueue {
+    pub fn add_diag(&mut self, diagnostic: Diagnostic) {
+        self.vec.push(diagnostic)
+    }
+    pub fn print(&self) {
+        self.vec.iter().for_each(Diagnostic::print)
+    }
+}
 
 pub fn pos_to_str(position: Position) -> String {
     format!("{}:{}", position.line, position.character)

@@ -1,14 +1,23 @@
 use lsp_types::{Position, Range};
-use pr_core::error::CResult;
+use pr_core::error::{CResult, ErrorQueue};
 use pr_core::parser::parse1_tokenize::{token::*, tokenize};
 use pr_core::parser::*;
 use pr_core::parser::operations::*;
+
+fn easy_tokenize(text: &str) -> CResult<Vec<RangedToken>> {
+    let mut errors = ErrorQueue::default();
+    let tokens = tokenize(&mut errors, text);
+    if !errors.vec.is_empty() {
+        return Err(())
+    }
+    Ok(tokens)
+}
 
 fn map_remove_place(vec: Vec<RangedToken>) -> Vec<Token> {
     vec.into_iter().map(|x| x.token).collect()
 }
 fn parse(text: &str) -> CResult<Vec<Token>> {
-    let tokens = tokenize(text);
+    let tokens = easy_tokenize(text);
     tokens.map(map_remove_place)
 }
 fn assert_has_error(str: &str) {
@@ -170,7 +179,7 @@ fn test_correct_names() {
 #[test]
 fn test_correct_token_position() {
     assert_eq!(
-        tokenize("a b\nc"),
+        easy_tokenize("a b\nc"),
         Ok(vec![
             RangedToken::new(Token::String("a".to_string()), Range::new(Position::new(0, 0), Position::new(0, 1))),
             RangedToken::new(Token::String("b".to_string()), Range::new(Position::new(0, 2), Position::new(0, 3))),
@@ -179,7 +188,7 @@ fn test_correct_token_position() {
     );
 
     assert_eq!(
-        tokenize("\"a\nbb\""),
+        easy_tokenize("\"a\nbb\""),
         Ok(vec![
             RangedToken::new(
                 Token::DoubleQuotes("a\nbb".to_string()),

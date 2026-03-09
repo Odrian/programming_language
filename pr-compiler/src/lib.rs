@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use clap::Parser;
-use pr_core::error::CResult;
+use pr_core::error::{CResult, ErrorQueue};
 use pr_core::io_error::FileError;
 use pr_core::parser::*;
 
@@ -53,8 +53,11 @@ const ARTIFACT_DIR: &str = "artifacts";
 pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> CResult<()> {
     let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
     let text = fs::read_to_string(file_path).expect("can't read file");
+    let mut errors = ErrorQueue::default();
 
-    let tokens = parse1_tokenize::tokenize(&text)?;
+    let tokens = parse1_tokenize::tokenize(&mut errors, &text);
+
+    errors.print();
     if args.gen_tokens {
         let text = tokens.iter()
             .map(|t| format!("{:#?}", t.token))

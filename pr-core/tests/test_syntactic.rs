@@ -1,13 +1,17 @@
-use pr_core::error::CResult;
+use pr_core::error::{CResult, ErrorQueue};
 use pr_core::parser::*;
 use pr_core::parser::operations::*;
 use pr_core::parser::parse2_syntactic::statement::*;
 use pr_core::RString;
 
 fn parse(text: &str) -> CResult<Vec<Statement>> {
-    let tokens = parse1_tokenize::tokenize(text)?;
+    let mut errors = ErrorQueue::default();
+    let tokens = parse1_tokenize::tokenize(&mut errors, text);
     let statements = parse2_syntactic::parse_statements(tokens)?;
     let statements = statements.into_iter().map(|x| x.value).collect();
+    if !errors.vec.is_empty() {
+        return Err(())
+    }
     Ok(statements)
 }
 fn assert_has_error(str: &str) {

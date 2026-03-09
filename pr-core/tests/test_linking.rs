@@ -1,4 +1,4 @@
-use pr_core::error::CResult;
+use pr_core::error::{CResult, ErrorQueue};
 use pr_core::parser::operations::*;
 use pr_core::parser::parse3_linking::linked_statement::*;
 use pr_core::parser::parse3_linking::object::*;
@@ -6,9 +6,13 @@ use pr_core::parser::parse3_linking::LinkedProgram;
 use pr_core::parser::*;
 
 fn parse(text: &str) -> CResult<LinkedProgram> {
-    let tokens = parse1_tokenize::tokenize(&text)?;
+    let mut errors = ErrorQueue::default();
+    let tokens = parse1_tokenize::tokenize(&mut errors, text);
     let statements = parse2_syntactic::parse_statements(tokens)?;
     let linked_program = parse3_linking::link_all(statements)?;
+    if !errors.vec.is_empty() {
+        return Err(())
+    }
     Ok(linked_program)
 }
 fn assert_has_error_global(str: &str) {
