@@ -1,14 +1,14 @@
 use lsp_types::{Position, Range};
-use pr_core::error::{CResult, ErrorQueue};
+use pr_core::error::ErrorQueue;
 use pr_core::parser::parse1_tokenize::{token::*, tokenize};
 use pr_core::parser::*;
 use pr_core::parser::operations::*;
 
-fn easy_tokenize(text: &str) -> CResult<Vec<RangedToken>> {
+fn easy_tokenize(text: &str) -> Result<Vec<RangedToken>, ErrorQueue> {
     let mut errors = ErrorQueue::default();
     let tokens = tokenize(&mut errors, text);
-    if !errors.vec.is_empty() {
-        return Err(())
+    if errors.has_errors() {
+        return Err(errors)
     }
     Ok(tokens)
 }
@@ -16,7 +16,7 @@ fn easy_tokenize(text: &str) -> CResult<Vec<RangedToken>> {
 fn map_remove_place(vec: Vec<RangedToken>) -> Vec<Token> {
     vec.into_iter().map(|x| x.token).collect()
 }
-fn parse(text: &str) -> CResult<Vec<Token>> {
+fn parse(text: &str) -> Result<Vec<Token>, ErrorQueue> {
     let tokens = easy_tokenize(text);
     tokens.map(map_remove_place)
 }
@@ -26,17 +26,16 @@ fn assert_has_error(str: &str) {
 fn assert_no_error(str: &str) {
     assert_eq!(parse(str).err(), None);
 }
-fn assert_result(str: &str, result: CResult<Vec<Token>>) {
+fn assert_result(str: &str, result: Vec<Token>) {
     let actual = parse(str);
+    let actual = match actual {
+        Ok(actual) => actual,
+        Err(err) => panic!("{err:?}"),
+    };
     assert!(token_equality(&actual, &result), "assertion `left == right` failed\n  left = {0:?}\n right = {1:?}", &actual, &result);
 }
 
-fn token_equality(token1: &CResult<Vec<Token>>, token2: &CResult<Vec<Token>>) -> bool {
-    if token1.is_ok() != token2.is_ok() {
-        return false;
-    }
-    let Ok(token1) = token1 else { unreachable!() };
-    let Ok(token2) = token2 else { unreachable!() };
+fn token_equality(token1: &Vec<Token>, token2: &Vec<Token>) -> bool {
     if token1.len() != token2.len() {
         return false;
     }
@@ -51,7 +50,7 @@ fn token_equality(token1: &CResult<Vec<Token>>, token2: &CResult<Vec<Token>>) ->
             let Token::Bracket(vec2, t2) = token2 else {unreachable!()};
             let vec1 = map_remove_place(vec1.clone());
             let vec2 = map_remove_place(vec2.clone());
-            t1 == t2 && token_equality(&Ok(vec1), &Ok(vec2))
+            t1 == t2 && token_equality(&vec1, &vec2)
         } else {
             true
         }
@@ -68,15 +67,15 @@ fn bracket_token(bracket_type: BracketType, vec: Vec<Token>) -> Token {
 
 #[test]
 fn text_empty_string() {
-    assert_result("", Ok(vec![]));
-    assert_result(" ", Ok(vec![]));
+    assert_result("", vec![]);
+    assert_result(" ", vec![]);
 }
 
 #[test]
 fn test_token_colon() {
     assert_result(
         ":::dog::cat: :dog::::",
-        Ok(vec![
+        vec![
             Token::DoubleColon,
             Token::Colon,
             Token::String("dog".to_owned()),
@@ -87,7 +86,7 @@ fn test_token_colon() {
             Token::String("dog".to_owned()),
             Token::DoubleColon,
             Token::DoubleColon,
-        ]),
+        ],
     );
 }
 
@@ -95,14 +94,14 @@ fn test_token_colon() {
 fn test_token_colon_equal() {
     assert_result(
         ":= dog ::= :==",
-        Ok(vec![
+        vec![
             Token::EqualOperation(EqualOperation::ColonEqual),
             Token::String("dog".to_owned()),
             Token::DoubleColon,
             Token::EqualOperation(EqualOperation::Equal),
             Token::EqualOperation(EqualOperation::ColonEqual),
             Token::EqualOperation(EqualOperation::Equal),
-        ]),
+        ],
     );
 }
 
@@ -114,22 +113,22 @@ fn test_parse_brackets() {
     assert_has_error("}");
     assert_has_error("{)");
     assert_has_error("{})");
-    
+
     assert_no_error("{({(())})}");
 
-    assert_result("()", Ok(vec![Token::Bracket(vec![], BracketType::Round)]));
-    assert_result("{}", Ok(vec![Token::Bracket(vec![], BracketType::Curly)]));
+    assert_result("()", vec![Token::Bracket(vec![], BracketType::Round)]);
+    assert_result("{}", vec![Token::Bracket(vec![], BracketType::Curly)]);
     assert_result(
         ",+",
-        Ok(vec![
+        vec![
             Token::Comma,
             NumberOperation::Add.into(),
-        ]),
+        ],
     );
 
     assert_result(
         "{:=+cat=cat}",
-        Ok(vec![bracket_token(
+        vec![bracket_token(
             BracketType::Curly,
             vec![
                 Token::EqualOperation(EqualOperation::ColonEqual),
@@ -138,7 +137,7 @@ fn test_parse_brackets() {
                 Token::EqualOperation(EqualOperation::Equal),
                 Token::String("cat".to_owned()),
             ],
-        )]),
+        )],
     );
 }
 
@@ -146,7 +145,7 @@ fn test_parse_brackets() {
 fn test_tokens() {
     assert_result(
         "cat+323,cat=3d{,(,),}",
-        Ok(vec![
+        vec![
             Token::String("cat".to_owned()),
             NumberOperation::Add.into(),
             Token::NumberLiteral("323".to_owned()),
@@ -162,7 +161,7 @@ fn test_tokens() {
                     Token::Comma,
                 ],
             ),
-        ]),
+        ],
     );
 }
 

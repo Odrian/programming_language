@@ -2,17 +2,20 @@ use lsp_types::{DiagnosticSeverity, Position, Range};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Diagnostic {
-    pub range: Range,
+    pub range: Option<Range>,
     pub severity: DiagnosticSeverity,
     pub message: String,
 }
 
 impl Diagnostic {
-    fn new(range: Range, message: String, severity: DiagnosticSeverity) -> Self {
+    fn new(range: Option<Range>, message: String, severity: DiagnosticSeverity) -> Self {
         Self { range, severity, message }
     }
     pub fn new_error(range: Range, message: String) -> Self {
-        Self::new(range, message, DiagnosticSeverity::ERROR)
+        Self::new(Some(range), message, DiagnosticSeverity::ERROR)
+    }
+    pub fn new_error_unranged(message: String) -> Self {
+        Self::new(None, message, DiagnosticSeverity::ERROR)
     }
     pub fn print(&self) {
         println!("error: {}", self.message)
@@ -21,7 +24,7 @@ impl Diagnostic {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ErrorQueue {
-    pub vec: Vec<Diagnostic>,
+    vec: Vec<Diagnostic>,
 }
 
 impl Default for ErrorQueue {
@@ -31,11 +34,19 @@ impl Default for ErrorQueue {
 }
 
 impl ErrorQueue {
+    pub fn new_single_error(text: &str) -> Self {
+        let mut errors = Self::default();
+        errors.add_diag(Diagnostic::new_error_unranged(text.to_string()));
+        errors
+    }
     pub fn add_diag(&mut self, diagnostic: Diagnostic) {
         self.vec.push(diagnostic)
     }
     pub fn print(&self) {
         self.vec.iter().for_each(Diagnostic::print)
+    }
+    pub fn has_errors(&self) -> bool {
+        self.vec.iter().any(|diag| diag.severity == DiagnosticSeverity::ERROR)
     }
 }
 
@@ -47,8 +58,6 @@ pub fn range_to_str(range: Range) -> String {
     let end = pos_to_str(range.end);
     format!("{start} - {end}")
 }
-
-pub type CResult<T> = Result<T, ()>;
 
 pub fn print_error(kind: ErrKind, error_string: &str) {
     let kind = kind.to_string();

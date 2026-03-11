@@ -11,7 +11,8 @@ fn main() {
         Ok(()) => {
             println!("compiled");
         },
-        Err(()) => {
+        Err(errors) => {
+            errors.print();
             eprintln!("not compiled due to error");
         },
     }

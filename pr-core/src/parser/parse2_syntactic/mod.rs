@@ -4,11 +4,10 @@ mod parser_statements;
 
 mod error;
 
-use crate::error::CResult;
+use crate::error::ErrorQueue;
 use super::parse1_tokenize::token::RangedToken;
 use statement::RStatement;
 
-pub fn parse_statements(tokens: Vec<RangedToken>) -> CResult<Vec<RStatement>> {
-    parser_statements::parse_statements(tokens)
-        .map_err(|err| err.print())
+pub fn parse_statements(errors: &mut ErrorQueue, tokens: Vec<RangedToken>) -> Vec<RStatement> {
+    parser_statements::parse_statements(errors, tokens)
 }

@@ -1,12 +1,12 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use clap::builder::OsStr;
 use clap::Parser;
 use pr_compiler::{Args, compile_src};
-use pr_core::error::CResult;
+use pr_core::error::ErrorQueue;
 
 use tempfile::TempDir;
 
-fn compile_text(text: &str) -> CResult<(TempDir, Command)> {
+fn compile_text(text: &str) -> Result<(TempDir, Command), ErrorQueue> {
    let temp_dir = tempfile::tempdir().expect("can't create temp dir");
 
     let src_path = temp_dir.path().join("src");
@@ -29,21 +29,32 @@ fn compile_text(text: &str) -> CResult<(TempDir, Command)> {
     }
 }
 
-pub fn run_code(text: &str) -> CResult<i32> {
-    let (_temp_dir, mut command) = compile_text(text)?;
-
-    let code = command.status().unwrap().code().unwrap_or(-1);
+fn unwrap_code(exit_status: &ExitStatus) -> Result<i32, ErrorQueue> {
+    let Some(code) = exit_status.code() else {
+        return Err(ErrorQueue::new_single_error("process was terminated by a signal"))
+    };
     Ok(code)
 }
 
-pub fn run_code_stdout(text: &str) -> CResult<String> {
+pub fn run_code(text: &str) -> Result<i32, ErrorQueue> {
+    let (_temp_dir, mut command) = compile_text(text)?;
+
+    let status = command.status().unwrap();
+    let code = unwrap_code(&status)?;
+    Ok(code)
+}
+
+pub fn run_code_stdout(text: &str) -> Result<String, ErrorQueue> {
     let (_temp_dir, mut command) = compile_text(text)?;
 
     let stdio = Stdio::piped();
     command.stdout(stdio);
 
     let output = command.output().unwrap();
-    if output.status.code().unwrap() != 0 { return Err(()) }
+    let code = unwrap_code(&output.status)?;
+    if code != 0 {
+        return Err(ErrorQueue::new_single_error(&format!("exit code {code}")))
+    }
 
     let out_text = String::from_utf8_lossy(&output.stdout);
     Ok(out_text.to_string())
@@ -54,7 +65,7 @@ pub fn get_exit_code(text: &str) -> i32 {
 
     match result {
         Ok(value) => value,
-        Err(()) => panic!("not compiled")
+        Err(err) => panic!("{err:?}")
     }
 }
 
@@ -80,7 +91,7 @@ pub fn get_exit_code_main_return(text: &str) -> i32 {
     get_exit_code_main(&format!("return {text}"))
 }
 
-pub fn test_global(global: &str) -> CResult<()> {
+pub fn test_global(global: &str) -> Result<(), ErrorQueue> {
     let program = format!("\
 main :: () -> i32 {{
     return 0;

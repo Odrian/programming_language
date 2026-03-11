@@ -1,26 +1,16 @@
 use std::fmt::{Display, Formatter};
 use std::ops::BitOr;
 use lsp_types::Range;
-use crate::error::{range_to_str, print_error, ErrKind};
+use crate::error::Diagnostic;
 
-pub enum SyntacticError {
-    Syntactic(Range, String),
-    LiteralParseError { what: String, error: String },
-    LocalGlobalStatement { name: String },
-    Expected(ExpectedError),
-    Unexpected(String),
-}
+pub struct SyntacticError {}
 
 impl SyntacticError {
-    pub fn print(self) {
-        print_error(ErrKind::Error, &self.to_string());
+    pub fn from_text(text: &str, range: Range) -> Diagnostic {
+        Diagnostic::new_error(range, text.to_string())
     }
-    
-    pub fn new_local_global(str: &str) -> Self {
-        Self::LocalGlobalStatement { name: str.to_string() }
-    }
-    pub fn new_unexpected(str: &str) -> Self {
-        Self::Unexpected(str.to_string())
+    pub fn new_local_global(name: &str, range: Range) -> Diagnostic {
+        Diagnostic::new_error(range, format!("local {name} not supported"))
     }
 }
 
@@ -47,13 +37,25 @@ impl ExpectedError {
     fn from(expected_enum: ExpectedEnum) -> Self {
         Self { variants: vec![expected_enum] }
     }
-    pub fn err(self) -> SyntacticError {
-        SyntacticError::Expected(self)
+    pub fn diagnostic(self, range: Range) -> Diagnostic {
+        Diagnostic::new_error(range, self.to_string())
+    }
+    pub fn diagnostic_after(self, range: Range) -> Diagnostic {
+        Diagnostic::new_error(range, self.to_string() + " after that")
+    }
+    fn to_string(self) -> String {
+        let variants = self.variants.iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>().join(" or ");
+        format!("expected {variants}")
     }
 }
 impl ExpectedEnum {
-    pub fn err(self) -> SyntacticError {
-        SyntacticError::Expected(ExpectedError::from(self))
+    pub fn diagnostic(self, range: Range) -> Diagnostic {
+        ExpectedError::from(self).diagnostic(range)
+    }
+    pub fn diagnostic_after(self, range: Range) -> Diagnostic {
+        ExpectedError::from(self).diagnostic_after(range)
     }
     pub fn new_string(str: &str) -> Self {
         Self::String(str.to_string())
@@ -92,35 +94,6 @@ impl Display for ExpectedEnum {
             Self::RoundBracket => write!(f, "("),
             Self::Equal => write!(f, "="),
             Self::As => write!(f, "'as'"),
-        }
-    }
-}
-
-impl Display for SyntacticError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Syntactic(place_info, description) => {
-                let place_info = range_to_str(*place_info);
-                write!(f, "{description} at {place_info}")
-            }
-
-            Self::LiteralParseError { what, error } => {
-                write!(f, "{error} in literal {what}")
-            }
-
-            Self::LocalGlobalStatement { name } => {
-                write!(f, "local {name} not supported")
-            }
-
-            Self::Expected(expected) => {
-                let variants = expected.variants.iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>().join(" or ");
-                write!(f, "expected {variants}")
-            },
-            Self::Unexpected(str) => {
-                write!(f, "unexpected {str}")
-            },
         }
     }
 }

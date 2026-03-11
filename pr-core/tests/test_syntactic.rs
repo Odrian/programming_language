@@ -1,16 +1,16 @@
-use pr_core::error::{CResult, ErrorQueue};
+use pr_core::error::ErrorQueue;
 use pr_core::parser::*;
 use pr_core::parser::operations::*;
 use pr_core::parser::parse2_syntactic::statement::*;
 use pr_core::RString;
 
-fn parse(text: &str) -> CResult<Vec<Statement>> {
+fn parse(text: &str) -> Result<Vec<Statement>, ErrorQueue> {
     let mut errors = ErrorQueue::default();
     let tokens = parse1_tokenize::tokenize(&mut errors, text);
-    let statements = parse2_syntactic::parse_statements(tokens)?;
+    let statements = parse2_syntactic::parse_statements(&mut errors, tokens);
     let statements = statements.into_iter().map(|x| x.value).collect();
-    if !errors.vec.is_empty() {
-        return Err(())
+    if errors.has_errors() {
+        return Err(errors)
     }
     Ok(statements)
 }
@@ -20,8 +20,8 @@ fn assert_has_error(str: &str) {
 fn assert_no_error(str: &str) {
     assert_eq!(parse(str).err(), None);
 }
-fn assert_result(str: &str, result: CResult<Vec<Statement>>) {
-    assert_eq!(parse(str), result);
+fn assert_result(str: &str, result: Vec<Statement>) {
+    assert_eq!(parse(str), Ok(result));
 }
 
 fn add_type(typee: RTypee, args: Vec<RString>) -> Vec<(RString, RTypee)> {
@@ -71,7 +71,7 @@ fn test_set_with_brackets() {
     let variable = Expression::Variable(RString::new_no_range("cat".to_owned()));
     assert_result(
         "cat := cat + (cat + cat)",
-        Ok(vec![Statement::new_variable(
+        vec![Statement::new_variable(
             RString::new_no_range("cat".to_owned()),
             None,
             Expression::new_operation(
@@ -85,7 +85,7 @@ fn test_set_with_brackets() {
                 ).add_no_range(),
                 TwoSidedOperation::from(NumberOperation::Add).add_no_range()
             ).add_no_range()
-        )])
+        )]
     );
 }
 
@@ -128,32 +128,32 @@ fn test_if_while() {
 
     assert_result(
         "if cat { }",
-        Ok(vec![Statement::new_if(variable.clone(), vec![], )])
+        vec![Statement::new_if(variable.clone(), vec![], )]
     );
     assert_result(
         "if cat { cat := cat }",
-        Ok(vec![Statement::new_if(variable.clone(), vec![
+        vec![Statement::new_if(variable.clone(), vec![
             Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range()
-        ], )])
+        ], )]
     );
     assert_result(
         "if cat { cat := cat; cat := cat }",
-        Ok(vec![Statement::new_if(variable.clone(), vec![
+        vec![Statement::new_if(variable.clone(), vec![
             Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range(),
             Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range(),
-        ])])
+        ])]
     );
     assert_result(
         "while cat { }",
-        Ok(vec![
+        vec![
             Statement::new_while(variable.clone(), vec![])
-        ])
+        ]
     );
     assert_result(
         "while cat { cat := cat }",
-        Ok(vec![Statement::new_while(variable.clone(), vec![
+        vec![Statement::new_while(variable.clone(), vec![
             Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range()
-        ])])
+        ])]
     );
 
     assert_has_error("if cat = cat { cat := cat }");
@@ -212,41 +212,41 @@ fn test_function() {
 
     assert_result(
         "foo :: () { }",
-        Ok(vec![Statement::new_function(name.clone(), vec![], None, vec![])])
+        vec![Statement::new_function(name.clone(), vec![], None, vec![])]
     );
     assert_result(
         "foo :: (arg1: i32) { }",
-        Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone()]), None, vec![])])
+        vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone()]), None, vec![])]
     );
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { }",
-        Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![])])
+        vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![])]
     );
     let set_expr = Statement::new_variable(v_cat, None, Expression::Variable(v_dog.clone()).add_no_range()).add_no_range();
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { cat := dog }",
-        Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
+        vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
             set_expr.clone(),
-        ])])
+        ])]
     );
 
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { cat := dog; cat := dog }",
-            Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
+            vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
                 set_expr.clone(),
                 set_expr.clone(),
-            ])])
+            ])]
     );
     let another_set_expr = Statement::new_variable(v_owl.clone(), None, Expression::new_operation(
         Expression::Variable(v_dog.clone()).add_no_range(), Expression::Variable(v_kitten).add_no_range(), TwoSidedOperation::from(NumberOperation::Add).add_no_range()
     ).add_no_range()).add_no_range();
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { owl := dog + kitten; cat := dog; owl := dog + kitten }",
-        Ok(vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
+        vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
             another_set_expr.clone(),
             set_expr.clone(),
             another_set_expr.clone(),
-        ])])
+        ])]
     );
 }
 
@@ -277,30 +277,30 @@ fn test_function_with_while() {
     };
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { while arg1 { arg2 := arg2 + 1 } }",
-        Ok(vec![create_function_statement(vec![
+        vec![create_function_statement(vec![
             while_statement.clone(),
-        ])])
+        ])]
     );
     assert_result(
         "foo::(arg1:i32,arg2:i32){while arg1{arg2:=arg2+1}}",
-        Ok(vec![create_function_statement(vec![
+        vec![create_function_statement(vec![
             while_statement.clone(),
-        ])])
+        ])]
     );
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1; while arg1 { arg2 := arg2 + 1 } }",
-        Ok(vec![create_function_statement(vec![
+        vec![create_function_statement(vec![
             set_statement.clone(),
             while_statement.clone(),
-        ])])
+        ])]
     );
     assert_result(
         "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1; while arg1 { arg2 := arg2 + 1 } arg2 := arg2 + 1 }",
-        Ok(vec![create_function_statement(vec![
+        vec![create_function_statement(vec![
             set_statement.clone(),
             while_statement.clone(),
             set_statement.clone(),
-        ])])
+        ])]
     );
 }
 
@@ -327,14 +327,14 @@ fn test_function_call() {
     let v_5 = "5".to_owned();
     assert_result(
         "foo()",
-        Ok(vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![]))])
+        vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![]))]
     );
     assert_result(
         "foo(cat, 5)",
-        Ok(vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![
+        vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![
             Expression::Variable(v_cat).add_no_range(),
             Expression::Literal(LiteralExpression::NumberLiteral(v_5)).add_no_range(),
-        ]))])
+        ]))]
     );
 }
 

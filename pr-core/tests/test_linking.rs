@@ -1,19 +1,20 @@
-use pr_core::error::{CResult, ErrorQueue};
+use pr_core::error::ErrorQueue;
 use pr_core::parser::operations::*;
 use pr_core::parser::parse3_linking::linked_statement::*;
 use pr_core::parser::parse3_linking::object::*;
 use pr_core::parser::parse3_linking::LinkedProgram;
 use pr_core::parser::*;
 
-fn parse(text: &str) -> CResult<LinkedProgram> {
+fn parse(text: &str) -> Result<LinkedProgram, ErrorQueue> {
     let mut errors = ErrorQueue::default();
     let tokens = parse1_tokenize::tokenize(&mut errors, text);
-    let statements = parse2_syntactic::parse_statements(tokens)?;
-    let linked_program = parse3_linking::link_all(statements)?;
-    if !errors.vec.is_empty() {
-        return Err(())
+    let statements = parse2_syntactic::parse_statements(&mut errors, tokens);
+    if errors.has_errors() {
+        return Err(errors)
     }
-    Ok(linked_program)
+    let linked_program = parse3_linking::link_all(statements)
+        .map_err(|_| ErrorQueue::default());
+    linked_program
 }
 fn assert_has_error_global(str: &str) {
     assert_ne!(parse(str).err(), None);
@@ -239,7 +240,7 @@ fn test_function_with_while() {
     assert_eq!(linked_program.factory.get_name(c_var).value, "c");
 
     assert_eq!(while_body.len(), 1);
-    let LinkedStatement::SetVariable { what, value: value2, op: None } = while_body.pop().unwrap() else { panic!() };
+    let LinkedStatement::SetVariable { what, value: value2, op: Option::None } = while_body.pop().unwrap() else { panic!() };
     let LinkedExpression::Variable(var2) = what.expr else { panic!() };
     let LinkedExpression::Variable(value2) = value2.expr else { panic!() };
     // arg = b
