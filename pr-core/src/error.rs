@@ -48,10 +48,20 @@ impl ErrorQueue {
     pub fn has_errors(&self) -> bool {
         self.vec.iter().any(|diag| diag.severity == DiagnosticSeverity::ERROR)
     }
+    pub fn to_lsp_diagnostics(self) -> Vec<lsp_types::Diagnostic> {
+        self.vec.into_iter().map(|d|
+            lsp_types::Diagnostic {
+                range: d.range.unwrap_or(Range::default()),
+                severity: Some(d.severity),
+                message: d.message,
+                ..Default::default()
+            }
+        ).collect()
+    }
 }
 
 pub fn pos_to_str(position: Position) -> String {
-    format!("{}:{}", position.line, position.character)
+    format!("{}:{}", position.line + 1, position.character + 1)
 }
 pub fn range_to_str(range: Range) -> String {
     let start = pos_to_str(range.start);

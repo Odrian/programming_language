@@ -1,9 +1,14 @@
+use pr_core::error::ErrorQueue;
+use pr_core::parser::parse1_tokenize::tokenize;
+use pr_core::parser::parse2_syntactic::parse_statements;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
-use tower_lsp::Client;
 use tower_lsp::lsp_types::*;
+use tower_lsp::Client;
+
+mod debug_diagnostics;
 
 pub struct Backend {
     pub client: Client,
@@ -26,33 +31,32 @@ impl Backend {
 }
 
 impl Backend {
-    async fn update_file(&self, uri: Url, version: i32, text: String) {
+    async fn update_file(&self, uri: Url, version: i32, text: &str) {
         self.client.log_message(MessageType::INFO, format!("update file {uri}")).await;
 
         let mut files = self.files.write().await;
         if let Some(file) = files.get(&uri) && file.version > version {
 
         } else {
-            files.insert(uri, File { version, text });
+            files.insert(uri, File { version, text: text.to_string() });
         }
     }
 
-    async fn diagnose_file(&self, uri: Url) {
-        let Some(file) = self.files.write().await.get(&uri) else { return; };
-
-        let mut diagnostics = vec![];
-        diagnostics.push(Diagnostic {
-            range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 1 },
-            },
-            severity: Some(DiagnosticSeverity::ERROR),
-            code: None,
-            source: Some("pr lsp".to_string()),
-            message: "Example error found".to_string(),
-            ..Default::default()
-        });
+    async fn send_diagnostics(&self, uri: Url, diagnostics: Vec<Diagnostic>) {
         let _ = self.client.publish_diagnostics(uri, diagnostics, None).await;
+    }
+
+    async fn diagnose_file(&self, uri: Url, text: &str) {
+        let mut errors = ErrorQueue::default();
+
+        let tokens = tokenize(&mut errors, text);
+        // self.add_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens)).await;
+
+        let statements = parse_statements(&mut errors, tokens);
+        // self.add_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements)).await;
+
+        let diagnostics = errors.to_lsp_diagnostics();
+        self.send_diagnostics(uri, diagnostics).await;
     }
 }
 
@@ -98,9 +102,12 @@ impl tower_lsp::LanguageServer for Backend {
 
         self.client.log_message(MessageType::INFO, format!("open {lang_id} __ {uri}")).await;
 
-        self.update_file(uri.clone(), text_doc.version, text_doc.text).await;
-        self.diagnose_file(uri).await;
-
+        tokio::join!(
+            self.update_file(uri.clone(), text_doc.version, &text_doc.text),
+            self.diagnose_file(uri, &text_doc.text),
+        );
+        // self.update_file(uri.clone(), text_doc.version, text_doc.text).await;
+        // self.diagnose_file(uri, text).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -110,8 +117,10 @@ impl tower_lsp::LanguageServer for Backend {
         let uri = params.text_document.uri;
         let text = change.text;
 
-        self.update_file(uri.clone(), params.text_document.version, text).await;
-        self.diagnose_file(uri).await;
+        tokio::join!(
+            self.update_file(uri.clone(), params.text_document.version, &text),
+            self.diagnose_file(uri, &text),
+        );
     }
 
     async fn hover(&self, _: HoverParams) -> Result<Option<Hover>> {

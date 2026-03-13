@@ -334,9 +334,6 @@ impl ParsingState<'_> {
             SyntacticError::from_text("unexpected EOF", s.all_range))?;
 
         match token {
-            Token::DoubleColon | Token::Colon | Token::EqualOperation(EqualOperation::ColonEqual) | Token::Bracket(_, BracketType::Round) => {
-                unreachable!("was in parse_statement2")
-            }
             Token::EqualOperation(equal_operation) => {
                 // name _=
                 let expression2 = self.parse_expression(false)?;

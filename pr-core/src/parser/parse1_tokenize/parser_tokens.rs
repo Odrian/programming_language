@@ -35,7 +35,8 @@ fn parse_inside_brackets(
 
     let mut buffer = String::new();
     let mut start_buffer_index = start_position;
-    let mut index = start_position; // map to char in start of loop
+    if open_bracket_type.is_some() { add_one(Some('('), &mut start_buffer_index); }
+    let mut index = start_buffer_index; // map to char in start of loop
 
     let mut text_was = text.clone();
     while let Some(char) = text.next() {
@@ -58,7 +59,9 @@ fn parse_inside_brackets(
                 };
                 add_one(Some(next_char), &mut index);
                 if char != '`' && next_char == '\\' {
-                    match text.next() {
+                    let escape_char = text.next();
+                    add_one(escape_char, &mut index);
+                    match escape_char {
                         Some('\\') => inside_quotes.push('\\'),
                         Some('0') => inside_quotes.push('\0'),
                         Some('t') => inside_quotes.push('\t'),
@@ -96,9 +99,9 @@ fn parse_inside_brackets(
                 '`' => Token::String(inside_quotes),
                 _ => unreachable!()
             };
+            add_one(text.clone().next(), &mut index);
             let position = Range::new(start_index, index);
             result_tokens.push(RangedToken::new(token, position));
-            add_one(text.clone().next(), &mut index);
             start_buffer_index = index;
         } else if let Some(bracket_type) = is_open_bracket(char) {
             // open bracket
@@ -108,7 +111,6 @@ fn parse_inside_brackets(
                 result_tokens.append(&mut tokens);
             }
 
-            add_one(text.clone().next(), &mut index);
             let (new_token, new_index) =
                 parse_inside_brackets(errors, text, index, Some(bracket_type));
             result_tokens.push(new_token);
@@ -142,8 +144,8 @@ fn parse_inside_brackets(
             }
 
             let result_token = Token::Bracket(result_tokens, open_bracket_type);
+            add_one(Some(char), &mut index);
             let range = Range::new(start_position, index);
-            add_one(text.clone().next(), &mut index);
             return (RangedToken::new(result_token, range), index);
         } else {
             buffer.push(char);
@@ -314,7 +316,7 @@ pub fn split_text_without_brackets(
                     state.buffer.pop();
                     state.buffer_end.character -= 1; // correct because previous char actually dot
                     state.flush_buffer();
-                    state.add(1, Token::DoubleDot);
+                    state.add(2, Token::DoubleDot); // correct because buffer is flushed
                 } else {
                     state.use_char_in_string(char);
                 }
@@ -372,11 +374,10 @@ impl TokenizeState {
     fn add(&mut self, skip_chars: u32, token: Token) {
         self.flush_buffer(); // after start==end
 
-        self.buffer_end.character += skip_chars - 1;
+        self.buffer_end.character += skip_chars;
 
         let place_info = Range::new(self.buffer_start, self.buffer_end);
         self.tokens.push(RangedToken::new(token, place_info));
-        self.buffer_end.character += 1;
         self.buffer_start = self.buffer_end;
         // here start==end
     }

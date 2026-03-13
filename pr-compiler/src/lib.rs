@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::PathBuf;
 use clap::Parser;
-use pr_core::error::ErrorQueue;
+use pr_core::error::{range_to_str, ErrorQueue};
 use pr_core::io_error::FileError;
 use pr_core::parser::*;
-use pr_core::parser::parse1_tokenize::token::RangedToken;
+use pr_core::parser::parse1_tokenize::token::{RangedToken, Token};
 use pr_core::parser::parse2_syntactic::statement::RStatement;
 use pr_core::parser::parse3_linking::LinkedProgram;
 
@@ -59,10 +59,10 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
     let mut errors = ErrorQueue::default();
 
     let tokens = parse1_tokenize::tokenize(&mut errors, &text);
-    if args.gen_tokens { generate_tokens(&filename, &tokens)? }
+    if args.gen_tokens { generate_tokens_file(&filename, &tokens)? }
 
     let statements = parse2_syntactic::parse_statements(&mut errors, tokens);
-    if args.gen_ast { generate_ast(&filename, &statements)? }
+    if args.gen_ast { generate_ast_file(&filename, &statements)? }
 
     if errors.has_errors() {
         return Err(errors)
@@ -70,7 +70,7 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
 
     let linked_program = parse3_linking::link_all(statements)
         .map_err(|_| ErrorQueue::new_single_error("linking error"))?;
-    if args.gen_last { generate_last(&filename, &linked_program)? }
+    if args.gen_last { generate_last_file(&filename, &linked_program)? }
 
     compiling::parse_to_llvm(args, linked_program)
         .map_err(|err| ErrorQueue::new_single_error(&err.to_string()))?;
@@ -78,10 +78,41 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
     Ok(())
 }
 
-fn generate_tokens(filename: &String, tokens: &Vec<RangedToken>) -> Result<(), ErrorQueue> {
-    let text = tokens.iter()
-        .map(|t| format!("{:#?}", t.token))
-        .collect::<Vec<_>>().join("\n");
+fn tokens_to_str(tokens: &Vec<RangedToken>, layer: u8) -> String {
+    tokens.iter().map(|t| {
+        let range = range_to_str(t.range);
+        let str = match &t.token {
+            Token::Bracket(body, bracket) => {
+                let body = tokens_to_str(body, layer + 1);
+                let left = bracket.to_open_string();
+                let right = bracket.to_close_string();
+                let spaces = "    ".repeat(layer as usize);
+                format!("{left} {range}\n{body}\n{spaces}{right}")
+            }
+            Token::String(str) => format!("{str} {range}"),
+            Token::DoubleQuotes(str) => format!("\"{str}\" {range}"),
+            Token::Quotes(str) => format!("'{str}' {range}"),
+            Token::Keyword(keyword) => format!("{keyword:?} {range}"),
+            Token::NumberLiteral(str) => format!("{str} {range}"),
+
+            Token::UnaryOperation(op) => format!("{op} {range}"),
+            Token::Operation(op) => format!("{op} {range}"),
+            Token::EqualOperation(op) => format!("{op} {range}"),
+
+            Token::Semicolon => format!("; {range}"),
+            Token::Dot => format!(". {range}"),
+            Token::DoubleDot => format!(".. {range}"),
+            Token::Comma => format!(", {range}"),
+            Token::Colon => format!(": {range}"),
+            Token::DoubleColon => format!(":: {range}"),
+            Token::Arrow => format!("-> {range}"),
+        };
+        "    ".repeat(layer as usize).to_owned() + &str
+    }).collect::<Vec<_>>().join("\n")
+}
+
+fn generate_tokens_file(filename: &String, tokens: &Vec<RangedToken>) -> Result<(), ErrorQueue> {
+    let text = tokens_to_str(tokens, 0);
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();
     let filepath = format!("{ARTIFACT_DIR}/{filename}_tokens.txt");
@@ -97,7 +128,7 @@ fn generate_tokens(filename: &String, tokens: &Vec<RangedToken>) -> Result<(), E
     Ok(())
 }
 
-fn generate_ast(filename: &String, statements: &Vec<RStatement>) -> Result<(), ErrorQueue> {
+fn generate_ast_file(filename: &String, statements: &Vec<RStatement>) -> Result<(), ErrorQueue> {
     let text = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();
@@ -114,7 +145,7 @@ fn generate_ast(filename: &String, statements: &Vec<RStatement>) -> Result<(), E
     Ok(())
 }
 
-fn generate_last(filename: &String, linked_program: &LinkedProgram) -> Result<(), ErrorQueue> {
+fn generate_last_file(filename: &String, linked_program: &LinkedProgram) -> Result<(), ErrorQueue> {
     let text = [&linked_program.extern_statements, &linked_program.type_statements, &linked_program.variable_statement, &linked_program.function_statement]
         .iter().map(|hashmap| hashmap.iter()
         .map(|(&object, statement)| statement.to_string::<true>(&linked_program.factory, object) + "\n")

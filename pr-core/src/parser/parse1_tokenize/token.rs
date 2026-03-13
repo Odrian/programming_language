@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use lsp_types::Range;
 use crate::parser::BracketType;
 use crate::parser::operations::*;
@@ -91,5 +92,15 @@ impl From<BoolOperation> for Token {
 impl From<CompareOperator> for Token {
     fn from(value: CompareOperator) -> Self {
         Self::Operation(TwoSidedOperation::Compare(value))
+    }
+}
+
+impl Display for EqualOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Equal => write!(f, "="),
+            Self::ColonEqual => write!(f, ":="),
+            Self::OperationEqual(op) => write!(f, "{op}="),
+        }
     }
 }
