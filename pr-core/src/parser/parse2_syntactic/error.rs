@@ -37,13 +37,13 @@ impl ExpectedError {
     fn from(expected_enum: ExpectedEnum) -> Self {
         Self { variants: vec![expected_enum] }
     }
-    pub fn diagnostic(self, range: Range) -> Diagnostic {
+    pub fn diagnostic(&self, range: Range) -> Diagnostic {
         Diagnostic::new_error(range, self.to_string())
     }
-    pub fn diagnostic_after(self, range: Range) -> Diagnostic {
+    pub fn diagnostic_after(&self, range: Range) -> Diagnostic {
         Diagnostic::new_error(range, self.to_string() + " after that")
     }
-    fn to_string(self) -> String {
+    fn to_string(&self) -> String {
         let variants = self.variants.iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>().join(" or ");

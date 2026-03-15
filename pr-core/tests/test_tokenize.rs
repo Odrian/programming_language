@@ -35,7 +35,7 @@ fn assert_result(str: &str, result: Vec<Token>) {
     assert!(token_equality(&actual, &result), "assertion `left == right` failed\n  left = {0:?}\n right = {1:?}", &actual, &result);
 }
 
-fn token_equality(token1: &Vec<Token>, token2: &Vec<Token>) -> bool {
+fn token_equality(token1: &[Token], token2: &[Token]) -> bool {
     if token1.len() != token2.len() {
         return false;
     }

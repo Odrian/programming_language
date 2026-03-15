@@ -78,7 +78,7 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
     Ok(())
 }
 
-fn tokens_to_str(tokens: &Vec<RangedToken>, layer: u8) -> String {
+fn tokens_to_str(tokens: &[RangedToken], layer: u8) -> String {
     tokens.iter().map(|t| {
         let range = range_to_str(t.range);
         let str = match &t.token {
@@ -111,7 +111,7 @@ fn tokens_to_str(tokens: &Vec<RangedToken>, layer: u8) -> String {
     }).collect::<Vec<_>>().join("\n")
 }
 
-fn generate_tokens_file(filename: &String, tokens: &Vec<RangedToken>) -> Result<(), ErrorQueue> {
+fn generate_tokens_file(filename: &String, tokens: &[RangedToken]) -> Result<(), ErrorQueue> {
     let text = tokens_to_str(tokens, 0);
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();
@@ -128,7 +128,7 @@ fn generate_tokens_file(filename: &String, tokens: &Vec<RangedToken>) -> Result<
     Ok(())
 }
 
-fn generate_ast_file(filename: &String, statements: &Vec<RStatement>) -> Result<(), ErrorQueue> {
+fn generate_ast_file(filename: &String, statements: &[RStatement]) -> Result<(), ErrorQueue> {
     let text = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();

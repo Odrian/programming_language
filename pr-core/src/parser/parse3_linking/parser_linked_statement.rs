@@ -74,7 +74,7 @@ impl FunctionLinkingContext<'_> {
             }
             ExternStatement::Function { name, args, is_vararg, returns } => {
                 let arguments_type = args.iter().map(|typee| {
-                    let object_type = self.parse_type(&typee)?;
+                    let object_type = self.parse_type(typee)?;
                     if object_type.is_void() {
                         return Err(LinkingError::UnexpectedVoidUse);
                     }
@@ -109,7 +109,7 @@ impl FunctionLinkingContext<'_> {
         let Some(typee) = typee else {
             return Err(LinkingError::GlobalVariableWithoutType { name: name.clone() });
         };
-        let obj_type = self.parse_type(&typee)?;
+        let obj_type = self.parse_type(typee)?;
 
         *self.context.factory.get_type_mut(object) = obj_type;
         self.object_context_window.add(name.clone(), object);
@@ -134,7 +134,7 @@ impl FunctionLinkingContext<'_> {
 
         let mut arguments_type = Vec::with_capacity(args.len());
         for (_, typee) in args {
-            let object_type = self.parse_type(&typee)?;
+            let object_type = self.parse_type(typee)?;
             if object_type.is_void() {
                 return Err(LinkingError::UnexpectedVoidUse);
             }
@@ -497,7 +497,7 @@ impl FunctionLinkingContext<'_> {
             }
             Expression::Literal(literal) => self.parse_literal(literal, expected_type),
             Expression::StructConstruct { struct_name, fields: fields_values } => {
-                let struct_type = self.parse_type(&Typee::String(struct_name.value.clone()).add_range(struct_name.range.clone()))?;
+                let struct_type = self.parse_type(&Typee::String(struct_name.value.clone()).add_range(struct_name.range))?;
                 let ObjType::Struct(object) = &struct_type else {
                     return Err(LinkingError::NameNotFound { name: struct_name, context: format!("{:?}", self.object_context_window) });
                 };

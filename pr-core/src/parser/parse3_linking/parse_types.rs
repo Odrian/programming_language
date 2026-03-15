@@ -62,7 +62,7 @@ impl TypeResolver<'_> {
         let mut linked_fields = Vec::with_capacity(fields.len());
         let mut field_names = HashMap::with_capacity(fields.len());
         for (index, (name, typee)) in fields.iter().enumerate() {
-            let obj_type = self.parse_type(&typee, &mut dependencies, false)?;
+            let obj_type = self.parse_type(typee, &mut dependencies, false)?;
             linked_fields.push(obj_type);
             let previous_name = field_names.insert(name.value.clone(), index as u32);
             if previous_name.is_some() {
@@ -107,11 +107,11 @@ impl TypeResolver<'_> {
                 Ok(ObjType::Struct(object))
             }
             Typee::Pointer(obj_type) => {
-                let obj_type = self.parse_type(&obj_type, dependencies, true)?;
+                let obj_type = self.parse_type(obj_type, dependencies, true)?;
                 Ok(ObjType::new_pointer(obj_type))
             }
             Typee::Reference(obj_type) => {
-                let obj_type = self.parse_type(&obj_type, dependencies, true)?;
+                let obj_type = self.parse_type(obj_type, dependencies, true)?;
                 Ok(ObjType::new_reference(obj_type))
             }
         }

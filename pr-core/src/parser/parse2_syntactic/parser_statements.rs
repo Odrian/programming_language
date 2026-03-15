@@ -1042,18 +1042,17 @@ impl ParsingState<'_> {
         let mut chars = string.chars();
         let Some(first_char) = chars.next() else {
             self.add_diag(SyntacticError::from_text("empty char literal", range));
-            return '?' as u8;
+            return b'?';
         };
 
         if chars.next().is_some() {
             self.add_diag(SyntacticError::from_text(">1 char in literal", range));
-            return '?' as u8;
+            return b'?';
         }
         if !first_char.is_ascii() {
             self.add_diag(SyntacticError::from_text("not ascii char in literal", range));
-            return '?' as u8;
+            return b'?';
         }
-        let char_value = first_char as u8;
-        char_value
+        first_char as u8
     }
 }
