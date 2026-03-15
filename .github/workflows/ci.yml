@@ -1,0 +1,107 @@
+name: Rust CI (with LLVM 21)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }} / ${{ matrix.rust }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+#        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
+        rust: [stable]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install LLVM 21 on Ubuntu
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg lsb-release software-properties-common curl
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
+          # install common packages
+          sudo apt-get update
+          sudo apt-get install -y clang-21 lld-21 llvm-21 llvm-21-dev llvm-21-tools
+          # prefer llvm-config-21 if present
+          if command -v llvm-config-21 >/dev/null 2>&1; then
+            echo "LLVM_CONFIG_PATH=$(command -v llvm-config-21)" >> $GITHUB_ENV
+          elif command -v llvm-config >/dev/null 2>&1; then
+            echo "LLVM_CONFIG_PATH=$(command -v llvm-config)" >> $GITHUB_ENV
+          fi
+
+#      - name: Install LLVM 21 on macOS
+#        if: matrix.os == 'macos-latest'
+#        run: |
+#          brew update
+#          brew install llvm@21
+#          # expose the llvm bin to PATH for later steps
+#          echo "$(brew --prefix llvm@21)/bin" >> $GITHUB_PATH
+#          # set LLVM_CONFIG_PATH explicitly
+#          echo "LLVM_CONFIG_PATH=$(brew --prefix llvm@21)/bin/llvm-config" >> $GITHUB_ENV
+
+#      - name: Install LLVM 21 on Windows
+#        if: matrix.os == 'windows-latest'
+#        shell: powershell
+#        run: |
+#          choco install llvm --version=21.1.0 -y
+#          $possible = "C:\Program Files\LLVM\bin\llvm-config.exe","C:\Program Files (x86)\LLVM\bin\llvm-config.exe"
+#          foreach ($p in $possible) {
+#            if (Test-Path $p) {
+#              echo "LLVM_CONFIG_PATH=$p" >> $env:GITHUB_ENV
+#              break
+#            }
+#          }
+#          # Fallback: try to find llvm-config on PATH
+#          if (-not (Test-Path $env:GITHUB_ENV)) {
+#            $found = (Get-Command llvm-config.exe -ErrorAction SilentlyContinue)
+#            if ($found) {
+#              echo "LLVM_CONFIG_PATH=$($found.Path)" >> $env:GITHUB_ENV
+#            }
+#          }
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          override: true
+
+      - name: Cache cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.rust }}-
+            ${{ runner.os }}-cargo-
+
+      - name: Show llvm-config version
+        run: |
+          echo "Using LLVM_CONFIG_PATH=$LLVM_CONFIG_PATH"
+          if [ -n "$LLVM_CONFIG_PATH" ]; then
+            $LLVM_CONFIG_PATH --version || true
+          else
+            llvm-config --version || true
+          fi
+        shell: bash
+
+      - name: Run clippy (optional)
+        run: |
+          rustup component add clippy --toolchain ${{ matrix.rust }} || true
+          cargo clippy --all-targets --all-features -- -D warnings
+        continue-on-error: true
+
+      - name: Run tests
+        run: cargo test --all --verbose
+        env:
+          LLVM_CONFIG_PATH: ${{ env.LLVM_CONFIG_PATH || '' }}
