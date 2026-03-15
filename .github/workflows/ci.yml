@@ -18,24 +18,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install LLVM 21 on Ubuntu
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg lsb-release software-properties-common curl
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 21
-          # install common packages
-          sudo apt-get update
-          sudo apt-get install -y clang-21 lld-21 llvm-21 llvm-21-dev llvm-21-tools
-          # prefer llvm-config-21 if present
-          if command -v llvm-config-21 >/dev/null 2>&1; then
-            echo "LLVM_CONFIG_PATH=$(command -v llvm-config-21)" >> $GITHUB_ENV
-          elif command -v llvm-config >/dev/null 2>&1; then
-            echo "LLVM_CONFIG_PATH=$(command -v llvm-config)" >> $GITHUB_ENV
-          fi
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "21.1"
 
+#      - name: Install LLVM 21 on Ubuntu
+#        if: matrix.os == 'ubuntu-latest'
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install -y wget gnupg lsb-release software-properties-common curl
+#          wget https://apt.llvm.org/llvm.sh
+#          chmod +x llvm.sh
+#          sudo ./llvm.sh 21
+#          sudo apt-get update
+#          sudo apt-get install -y clang-21 lld-21 llvm-21 llvm-21-dev llvm-21-tools
+#          # попытаться установить пакет polly — пробуем несколько имён (пока не упадём)
+#          sudo apt-get install -y libpolly-21-dev || sudo apt-get install -y libpolly-dev || true
+#
+#          # диагностические проверки (помогут понять, где проблема)
+#          if command -v llvm-config-21 >/dev/null 2>&1; then
+#            echo "llvm-config: $(command -v llvm-config-21)"
+#            llvm-config-21 --link-static --libs | tr ' ' '\n' | grep -i polly || true
+#          else
+#            echo "llvm-config not found"
+#          fi
+#
+#          ls -la /usr/lib/llvm-21/lib/libPolly* || ls -la /usr/lib/llvm-21/lib | sed -n '1,200p' || true
+#
+#          # выставим LLVM_CONFIG_PATH (если нашёлся llvm-config-21)
+#          if command -v llvm-config-21 >/dev/null 2>&1; then
+#            echo "LLVM_CONFIG_PATH=$(command -v llvm-config-21)" >> $GITHUB_ENV
+#          fi
 #      - name: Install LLVM 21 on macOS
 #        if: matrix.os == 'macos-latest'
 #        run: |
