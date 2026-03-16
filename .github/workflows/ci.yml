@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
 #        os: [ubuntu-latest, macos-latest, windows-latest]
-        os: [25.10]
+        os: [ubuntu-25.10]
         rust: [stable]
 
     steps:
