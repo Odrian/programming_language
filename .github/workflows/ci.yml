@@ -22,57 +22,18 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           LLVM_VERSION=21
-          DISTRO=$(lsb_release -is)
-          VERSION=$(lsb_release -sr)
-          DIST_VERSION="${DISTRO}_${VERSION}"
-          case "$DIST_VERSION" in
-            Ubuntu_24.04 )   REPO_NAME="deb https://apt.llvm.org/noble/    llvm-toolchain-kinetic-$LLVM_VERSION main" ;;
-            Ubuntu_25.10 )   REPO_NAME="deb https://apt.llvm.org/questing/ llvm-toolchain-kinetic-$LLVM_VERSION main" ;;
-            * )
-            echo "Distribution '$DISTRO' in version '$VERSION' is not supported by this script (${DIST_VERSION})."
-            exit 2
-          esac
 
           sudo apt-get update
-          sudo apt-get install -y software-properties-common
+          sudo apt-get install -y wget gnupg lsb-release software-properties-common curl
 
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo add-apt-repository "${REPO_NAME}"
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${LLVM_VERSION}
+
           sudo apt-get update
+          sudo apt-get install -y clang-${LLVM_VERSION} lld-${LLVM_VERSION} llvm-${LLVM_VERSION} llvm-${LLVM_VERSION}-dev llvm-${LLVM_VERSION}-tools
 
-          # Install required packages for LLVM
-          sudo apt-get install -y llvm-$LLVM_VERSION llvm-$LLVM_VERSION-* liblld-$LLVM_VERSION* libclang-rt-$LLVM_VERSION-dev
-          sudo apt download libpolly-$LLVM_VERSION-dev && dpkg --force-all -i libpolly-$LLVM_VERSION-dev*
-
-#      - name: Install LLVM 21 on macOS
-#        if: matrix.os == 'macos-latest'
-#        run: |
-#          brew update
-#          brew install llvm@21
-#          # expose the llvm bin to PATH for later steps
-#          echo "$(brew --prefix llvm@21)/bin" >> $GITHUB_PATH
-#          # set LLVM_CONFIG_PATH explicitly
-#          echo "LLVM_CONFIG_PATH=$(brew --prefix llvm@21)/bin/llvm-config" >> $GITHUB_ENV
-
-#      - name: Install LLVM 21 on Windows
-#        if: matrix.os == 'windows-latest'
-#        shell: powershell
-#        run: |
-#          choco install llvm --version=21.1.0 -y
-#          $possible = "C:\Program Files\LLVM\bin\llvm-config.exe","C:\Program Files (x86)\LLVM\bin\llvm-config.exe"
-#          foreach ($p in $possible) {
-#            if (Test-Path $p) {
-#              echo "LLVM_CONFIG_PATH=$p" >> $env:GITHUB_ENV
-#              break
-#            }
-#          }
-#          # Fallback: try to find llvm-config on PATH
-#          if (-not (Test-Path $env:GITHUB_ENV)) {
-#            $found = (Get-Command llvm-config.exe -ErrorAction SilentlyContinue)
-#            if ($found) {
-#              echo "LLVM_CONFIG_PATH=$($found.Path)" >> $env:GITHUB_ENV
-#            }
-#          }
+          sudo apt-get install -y libpolly-${LLVM_VERSION}-dev
 
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
