@@ -1,0 +1,9 @@
+[package]
+name = "pr-tokenize"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pr-common = { path = "../pr-common" }
+
+lsp-types = { workspace = true }

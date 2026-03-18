@@ -1,14 +1,16 @@
 use std::fs;
 use std::path::PathBuf;
 use clap::Parser;
-use pr_core::error::{range_to_str, ErrorQueue};
-use pr_core::io_error::FileError;
-use pr_core::parser::*;
-use pr_core::parser::parse1_tokenize::token::{RangedToken, Token};
-use pr_core::parser::parse2_syntactic::statement::RStatement;
-use pr_core::parser::parse3_linking::LinkedProgram;
+use pr_common::error::{range_to_str, ErrorQueue};
+use pr_tokenize::TokenizeResult;
+use pr_tokenize::token::{RangedToken, Token};
+use pr_ast::SyntacticResult;
+use pr_ast_linked::LinkedProgram;
 
 pub mod compiling;
+mod io_error;
+
+use io_error::FileError;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -55,18 +57,22 @@ const ARTIFACT_DIR: &str = "artifacts";
 
 pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
     let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
-    let text = fs::read_to_string(file_path).expect("can't read file");
+    let text = fs::read_to_string(&file_path)
+        .map_err(|err| {
+            FileError::CantReadSourceFile { filepath: file_path, io_error: err.to_string() }.print();
+            ErrorQueue::new_single_error("file error")
+        })?;
     let mut errors = ErrorQueue::default();
 
-    let tokens = parse1_tokenize::tokenize(&mut errors, &text);
+    let tokens = pr_tokenize::tokenize(&mut errors, &text);
     if args.gen_tokens { generate_tokens_file(&filename, &tokens)? }
 
-    let statements = parse2_syntactic::parse_statements(&mut errors, tokens);
+    let statements = pr_ast::parse_ast(&mut errors, tokens);
     if args.gen_ast { generate_ast_file(&filename, &statements)? }
 
     if errors.has_errors() { return Err(errors) }
 
-    let linked_program = parse3_linking::link_all(&mut errors, statements);
+    let linked_program = pr_ast_linked::link_ast(&mut errors, statements);
     if args.gen_last { generate_last_file(&filename, &linked_program)? }
 
     if errors.has_errors() { return Err(errors) }
@@ -110,8 +116,8 @@ fn tokens_to_str(tokens: &[RangedToken], layer: u8) -> String {
     }).collect::<Vec<_>>().join("\n")
 }
 
-fn generate_tokens_file(filename: &String, tokens: &[RangedToken]) -> Result<(), ErrorQueue> {
-    let text = tokens_to_str(tokens, 0);
+fn generate_tokens_file(filename: &String, tokens: &TokenizeResult) -> Result<(), ErrorQueue> {
+    let text = tokens_to_str(&tokens.tokens, 0);
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();
     let filepath = format!("{ARTIFACT_DIR}/{filename}_tokens.txt");
@@ -127,8 +133,8 @@ fn generate_tokens_file(filename: &String, tokens: &[RangedToken]) -> Result<(),
     Ok(())
 }
 
-fn generate_ast_file(filename: &String, statements: &[RStatement]) -> Result<(), ErrorQueue> {
-    let text = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+fn generate_ast_file(filename: &String, statements: &SyntacticResult) -> Result<(), ErrorQueue> {
+    let text = statements.statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();
     let filepath = format!("{ARTIFACT_DIR}/{filename}_AST.txt");

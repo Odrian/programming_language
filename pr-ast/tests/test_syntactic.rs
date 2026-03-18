@@ -1,0 +1,401 @@
+use pr_common::error::ErrorQueue;
+use pr_common::operations::*;
+use pr_common::ranged::RString;
+use pr_tokenize::tokenize;
+use pr_ast::statement::*;
+use pr_ast::parse_ast;
+
+fn parse_global(text: &str) -> Result<Vec<Statement>, ErrorQueue> {
+    let mut errors = ErrorQueue::default();
+    let tokens = tokenize(&mut errors, text);
+    let statements = parse_ast(&mut errors, tokens);
+    let statements = statements.statements.into_iter().map(|x| x.value).collect();
+    if errors.has_errors() {
+        return Err(errors)
+    }
+    Ok(statements)
+}
+fn parse(text: &str) -> Result<Vec<Statement>, ErrorQueue> {
+    let mut statements = parse_global(&format!("main :: () -> i32 {{ {text} }}"))?;
+    assert_eq!(statements.len(), 1);
+    let Statement::DeclarationStatement { name: _, statement } = statements.pop().unwrap() else { panic!() };
+    let DeclarationStatement::Function { args: _, returns: _, body } = statement else { panic!() };
+    Ok(body.into_iter().map(|s| s.value).collect())
+}
+fn assert_has_error(str: &str) {
+    assert_ne!(parse(str).err(), None);
+}
+fn assert_has_error_global(str: &str) {
+    assert_ne!(parse_global(str).err(), None);
+}
+fn assert_no_error(str: &str) {
+    assert_eq!(parse(str).err(), None);
+}fn assert_no_error_global(str: &str) {
+    assert_eq!(parse_global(str).err(), None);
+}
+fn assert_result(str: &str, result: Vec<Statement>) {
+    assert_eq!(parse(str), Ok(result));
+}
+fn assert_result_global(str: &str, result: Vec<Statement>) {
+    assert_eq!(parse_global(str), Ok(result));
+}
+
+fn add_type(typee: RTypee, args: Vec<RString>) -> Vec<(RString, RTypee)> {
+    args.into_iter().map(|a| (a, typee.clone())).collect()
+}
+
+#[test]
+fn test_set() {
+    assert_no_error("cat = cat");
+    assert_no_error("cat = 4");
+    assert_no_error("cat = cat + cat");
+    assert_no_error("cat = cat + 4");
+    assert_no_error("cat = 4 + cat");
+    assert_no_error("cat = 4 + 4");
+    assert_no_error("cat = cat + cat + cat");
+    assert_no_error("cat = cat + cat + cat + cat");
+    assert_no_error("cat := cat + cat + cat + cat");
+    assert_no_error("cat : i32 = cat");
+
+    assert_has_error("4 = cat");
+    assert_has_error("cat = cat = cat");
+    assert_has_error("cat + cat = cat");
+    assert_has_error("cat + 4 = cat");
+    assert_has_error("cat + cat");
+    assert_has_error("cat =+ cat");
+    assert_has_error("cat = +cat");
+    assert_has_error("cat == cat");
+    assert_has_error("cat := +cat");
+    assert_has_error("cat :== cat");
+    assert_has_error("cat : = cat")
+}
+
+#[test]
+fn test_set_with_brackets() {
+    assert_no_error("cat = (4 + 4)");
+    assert_no_error("cat = ((4 + 4))");
+    assert_no_error("cat = 4 + (4 + 4)");
+    assert_no_error("cat = (4 + 4) + 4");
+    assert_no_error("cat = cat;cat = cat");
+    assert_no_error("cat = cat; \n cat = cat");
+
+    assert_has_error("(cat + cat) = cat");
+    assert_has_error("(cat + cat) := cat");
+    assert_has_error("(4 + 4) = 4");
+    assert_has_error("(4 + 4) := 4");
+
+    let variable = Expression::Variable(RString::new_no_range("cat".to_owned()));
+    assert_result(
+        "cat := cat + (cat + cat)",
+        vec![Statement::new_variable(
+            RString::new_no_range("cat".to_owned()),
+            None,
+            Expression::new_operation(
+                variable.clone().add_no_range(),
+                Expression::new_round_bracket(
+                    Expression::new_operation(
+                        variable.clone().add_no_range(),
+                        variable.clone().add_no_range(),
+                        TwoSidedOperation::from(NumberOperation::Add).add_no_range()
+                    ).add_no_range()
+                ).add_no_range(),
+                TwoSidedOperation::from(NumberOperation::Add).add_no_range()
+            ).add_no_range()
+        )]
+    );
+}
+
+#[test]
+fn test_minus() {
+    assert_no_error("a := 0 - 0");
+    assert_no_error("a := 0 - 0; a = 0 - a");
+    assert_no_error("a := 0 - 0; a = a - 0");
+
+    assert_no_error("a := -1");
+    assert_has_error("a := --1");
+    assert_no_error("a := 0; a = -a");
+}
+
+#[test]
+fn test_two_sided_ops() {
+    assert_no_error("a := a * a / a + a - a % a");
+    assert_no_error("a := (a * (a / (a + (a - (a % a)))))");
+    
+    // correct order is tested at compiling
+}
+
+#[test]
+fn test_equal_set() {
+    assert_no_error("a += a");
+    assert_no_error("a -= a");
+    assert_no_error("a *= a");
+    assert_no_error("a /= a");
+    assert_no_error("a %= a");
+    // assert_no_error("a &= a");
+    // assert_no_error("a &&= a");
+    // assert_no_error("a |= a");
+    // assert_no_error("a ||= a");
+}
+
+#[test]
+fn test_if_while() {
+    let string_cat = RString::new_no_range("cat".to_owned());
+    let variable = Expression::Variable(string_cat.clone()).add_no_range();
+
+    assert_result(
+        "if cat { }",
+        vec![Statement::new_if(variable.clone(), vec![], )]
+    );
+    assert_result(
+        "if cat { cat := cat }",
+        vec![Statement::new_if(variable.clone(), vec![
+            Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range()
+        ], )]
+    );
+    assert_result(
+        "if cat { cat := cat; cat := cat }",
+        vec![Statement::new_if(variable.clone(), vec![
+            Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range(),
+            Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range(),
+        ])]
+    );
+    assert_result(
+        "while cat { }",
+        vec![
+            Statement::new_while(variable.clone(), vec![])
+        ]
+    );
+    assert_result(
+        "while cat { cat := cat }",
+        vec![Statement::new_while(variable.clone(), vec![
+            Statement::new_variable(string_cat.clone(), None, variable.clone()).add_no_range()
+        ])]
+    );
+
+    assert_has_error("if cat = cat { cat := cat }");
+    assert_has_error("if { cat = cat }");
+}
+
+#[test]
+fn test_operations() {
+    assert_no_error("a := a & a");
+    assert_no_error("a := a | a");
+    assert_no_error("a := a & a | a");
+
+    assert_no_error("if a != b {}");
+    assert_no_error("while a != b {}");
+    assert_no_error("while a == b {}");
+    assert_no_error("while a > b {}");
+    assert_no_error("while a < b {}");
+    assert_no_error("while a >= b {}");
+    assert_no_error("while a <= b {}");
+
+    assert_no_error("if a && c {}");
+    assert_no_error("if a || c {}");
+    assert_no_error("if a || c && d {}");
+    assert_no_error("if a && c || d {}");
+    assert_no_error("if a == b && c == d {}");
+    assert_no_error("if a == b || c == d {}");
+
+    assert_no_error("if !a {}");
+    assert_no_error("if -a {}");
+
+    assert_no_error("if a as a {}");
+    assert_no_error("a := a as a");
+}
+
+#[test]
+fn test_function() {
+    assert_no_error_global("foo :: () { }");
+    assert_no_error_global("foo :: () -> i32 { }");
+    assert_no_error_global("foo :: () { return }");
+    assert_no_error_global("foo :: () { return 0 }");
+
+    assert_has_error_global(":: () { }");
+    assert_has_error_global("foo :: { }");
+    assert_has_error_global("foo :: ()");
+    assert_has_error_global("foo :: () -> i32");
+
+    let name = RString::new_no_range("foo".to_owned());
+    let arg1 = RString::new_no_range("arg1".to_owned());
+    let arg2 = RString::new_no_range("arg2".to_owned());
+    let v_cat = RString::new_no_range("cat".to_owned());
+    let v_dog = RString::new_no_range("dog".to_owned());
+    let v_kitten = RString::new_no_range("kitten".to_owned());
+    let v_owl = RString::new_no_range("owl".to_owned());
+
+    let number_typee = Typee::String("i32".to_owned()).add_no_range();
+
+    assert_result_global(
+        "foo :: () { }",
+        vec![Statement::new_function(name.clone(), vec![], None, vec![])]
+    );
+    assert_result_global(
+        "foo :: (arg1: i32) { }",
+        vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone()]), None, vec![])]
+    );
+    assert_result_global(
+        "foo :: (arg1: i32, arg2: i32) { }",
+        vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![])]
+    );
+    let set_expr = Statement::new_variable(v_cat, None, Expression::Variable(v_dog.clone()).add_no_range()).add_no_range();
+    assert_result_global(
+        "foo :: (arg1: i32, arg2: i32) { cat := dog }",
+        vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
+            set_expr.clone(),
+        ])]
+    );
+
+    assert_result_global(
+        "foo :: (arg1: i32, arg2: i32) { cat := dog; cat := dog }",
+            vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
+                set_expr.clone(),
+                set_expr.clone(),
+            ])]
+    );
+    let another_set_expr = Statement::new_variable(v_owl.clone(), None, Expression::new_operation(
+        Expression::Variable(v_dog.clone()).add_no_range(), Expression::Variable(v_kitten).add_no_range(), TwoSidedOperation::from(NumberOperation::Add).add_no_range()
+    ).add_no_range()).add_no_range();
+    assert_result_global(
+        "foo :: (arg1: i32, arg2: i32) { owl := dog + kitten; cat := dog; owl := dog + kitten }",
+        vec![Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, vec![
+            another_set_expr.clone(),
+            set_expr.clone(),
+            another_set_expr.clone(),
+        ])]
+    );
+}
+
+#[test]
+fn test_function_with_while() {
+    let name = RString::new_no_range("foo".to_owned());
+    let arg1 = RString::new_no_range("arg1".to_owned());
+    let arg2 = RString::new_no_range("arg2".to_owned());
+    let v_1 = "1".to_owned();
+
+    let number_typee = Typee::String("i32".to_owned()).add_no_range();
+
+    let set_statement = Statement::new_variable(
+        arg2.clone(),
+        None,
+        Expression::new_operation(
+            Expression::Variable(arg2.clone()).add_no_range(),
+            Expression::Literal(LiteralExpression::NumberLiteral(v_1.clone())).add_no_range(),
+            TwoSidedOperation::from(NumberOperation::Add).add_no_range()
+        ).add_no_range(),
+    ).add_no_range();
+    let while_statement = Statement::new_while(
+        Expression::Variable(arg1.clone()).add_no_range(),
+        vec![set_statement.clone()]
+    ).add_no_range();
+    let create_function_statement = |body| {
+        Statement::new_function(name.clone(), add_type(number_typee.clone(), vec![arg1.clone(), arg2.clone()]), None, body)
+    };
+    assert_result_global(
+        "foo :: (arg1: i32, arg2: i32) { while arg1 { arg2 := arg2 + 1 } }",
+        vec![create_function_statement(vec![
+            while_statement.clone(),
+        ])]
+    );
+    assert_result_global(
+        "foo::(arg1:i32,arg2:i32){while arg1{arg2:=arg2+1}}",
+        vec![create_function_statement(vec![
+            while_statement.clone(),
+        ])]
+    );
+    assert_result_global(
+        "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1; while arg1 { arg2 := arg2 + 1 } }",
+        vec![create_function_statement(vec![
+            set_statement.clone(),
+            while_statement.clone(),
+        ])]
+    );
+    assert_result_global(
+        "foo :: (arg1: i32, arg2: i32) { arg2 := arg2 + 1; while arg1 { arg2 := arg2 + 1 } arg2 := arg2 + 1 }",
+        vec![create_function_statement(vec![
+            set_statement.clone(),
+            while_statement.clone(),
+            set_statement.clone(),
+        ])]
+    );
+}
+
+#[test]
+fn test_function_call() {
+    assert_no_error("foo()");
+    assert_no_error("cat = foo()");
+    assert_no_error("foo(arg1)");
+    assert_no_error("foo(arg1, arg2)");
+    assert_no_error("foo(0, 1)");
+    assert_no_error("foo((0 + 1))");
+    assert_no_error("foo(foo(0))");
+
+    assert_no_error("a = foo(0) + foo(0) + foo(0) + 0");
+
+    assert_has_error("0 + 0");
+    assert_has_error("foo(0) + foo(0)");
+    assert_has_error("foo(0) + foo(0) + foo(0) + 0");
+
+    assert_has_error("foo(cat := cat)");
+
+    let v_foo = RString::new_no_range("foo".to_owned());
+    let v_cat = RString::new_no_range("cat".to_owned());
+    let v_5 = "5".to_owned();
+    assert_result(
+        "foo()",
+        vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![]))]
+    );
+    assert_result(
+        "foo(cat, 5)",
+        vec![Statement::Expression(Expression::new_function_call(v_foo.clone(), vec![
+            Expression::Variable(v_cat).add_no_range(),
+            Expression::Literal(LiteralExpression::NumberLiteral(v_5)).add_no_range(),
+        ]))]
+    );
+}
+
+#[test]
+fn test_function_return() {
+    assert_no_error("return");
+    assert_no_error("if 1 { return }");
+    assert_no_error("return 0");
+    assert_no_error_global("foo :: () { return 0 }");
+    assert_no_error_global("foo :: () { a := 0; return a }");
+
+    assert_has_error("return return 0");
+    assert_has_error("return foo :: () {}");
+    assert_has_error("return ()");
+}
+
+#[test]
+fn test_import() {
+    assert_no_error_global("import x;");
+    assert_no_error_global("import x::x;");
+    assert_no_error_global("import x::x::x;");
+    assert_no_error_global("import x as x;");
+    assert_no_error_global("import x::x as x;");
+    assert_no_error_global("import x::x::x as x;");
+    assert_no_error_global("import x::x::{x, x as x};");
+    assert_no_error_global("import x::x::{x, x as x,};");
+    assert_no_error_global("import x::x::{x as x, x};");
+    assert_no_error_global("import x::x::{x as x, x,};");
+    assert_no_error_global("import x::x::{};");
+
+    assert_has_error_global("import x::x::*;");
+
+    assert_has_error_global("import ;");
+    assert_has_error_global("import ::x;");
+    assert_has_error_global("import x::;");
+    assert_has_error_global("import x::{x}::x;");
+}
+
+#[test]
+fn test_struct() {
+    assert_no_error_global("x :: struct {}");
+    assert_no_error_global("x :: struct { x: u8 }");
+    assert_no_error_global("x :: struct { x: u8, }");
+    assert_no_error_global("x :: struct { x: u8, y: u8 }");
+
+    assert_has_error_global("x :: struct");
+    assert_has_error_global("x :: struct { x }");
+}

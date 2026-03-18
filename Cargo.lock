@@ -606,29 +606,62 @@ dependencies = [
 ]
 
 [[package]]
-name = "pr-compiler"
+name = "pr-ast"
 version = "0.1.0"
 dependencies = [
- "clap",
- "inkwell",
- "pr-core",
- "tempfile",
+ "lsp-types",
+ "pr-common",
+ "pr-tokenize",
 ]
 
 [[package]]
-name = "pr-core"
+name = "pr-ast-linked"
+version = "0.1.0"
+dependencies = [
+ "lsp-types",
+ "pr-ast",
+ "pr-common",
+ "pr-tokenize",
+]
+
+[[package]]
+name = "pr-common"
 version = "0.1.0"
 dependencies = [
  "lsp-types",
 ]
 
 [[package]]
+name = "pr-compiler"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "inkwell",
+ "pr-ast",
+ "pr-ast-linked",
+ "pr-common",
+ "pr-tokenize",
+ "tempfile",
+]
+
+[[package]]
 name = "pr-lsp"
 version = "0.1.0"
 dependencies = [
- "pr-core",
+ "pr-ast",
+ "pr-ast-linked",
+ "pr-common",
+ "pr-tokenize",
  "tokio",
  "tower-lsp",
+]
+
+[[package]]
+name = "pr-tokenize"
+version = "0.1.0"
+dependencies = [
+ "lsp-types",
+ "pr-common",
 ]
 
 [[package]]

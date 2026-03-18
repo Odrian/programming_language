@@ -1,8 +1,8 @@
-use pr_core::parser::parse1_tokenize::token::{RangedToken, Token};
-use pr_core::parser::parse2_syntactic::statement::*;
-use pr_core::Ranged;
 use std::fmt::Debug;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Range};
+use pr_common::ranged::Ranged;
+use pr_tokenize::token::{RangedToken, Token};
+use pr_ast::statement::*;
 
 #[allow(dead_code)]
 pub fn token_diag(tokens: &Vec<RangedToken>) -> Vec<Diagnostic> {

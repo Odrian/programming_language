@@ -2,16 +2,14 @@ mod context_window;
 mod module_generator;
 mod error;
 
-use std::process::Command;
 use std::path::Path;
-
+use std::process::Command;
 use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine}, OptimizationLevel};
-
+use pr_ast_linked::linked_statement::GlobalLinkedStatement;
+use pr_ast_linked::object::{IntObjType, ObjType};
+use pr_ast_linked::LinkedProgram;
 use crate::Args;
 use error::LLVMError;
-use pr_core::parser::parse3_linking::linked_statement::GlobalLinkedStatement;
-use pr_core::parser::parse3_linking::LinkedProgram;
-use pr_core::parser::parse3_linking::object::{IntObjType, ObjType};
 
 /// previous steps guarantees that every used variables is valid
 pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), LLVMError> {

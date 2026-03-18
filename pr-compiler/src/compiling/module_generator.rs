@@ -1,18 +1,16 @@
-use super::error::LLVMError;
-
-use pr_core::parser::operations::*;
-use pr_core::parser::parse3_linking::object::*;
-use pr_core::parser::parse3_linking::linked_statement::*;
-use super::context_window::ValueContextWindow;
-
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue, AnyValue, BasicValue};
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
-use pr_core::parser::parse3_linking::LinkedProgram;
-use pr_core::RString;
+use pr_common::ranged::RString;
+use pr_common::operations::*;
+use pr_ast_linked::LinkedProgram;
+use pr_ast_linked::object::*;
+use pr_ast_linked::linked_statement::*;
+use super::error::LLVMError;
+use super::context_window::ValueContextWindow;
 
 pub fn parse_module<'ctx>(
     context: &'ctx Context, target_data: &'ctx TargetData,

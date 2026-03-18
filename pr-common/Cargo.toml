@@ -1,0 +1,7 @@
+[package]
+name = "pr-common"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+lsp-types = { workspace = true }

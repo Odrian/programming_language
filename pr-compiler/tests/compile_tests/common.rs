@@ -2,7 +2,7 @@ use std::process::{Command, ExitStatus, Stdio};
 use clap::builder::OsStr;
 use clap::Parser;
 use pr_compiler::{Args, compile_src};
-use pr_core::error::ErrorQueue;
+use pr_common::error::ErrorQueue;
 
 use tempfile::TempDir;
 

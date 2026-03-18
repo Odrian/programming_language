@@ -1,6 +1,4 @@
-use pr_core::error::ErrorQueue;
-use pr_core::parser::parse1_tokenize::tokenize;
-use pr_core::parser::parse2_syntactic::parse_statements;
+use pr_common::error::ErrorQueue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -49,10 +47,10 @@ impl Backend {
     async fn diagnose_file(&self, uri: Url, text: &str) {
         let mut errors = ErrorQueue::default();
 
-        let tokens = tokenize(&mut errors, text);
+        let tokens = pr_tokenize::tokenize(&mut errors, text);
         // self.add_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens)).await;
 
-        let statements = parse_statements(&mut errors, tokens);
+        let statements = pr_ast::parse_ast(&mut errors, tokens);
         // self.add_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements)).await;
 
         let diagnostics = errors.to_lsp_diagnostics();
