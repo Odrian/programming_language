@@ -1,22 +1,24 @@
+use crate::error::ErrorQueue;
 use crate::parser::parse2_syntactic::statement::{ComptimeStatement, DeclarationStatement, ExternStatement, RStatement, Statement};
-use crate::parser::parse3_linking::error::{collect_errors, LinkingError};
+use crate::parser::parse3_linking::error::LinkingError;
 use crate::parser::parse3_linking::object::ObjType;
 use crate::parser::parse3_linking::TypeContext;
 
-pub fn parse_available_names(context: &mut TypeContext, statements: Vec<RStatement>) -> Result<(), ()> {
-    let errors = statements.into_iter().map(|stat|
-        add_name(context, stat)
-    ).collect::<Vec<_>>();
-    collect_errors(&context.factory, errors)
+pub fn parse_available_names(errors: &mut ErrorQueue, context: &mut TypeContext, statements: Vec<RStatement>) {
+    for statement in statements {
+        add_name(errors, context, statement);
+    }
 }
 
-fn add_name(context: &mut TypeContext, stat: RStatement) -> Result<(), LinkingError> {
+/// has errors only on name overloading
+fn add_name(errors: &mut ErrorQueue, context: &mut TypeContext, stat: RStatement) {
     match &stat.value {
         Statement::DeclarationStatement { name, statement } => {
             let object = context.factory.create_object(name.clone(), ObjType::Unknown);
             let object_option = context.available_names.insert(name.value.clone(), object);
             if object_option.is_some() {
-                return Err(LinkingError::Overloading { name: name.clone() });
+                errors.add_diag(LinkingError::overloading(name.clone()));
+                return
             }
             match statement {
                 DeclarationStatement::VariableDeclaration { .. } => {
@@ -38,7 +40,8 @@ fn add_name(context: &mut TypeContext, stat: RStatement) -> Result<(), LinkingEr
             let object = context.factory.create_object(name.clone(), ObjType::Unknown);
             let object_option = context.available_names.insert(name.value.clone(), object);
             if object_option.is_some() {
-                return Err(LinkingError::Overloading { name: name.clone() });
+            errors.add_diag(LinkingError::overloading(name.clone()));
+                return
             }
             context.extern_statements.insert(object, stat);
         }
@@ -52,5 +55,4 @@ fn add_name(context: &mut TypeContext, stat: RStatement) -> Result<(), LinkingEr
             unreachable!()
         }
     }
-    Ok(())
 }

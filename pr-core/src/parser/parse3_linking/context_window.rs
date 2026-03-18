@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::error::Diagnostic;
 use super::object::Object;
 use crate::parser::parse3_linking::error::LinkingError;
 use crate::RString;
@@ -35,10 +36,10 @@ impl ObjectContextWindow {
         self.contexts.iter().rev()
             .find_map(|obj_con|obj_con.get(name))
     }
-    pub fn get_or_error(&self, name: &RString) -> Result<Object, LinkingError> {
+    pub fn get_or_error(&self, name: &RString) -> Result<Object, Diagnostic> {
         match self.get(&name.value) {
             Some(obj) => Ok(obj),
-            None => Err(LinkingError::NameNotFound { name: name.clone(), context: format!("{self:?}") })
+            None => Err(LinkingError::name_not_found(name.clone()))
         }
     }
     pub fn add(&mut self, name: RString, object: Object) {

@@ -12,9 +12,11 @@ fn parse(text: &str) -> Result<LinkedProgram, ErrorQueue> {
     if errors.has_errors() {
         return Err(errors)
     }
-    let linked_program = parse3_linking::link_all(statements)
-        .map_err(|_| ErrorQueue::default());
-    linked_program
+    let linked_program = parse3_linking::link_all(&mut errors, statements);
+    if errors.has_errors() {
+        return Err(errors)
+    }
+    Ok(linked_program)
 }
 fn assert_has_error_global(str: &str) {
     assert_ne!(parse(str).err(), None);

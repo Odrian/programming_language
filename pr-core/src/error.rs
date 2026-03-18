@@ -1,5 +1,21 @@
 use lsp_types::{DiagnosticSeverity, Position, Range};
 
+pub struct DiagnosticString {
+    pub message: String,
+}
+
+impl DiagnosticString {
+    pub fn new(message: String) -> Self {
+        Self { message }
+    }
+    pub fn from_text(text: &str) -> Self {
+        Self::new(text.to_string())
+    }
+    pub fn to_diag(self, range: Range) -> Diagnostic {
+        Diagnostic::new(Some(range), self.message, DiagnosticSeverity::ERROR)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Diagnostic {
     pub range: Option<Range>,
@@ -59,6 +75,7 @@ impl ErrorQueue {
         ).collect()
     }
 }
+
 
 pub fn pos_to_str(position: Position) -> String {
     format!("{}:{}", position.line + 1, position.character + 1)

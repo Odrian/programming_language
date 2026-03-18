@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
-use crate::parser::parse3_linking::error::LinkingError;
 
 pub struct DependencyResolver<Key: Eq + Hash + Copy> {
     queue: VecDeque<Key>,
@@ -26,10 +25,11 @@ impl<Key: Eq + Hash + Copy> DependencyResolver<Key> {
         self.waiting_rev.clear();
         self.waiting_for.clear();
     }
-    pub fn next(&mut self) -> Result<Option<Key>, LinkingError> {
+    /// error: return dependency cycle
+    pub fn next(&mut self) -> Result<Option<Key>, Key> {
         let result = self.queue.pop_front();
         if result.is_none() && !self.waiting_for.is_empty() {
-            return Err(self.get_dependency_cycle_error())
+            return Err(self.get_dependency_cycle())
         }
         Ok(result)
     }
@@ -45,8 +45,8 @@ impl<Key: Eq + Hash + Copy> DependencyResolver<Key> {
             }
         }
     }
-    fn get_dependency_cycle_error(&mut self) -> LinkingError {
-        LinkingError::DependencyCycle
+    fn get_dependency_cycle(&mut self) -> Key {
+        *self.waiting_for.iter().next().unwrap().0
     }
     pub fn add_dependency(&mut self, what: Key, depends_on: Vec<Key>) {
         for &depends_on_one in &depends_on {

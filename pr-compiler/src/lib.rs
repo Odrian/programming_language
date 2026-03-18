@@ -64,13 +64,12 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
     let statements = parse2_syntactic::parse_statements(&mut errors, tokens);
     if args.gen_ast { generate_ast_file(&filename, &statements)? }
 
-    if errors.has_errors() {
-        return Err(errors)
-    }
+    if errors.has_errors() { return Err(errors) }
 
-    let linked_program = parse3_linking::link_all(statements)
-        .map_err(|_| ErrorQueue::new_single_error("linking error"))?;
+    let linked_program = parse3_linking::link_all(&mut errors, statements);
     if args.gen_last { generate_last_file(&filename, &linked_program)? }
+
+    if errors.has_errors() { return Err(errors) }
 
     compiling::parse_to_llvm(args, linked_program)
         .map_err(|err| ErrorQueue::new_single_error(&err.to_string()))?;

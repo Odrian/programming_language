@@ -1,122 +1,113 @@
-use crate::error::{print_error, ErrKind};
-use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
-use crate::parser::parse3_linking::linked_statement::LinkedExpression;
-use crate::parser::parse3_linking::object::{ObjType, ObjectFactory};
+use crate::error::{Diagnostic, DiagnosticString};
+use crate::parser::operations::{ROneSidedOperation, RTwoSidedOperation};
 use crate::RString;
+use lsp_types::Range;
 
-pub enum LinkingError {
-    DependencyCycle,
-    Overloading { name: RString },
-    NameNotFound { name: RString, context: String },
-    CallNotFunction { name: RString },
-
-    DotNotOnStruct { got: ObjType },
-    StructFieldNameCollision { struct_name: RString, field_name: String, in_construction: bool },
-    StructFieldNameNotFound { struct_name: RString, field_name: String },
-    IncorrectType { got: ObjType, expected: ObjType },
-    CantDetermineType,
-    IncorrectOneOper { object_type: ObjType, op: OneSidedOperation },
-    IncorrectTwoOper { object_type1: ObjType, object_type2: ObjType, op: TwoSidedOperation },
-    IncorrectAs { what: Box<LinkedExpression>, from: ObjType, to: ObjType },
-    GlobalVariableWithoutType { name: RString },
-    UnexpectedVoidUse,
-
-    FunctionMustReturn { function_name: RString },
-
-    LiteralParseError { what: String, error: String },
-    IncorrectArgumentCount { function_name: RString, is_vararg: bool, argument_need: usize, argument_got: usize },
-    FunctionAsValue { name: RString },
-}
-
-pub fn collect_errors(factory: &ObjectFactory, iter: impl IntoIterator<Item=Result<(), LinkingError>>) -> Result<(), ()> {
-    let mut ans = Ok(());
-    for result in iter {
-        if let Err(err) = result {
-            err.print(factory);
-            ans = Err(());
-        }
-    }
-    ans
-}
+pub struct LinkingError;
 
 impl LinkingError {
-    pub fn print(&self, factory: &ObjectFactory) {
-        print_error(ErrKind::Error, &self.to_string::<false>(factory));
+    pub fn dependency_cycle(name: RString) -> Diagnostic {
+        DiagnosticString::new(
+            format!("dependency cycle with {name}")
+        ).to_diag(name.range)
+    }
+    pub fn overloading(name: RString) -> Diagnostic {
+        DiagnosticString::new(
+            format!("overloaded {name}")
+        ).to_diag(name.range)
+    }
+    pub fn name_not_found(name: RString) -> Diagnostic {
+        DiagnosticString::new(
+            format!("undefined name {name}")
+        ).to_diag(name.range)
+    }
+    pub fn call_not_function(name: RString) -> Diagnostic {
+        DiagnosticString::new(
+            format!("can't call {name}, it's not a function")
+        ).to_diag(name.range)
     }
 
-    pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
-        match self {
-            Self::DependencyCycle => {
-                "dependency cycle".to_string()
-            }
-            Self::Overloading { name } => {
-                format!("overloaded '{name}'")
-            }
-            Self::NameNotFound { name, context } => {
-                format!("can't find {name} in {context}")
-            }
-            Self::CallNotFunction { name } => {
-                format!("can't call {name}, it's not a function")
-            }
+    pub fn dot_not_on_struct(got_obj_type: String, range: Range) -> Diagnostic {
+        DiagnosticString::new(
+            format!("dot operator can't be used on {got_obj_type}")
+        ).to_diag(range)
+    }
+    pub fn struct_field_name_collision(struct_name: RString, field_name: String) -> Diagnostic {
+        DiagnosticString::new(
+            format!("construction of struct '{struct_name}' has two fields with name {field_name}")
+        ).to_diag(struct_name.range)
+    }
+    pub fn struct_field_name_collision_in_construction(struct_name: RString, field_name: String) -> Diagnostic {
+        DiagnosticString::new(
+            format!("struct '{struct_name}' has two fields with name {field_name}")
+        ).to_diag(struct_name.range)
+    }
+    pub fn struct_field_name_not_found(struct_name: String, field_name: RString) -> Diagnostic {
+        DiagnosticString::new(
+            format!("struct '{struct_name}' hasn't field '{field_name}'")
+        ).to_diag(field_name.range)
+    }
+    pub fn struct_field_missing_in_construction(struct_name: RString, field_name: String) -> Diagnostic {
+        DiagnosticString::new(
+            format!("no field '{field_name}' in struct '{struct_name}' construction")
+        ).to_diag(struct_name.range)
+    }
+    pub fn incorrect_type(got_obj_type: String, expected_obj_type: String, range: Range) -> Diagnostic {
+        DiagnosticString::new(
+            format!("incorrect type, got {got_obj_type}, expected {expected_obj_type}")
+        ).to_diag(range)
+    }
+    pub fn cant_determine_type(range: Range) -> Diagnostic {
+        DiagnosticString::from_text(
+            "can't determine type"
+        ).to_diag(range)
+    }
+    pub fn incorrect_one_oper(obj_type: String, op: ROneSidedOperation) -> Diagnostic {
+        DiagnosticString::new(
+            format!("can't use '{op}' to '{obj_type}'")
+        ).to_diag(op.range)
+    }
+    pub fn incorrect_two_oper(obj_type1: String, obj_type2: String, op: RTwoSidedOperation) -> Diagnostic {
+        DiagnosticString::new(
+            format!("can't use '{op}' between '{obj_type1}' and '{obj_type2}'")
+        ).to_diag(op.range)
+    }
+    pub fn incorrect_as(obj_type_from: String, obj_type_to: String, range: Range) -> Diagnostic {
+        DiagnosticString::new(
+            format!("can't cast {obj_type_from} to {obj_type_to}")
+        ).to_diag(range)
+    }
+    pub fn global_variable_without_type(name: RString) -> Diagnostic {
+        DiagnosticString::new(
+            format!("global variable '{name}' is declared without type annotation")
+        ).to_diag(name.range)
+    }
+    pub fn unexpected_void_use(range: Range) -> Diagnostic {
+        DiagnosticString::from_text(
+            "'void' can't be used as actual type"
+        ).to_diag(range)
+    }
 
-            Self::DotNotOnStruct { got } => {
-                let got = got.to_string::<WITH_ID>(factory);
-                format!("dot operator can't be used on {got}")
-            }
-            Self::StructFieldNameCollision { struct_name, field_name, in_construction } => {
-                if *in_construction {
-                    format!("struct '{struct_name}' has two fields with name {field_name}")
-                } else {
-                    format!("construction of struct '{struct_name}' has two fields with name {field_name}")
-                }
-            }
-            Self::StructFieldNameNotFound { struct_name, field_name } => {
-                format!("struct '{struct_name}' hasn't field '{field_name}'")
-            }
-            Self::IncorrectType { got, expected } => {
-                let got = got.to_string::<WITH_ID>(factory);
-                let expected = expected.to_string::<WITH_ID>(factory);
-                format!("incorrect type, got {got}, expected {expected}")
-            }
-            Self::CantDetermineType => {
-                "can't determine type".to_string()
-            }
-            Self::IncorrectOneOper { object_type, op } => {
-                let object_type = object_type.to_string::<WITH_ID>(factory);
-                format!("can't use '{op}' to '{object_type}'")
-            }
-            Self::IncorrectTwoOper { object_type1, object_type2, op } => {
-                let object_type1 = object_type1.to_string::<WITH_ID>(factory);
-                let object_type2 = object_type2.to_string::<WITH_ID>(factory);
-                format!("can't use '{op}' between '{object_type1}' and '{object_type2}'")
-            }
-            Self::IncorrectAs { what, from, to } => {
-                let what = what.to_string::<WITH_ID>(factory);
-                let from = from.to_string::<WITH_ID>(factory);
-                let to = to.to_string::<WITH_ID>(factory);
-                format!("can't cast {what}, which has type {from} to {to}")
-            }
-            Self::GlobalVariableWithoutType { name } => {
-                format!("global variable '{name}' is declared without type annotation")
-            }
-            Self::UnexpectedVoidUse => {
-                "'void' can't be used as actual type".to_string()
-            }
+    pub fn function_must_return(function_name: RString) -> Diagnostic {
+        DiagnosticString::new(
+            format!("function {function_name} may not return")
+        ).to_diag(function_name.range)
+    }
 
-            Self::FunctionMustReturn { function_name } => {
-                format!("function {function_name} may not return")
-            }
-
-            Self::LiteralParseError { what, error } => {
-                format!("{error} in literal {what}")
-            }
-            Self::IncorrectArgumentCount { function_name, is_vararg, argument_need, argument_got } => {
-                let at_least = if *is_vararg { " at least" } else { "" };
-                format!("incorrect argument count for function {function_name}, need{at_least} {argument_need}, got {argument_got}")
-            }
-            Self::FunctionAsValue { name } => {
-                format!("can't use function {name} as variable value")
-            }
-        }
+    pub fn literal_unexpected_suffix(suffix: String, range: Range) -> Diagnostic {
+        DiagnosticString::new(
+            format!("unexpected suffix {suffix} in literal")
+        ).to_diag(range)
+    }
+    pub fn incorrect_argument_count(function_name: RString, is_vararg: bool, argument_need: usize, argument_got: usize) -> Diagnostic {
+        let at_least = if is_vararg { " at least" } else { "" };
+        DiagnosticString::new(
+            format!("incorrect argument count for function {function_name}, need{at_least} {argument_need}, got {argument_got}")
+        ).to_diag(function_name.range)
+    }
+    pub fn function_as_value(name: RString) -> Diagnostic {
+        DiagnosticString::new(
+            format!("can't use function {name} as variable value")
+        ).to_diag(name.range)
     }
 }

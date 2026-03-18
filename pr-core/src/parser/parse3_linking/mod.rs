@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use crate::parser::parse2_syntactic::statement::RStatement;
 use linked_statement::{GlobalLinkedStatement};
 use object::Object;
+use crate::error::ErrorQueue;
 use crate::parser::parse3_linking::object::ObjectFactory;
 
 #[derive(Default)]
@@ -27,6 +28,12 @@ struct TypeContext {
 
     result: LinkedProgram,
 }
+impl TypeContext {
+    fn consume(mut self) -> LinkedProgram {
+        self.result.factory = self.factory;
+        self.result
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct LinkedProgram {
@@ -39,14 +46,16 @@ pub struct LinkedProgram {
     pub variable_statement: HashMap<Object, GlobalLinkedStatement>,
 }
 
-pub fn link_all(statements: Vec<RStatement>) -> Result<LinkedProgram, ()> {
+pub fn link_all(errors: &mut ErrorQueue, statements: Vec<RStatement>) -> LinkedProgram {
     let mut context = TypeContext::default();
 
-    parse_available_names::parse_available_names(&mut context, statements)?;
-    parse_types::parse_types(&mut context)?;
+    parse_available_names::parse_available_names(errors, &mut context, statements);
 
-    parser_linked_statement::link_objects(&mut context)?;
+    if errors.has_errors() { return context.consume() }
 
-    context.result.factory = context.factory;
-    Ok(context.result)
+    parse_types::parse_types(errors, &mut context);
+
+    parser_linked_statement::link_objects(errors, &mut context);
+
+    context.consume()
 }

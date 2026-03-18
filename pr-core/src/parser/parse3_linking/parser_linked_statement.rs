@@ -1,55 +1,55 @@
+use std::cell::RefCell;
 use super::context_window::ObjectContextWindow;
 use super::linked_statement::*;
-use super::object::{FloatObjType, IntObjType, ObjType, Object};
+use super::object::{parse_primitive_type, IntObjType, ObjType, Object};
+use crate::error::{Diagnostic, ErrorQueue};
 use crate::parser::operations::{OneSidedOperation, TwoSidedOperation};
 use crate::parser::parse2_syntactic::statement::*;
-use crate::parser::parse3_linking::error::{collect_errors, LinkingError};
+use crate::parser::parse3_linking::error::LinkingError;
 use crate::parser::parse3_linking::TypeContext;
 use crate::RString;
+use lsp_types::Range;
 
-pub fn link_objects(context: &mut TypeContext) -> Result<(), ()> {
+pub fn link_objects(errors: &mut ErrorQueue, context: &mut TypeContext) {
     let function_declarations = std::mem::take(&mut context.function_statement);
     let variable_declarations = std::mem::take(&mut context.variable_statement);
     let extern_declarations = std::mem::take(&mut context.extern_statements);
 
-    let mut linking_context = FunctionLinkingContext::new(context);
+    let mut linking_context = FunctionLinkingContext::new(errors, context);
 
-    let mut errors1 = extern_declarations.into_iter().map(|(object, statement)|
+    let r1 = extern_declarations.into_iter().map(|(object, statement)|
         linking_context.link_global_declaration(object, statement)
-    ).collect::<Vec<_>>();
-    let errors2 =  variable_declarations.iter().map(|(&object, statement)|
+    ).collect::<Result<(), ()>>();
+    let r2 = variable_declarations.iter().map(|(&object, statement)|
         linking_context.prelink_global_variable(object, statement)
-    ).collect::<Vec<_>>();
-    let errors3 =  function_declarations.iter().map(|(&object, statement)|
+    ).collect::<Result<(), ()>>();
+    let r3 = function_declarations.iter().map(|(&object, statement)|
         linking_context.prelink_global_function(object, statement)
-    ).collect::<Vec<_>>();
- 
-    errors1.extend(errors2);
-    errors1.extend(errors3);
-    collect_errors(&linking_context.context.factory, errors1)?;
+    ).collect::<Result<(), ()>>();
 
-    let mut errors1 =  variable_declarations.into_iter().map(|(object, statement)|
+    if r1.is_err() || r2.is_err() || r3.is_err() {
+        return;
+    }
+
+    let _ = variable_declarations.into_iter().map(|(object, statement)|
         linking_context.parse_global_variable(object, statement)
-    ).collect::<Vec<_>>();
-    let errors2 =  function_declarations.into_iter().map(|(object, statement)|
+    ).collect::<Result<(), ()>>();
+    let _ = function_declarations.into_iter().map(|(object, statement)|
         linking_context.parse_global_function(object, statement)
-    ).collect::<Vec<_>>();
-
-    errors1.extend(errors2);
-    collect_errors(&linking_context.context.factory, errors1)?;
-
-    Ok(())
+    ).collect::<Result<(), ()>>();
 }
 
 struct FunctionLinkingContext<'factory> {
+    errors: RefCell<&'factory mut ErrorQueue>,
     object_context_window: ObjectContextWindow,
     context: &'factory mut TypeContext,
     current_function_returns: Option<ObjType>,
 }
 
 impl<'factory> FunctionLinkingContext<'factory> {
-    fn new(context: &'factory mut TypeContext) -> Self {
+    fn new(errors: &'factory mut ErrorQueue, context: &'factory mut TypeContext) -> Self {
         Self {
+            errors: RefCell::new(errors),
             object_context_window: ObjectContextWindow::new(context.available_names.clone()),
             context,
             current_function_returns: None,
@@ -58,7 +58,10 @@ impl<'factory> FunctionLinkingContext<'factory> {
 }
 
 impl FunctionLinkingContext<'_> {
-    fn link_global_declaration(&mut self, object: Object, statement: RStatement) -> Result<(), LinkingError> {
+    fn add_diag(&self, diag: Diagnostic) {
+        self.errors.borrow_mut().add_diag(diag)
+    }
+    fn link_global_declaration(&mut self, object: Object, statement: RStatement) -> Result<(), ()> {
         let Statement::ExternStatement { statement } = statement.value else { unreachable!() };
         match statement {
             ExternStatement::Variable { name, typee } => {
@@ -76,7 +79,9 @@ impl FunctionLinkingContext<'_> {
                 let arguments_type = args.iter().map(|typee| {
                     let object_type = self.parse_type(typee)?;
                     if object_type.is_void() {
-                        return Err(LinkingError::UnexpectedVoidUse);
+                        self.add_diag(
+                            LinkingError::unexpected_void_use(typee.range));
+                        return Err(())
                     }
                     Ok(object_type)
                 }).collect::<Result<Vec<_>, _>>()?;
@@ -102,12 +107,14 @@ impl FunctionLinkingContext<'_> {
             }
         }
     }
-    fn prelink_global_variable(&mut self, object: Object, statement: &RStatement) -> Result<(), LinkingError> {
+    fn prelink_global_variable(&mut self, object: Object, statement: &RStatement) -> Result<(), ()> {
         let Statement::DeclarationStatement { name, statement } = &statement.value else { unreachable!() };
         let DeclarationStatement::VariableDeclaration { typee, value: _ } = statement else { unreachable!() };
 
         let Some(typee) = typee else {
-            return Err(LinkingError::GlobalVariableWithoutType { name: name.clone() });
+            self.add_diag(
+                LinkingError::global_variable_without_type(name.clone()));
+            return Err(());
         };
         let obj_type = self.parse_type(typee)?;
 
@@ -116,7 +123,7 @@ impl FunctionLinkingContext<'_> {
 
         Ok(())
     }
-    fn parse_global_variable(&mut self, object: Object, statement: RStatement) -> Result<(), LinkingError> {
+    fn parse_global_variable(&mut self, object: Object, statement: RStatement) -> Result<(), ()> {
         let Statement::DeclarationStatement { name: _, statement } = statement.value else { unreachable!() };
         let DeclarationStatement::VariableDeclaration { typee: _, value: expr } = statement else { unreachable!() };
 
@@ -128,7 +135,7 @@ impl FunctionLinkingContext<'_> {
         self.context.result.variable_statement.insert(object, linked_statement);
         Ok(())
     }
-    fn prelink_global_function(&mut self, object: Object, statement: &RStatement) -> Result<(), LinkingError> {
+    fn prelink_global_function(&mut self, object: Object, statement: &RStatement) -> Result<(), ()> {
         let Statement::DeclarationStatement { name, statement } = &statement.value else { unreachable!() };
         let DeclarationStatement::Function { args, returns, body: _ } = statement else { unreachable!() };
 
@@ -136,7 +143,9 @@ impl FunctionLinkingContext<'_> {
         for (_, typee) in args {
             let object_type = self.parse_type(typee)?;
             if object_type.is_void() {
-                return Err(LinkingError::UnexpectedVoidUse);
+                self.add_diag(
+                    LinkingError::unexpected_void_use(typee.range));
+                return Err(())
             }
             arguments_type.push(object_type);
         }
@@ -158,7 +167,7 @@ impl FunctionLinkingContext<'_> {
 
         Ok(())
     }
-    fn parse_global_function(&mut self, object: Object, statement: RStatement) -> Result<(), LinkingError> {
+    fn parse_global_function(&mut self, object: Object, statement: RStatement) -> Result<(), ()> {
         let Statement::DeclarationStatement { name, statement } = statement.value else { unreachable!() };
         let DeclarationStatement::Function { args, returns: _, body } = statement else { unreachable!() };
 
@@ -186,7 +195,9 @@ impl FunctionLinkingContext<'_> {
             if return_type == ObjType::Void {
                 body.push(LinkedStatement::Return(None));
             } else {
-                return Err(LinkingError::FunctionMustReturn { function_name: name });
+                self.add_diag(
+                    LinkingError::function_must_return(name));
+                return Err(())
             }
         }
 
@@ -194,14 +205,14 @@ impl FunctionLinkingContext<'_> {
         self.context.result.function_statement.insert(object, linked_statement);
         Ok(())
     }
-    fn link_statements_recursive(&mut self, statements: Vec<RStatement>) -> Result<Vec<LinkedStatement>, LinkingError> {
+    fn link_statements_recursive(&mut self, statements: Vec<RStatement>) -> Result<Vec<LinkedStatement>, ()> {
         let mut result = Vec::with_capacity(statements.len());
         for statement in statements {
             self.parse_statement(statement, &mut result)?;
         }
         Ok(result)
     }
-    fn parse_statement(&mut self, statement: RStatement, result: &mut Vec<LinkedStatement>) -> Result<(), LinkingError> {
+    fn parse_statement(&mut self, statement: RStatement, result: &mut Vec<LinkedStatement>) -> Result<(), ()> {
         match statement.value {
             Statement::Brackets(body) => {
                 self.object_context_window.step_in();
@@ -252,7 +263,9 @@ impl FunctionLinkingContext<'_> {
             }
             Statement::Return(option_expression) => {
                 let expression = match option_expression {
-                    Some(expression) => Some(self.parse_expression(expression, self.current_function_returns.clone().as_ref())?),
+                    Some(expression) => Some(
+                        self.parse_expression(expression, self.current_function_returns.clone().as_ref())?
+                    ),
                     None => None,
                 };
                 let expression_type = match &expression {
@@ -261,12 +274,15 @@ impl FunctionLinkingContext<'_> {
                 };
                 if Some(expression_type) != self.current_function_returns.as_ref() {
                     let expected_type = self.current_function_returns.clone().unwrap_or(ObjType::Void);
-                    return Err(LinkingError::IncorrectType { got: expression_type.clone(), expected: expected_type });
+                    self.add_diag(LinkingError::incorrect_type(
+                        expression_type.to_str(self), expected_type.to_str(self),
+                        statement.range));
+                    return Err(())
                 }
                 result.push(LinkedStatement::Return(expression));
                 Ok(())
             }
-            Statement::DeclarationStatement { name, statement} => match &statement {
+            Statement::DeclarationStatement { name, statement } => match &statement {
                 DeclarationStatement::VariableDeclaration { .. } => {
                     self.parse_variable_declaration(name, statement, result)?;
                     Ok(())
@@ -279,15 +295,18 @@ impl FunctionLinkingContext<'_> {
             Statement::ExternStatement { .. } => unimplemented!("local extern"),
         }
     }
-    fn parse_variable_declaration(&mut self, name: RString, declaration: DeclarationStatement, result: &mut Vec<LinkedStatement>) -> Result<(), LinkingError> {
+    fn parse_variable_declaration(&mut self, name: RString, declaration: DeclarationStatement, result: &mut Vec<LinkedStatement>) -> Result<(), ()> {
         let DeclarationStatement::VariableDeclaration { typee, value: expr } = declaration else { unreachable!() };
         let objet_type_option = match typee {
             Some(typee) => Some(self.parse_type(&typee)?),
             None => None,
         };
+        let expr_range = expr.range;
         let typed_expr = self.parse_expression(expr, objet_type_option.as_ref())?;
         if typed_expr.object_type.is_void() {
-            return Err(LinkingError::UnexpectedVoidUse);
+            self.add_diag(
+                LinkingError::unexpected_void_use(expr_range));
+            return Err(())
         }
 
         let object = self.context.factory.create_object(name.clone(), typed_expr.object_type.clone());
@@ -295,7 +314,7 @@ impl FunctionLinkingContext<'_> {
         result.push(LinkedStatement::new_variable(object, typed_expr));
         Ok(())
     }
-    fn try_autocast(&self, mut typed_expression: TypedExpression, expected_type: Option<&ObjType>) -> Result<TypedExpression, LinkingError> {
+    fn try_autocast(&self, mut typed_expression: TypedExpression, expected_type: Option<&ObjType>) -> Result<TypedExpression, ()> {
         let Some(expected_type) = expected_type else {
             return Ok(typed_expression)
         };
@@ -314,7 +333,10 @@ impl FunctionLinkingContext<'_> {
                 expr: LinkedExpression::new_unary_operation(typed_expression, OneSidedOperation::Dereference)
             })
         }
-        Err(LinkingError::IncorrectType { expected: expected_type.clone(), got: typed_expression.object_type })
+        self.add_diag(LinkingError::incorrect_type(
+            expected_type.to_str(self), typed_expression.object_type.to_str(self),
+            Range::default()));
+        Err(())
     }
     fn try_deref_reference(expression: TypedExpression) -> TypedExpression {
         if !matches!(expression.object_type, ObjType::Reference { .. }) {
@@ -328,7 +350,7 @@ impl FunctionLinkingContext<'_> {
             expr: LinkedExpression::new_unary_operation(expression, OneSidedOperation::Dereference)
         }
     }
-    fn parse_expression(&self, expression: RExpression, expected_type: Option<&ObjType>) -> Result<TypedExpression, LinkingError> {
+    fn parse_expression(&self, expression: RExpression, expected_type: Option<&ObjType>) -> Result<TypedExpression, ()> {
         match expression.value {
             Expression::Operation(expression1, expression2, op) => {
                 let ex1 = self.parse_expression(*expression1, None)?;
@@ -337,7 +359,9 @@ impl FunctionLinkingContext<'_> {
                 // ex2 will deref if can in [self.try_autocast]
 
                 let Some(result_type) = ObjType::from_operation(&ex1.object_type, &ex2.object_type, op.value) else {
-                    return Err(LinkingError::IncorrectTwoOper { object_type1: ex1.object_type, object_type2: ex2.object_type, op: op.value });
+                    self.add_diag(LinkingError::incorrect_two_oper(
+                        ex1.object_type.to_str(self), ex2.object_type.to_str(self), op));
+                    return Err(())
                 };
                 let result = TypedExpression::new(
                     result_type,
@@ -370,7 +394,8 @@ impl FunctionLinkingContext<'_> {
                     },
                 };
                 let Some(result_type) = ObjType::from_unary_operation(&ex.object_type, op.value) else {
-                    return Err(LinkingError::IncorrectOneOper { object_type: ex.object_type, op: op.value });
+                    self.add_diag(LinkingError::incorrect_one_oper(ex.object_type.to_str(self), op));
+                    return Err(())
                 };
                 let result = TypedExpression::new(
                     result_type,
@@ -379,13 +404,17 @@ impl FunctionLinkingContext<'_> {
                 self.try_autocast(result, expected_type)
             }
             Expression::As(expression, typee) => {
+                let expr_range = expression.range;
                 let ex = self.parse_expression(*expression, None)?;
                 let ex = Self::try_deref_reference(ex); // FIXME: maybe not do it for * and &?
                 let object_type = self.parse_type(&typee)?;
 
                 let can_cast = ObjType::check_can_cast(&ex.object_type, &object_type);
                 if !can_cast {
-                    return Err(LinkingError::IncorrectAs { what: Box::new(ex.expr), from: ex.object_type, to: object_type });
+                    self.add_diag(LinkingError::incorrect_as(
+                        ex.object_type.to_str(self), object_type.to_str(self),
+                        expr_range));
+                    return Err(())
                 }
 
                 let result = TypedExpression::new(
@@ -402,11 +431,13 @@ impl FunctionLinkingContext<'_> {
                 ))
             }
             Expression::Variable(name) => {
-                let object = self.object_context_window.get_or_error(&name)?;
+                let object = self.object_context_window.get_or_error(&name)
+                    .map_err(|d| self.add_diag(d))?;
                 let obj_type = self.context.factory.get_type(object);
 
                 if matches!(obj_type, ObjType::Function { .. }) {
-                    return Err(LinkingError::FunctionAsValue { name });
+                    self.add_diag(LinkingError::function_as_value(name));
+                    return Err(())
                 }
 
                 let result = TypedExpression::new(
@@ -416,14 +447,18 @@ impl FunctionLinkingContext<'_> {
                 self.try_autocast(result, expected_type)
             },
             Expression::FunctionCall { object: name, args: args_values } => {
-                let object = self.object_context_window.get_or_error(&name)?;
+                let object = self.object_context_window.get_or_error(&name)
+                    .map_err(|d| self.add_diag(d))?;
                 let ObjType::Function { arguments, is_vararg, returns } = self.context.factory.get_type(object).clone() else {
-                    return Err(LinkingError::CallNotFunction { name });
+                    self.add_diag(LinkingError::call_not_function(name));
+                    return Err(())
                 };
                 if args_values.len() < arguments.len() || (!is_vararg && args_values.len() > arguments.len()) {
                     let function_name = self.context.factory.get_name(object).clone();
-                    return Err(LinkingError::IncorrectArgumentCount { function_name, is_vararg, argument_need: arguments.len(), argument_got: args_values.len() });
+                    self.add_diag(LinkingError::incorrect_argument_count(function_name, is_vararg, arguments.len(), args_values.len()));
+                    return Err(())
                 }
+                let args_ranges: Vec<Range> = args_values.iter().map(|x| x.range).collect();
                 let args = args_values.into_iter().enumerate()
                     .map(|(index, x)| {
                         if index < arguments.len() {
@@ -436,7 +471,10 @@ impl FunctionLinkingContext<'_> {
 
                 for index in 0..arguments.len() {
                     if args[index].object_type != arguments[index] {
-                        return Err(LinkingError::IncorrectType { got: args[index].object_type.clone(), expected: arguments[index].clone() });
+                        self.add_diag(LinkingError::incorrect_type(
+                            args[index].object_type.to_str(self), arguments[index].to_str(self),
+                            args_ranges[index]));
+                        return Err(())
                     }
                 }
 
@@ -450,16 +488,15 @@ impl FunctionLinkingContext<'_> {
                 let left = self.parse_expression(*left, None)?;
 
                 match &left.object_type {
-                    ObjType::Reference{ obj_type: object, is_weak: _ } if matches!(object.as_ref(), ObjType::Struct(..)) => {
+                    ObjType::Reference { obj_type: object, is_weak: _ } if matches!(object.as_ref(), ObjType::Struct(..)) => {
                         let ObjType::Struct(object) = object.as_ref() else { unreachable!() };
 
                         let statement = self.context.result.type_statements.get(object).unwrap();
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
                         let Some(&index) = field_names.get(&field.value) else {
-                            return Err(LinkingError::StructFieldNameNotFound {
-                                struct_name: self.context.factory.get_name(*object).clone(),
-                                field_name: field.value,
-                            });
+                            self.add_diag(LinkingError::struct_field_name_not_found(
+                                self.context.factory.get_name(*object).value.clone(), field));
+                            return Err(())
                         };
                         let obj_type = fields.get(index as usize).unwrap().clone();
 
@@ -473,10 +510,10 @@ impl FunctionLinkingContext<'_> {
                         let statement = self.context.result.type_statements.get(object).unwrap();
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
                         let Some(&index) = field_names.get(&field.value) else {
-                            return Err(LinkingError::StructFieldNameNotFound {
-                                struct_name: self.context.factory.get_name(*object).clone(),
-                                field_name: field.value,
-                            });
+                            self.add_diag(LinkingError::struct_field_name_not_found(
+                                self.context.factory.get_name(*object).value.clone(),
+                                field));
+                            return Err(())
                         };
                         let obj_type = fields.get(index as usize).unwrap().clone();
 
@@ -491,18 +528,20 @@ impl FunctionLinkingContext<'_> {
                         self.try_autocast(result, expected_type)
                     }
                     _ => {
-                        Err(LinkingError::DotNotOnStruct { got: left.object_type })
+                        self.add_diag(LinkingError::dot_not_on_struct(left.object_type.to_str(self), field.range));
+                        Err(())
                     }
                 }
             }
-            Expression::Literal(literal) => self.parse_literal(literal, expected_type),
+            Expression::Literal(literal) => self.parse_literal(literal, expression.range, expected_type),
             Expression::StructConstruct { struct_name, fields: fields_values } => {
                 let struct_type = self.parse_type(&Typee::String(struct_name.value.clone()).add_range(struct_name.range))?;
                 let ObjType::Struct(object) = &struct_type else {
-                    return Err(LinkingError::NameNotFound { name: struct_name, context: format!("{:?}", self.object_context_window) });
+                    self.add_diag(LinkingError::name_not_found(struct_name));
+                    return Err(())
                 };
                 let object = *object;
-                
+
                 let GlobalLinkedStatement::Struct { fields: field_types, field_names } =
                     self.context.result.type_statements.get(&object).unwrap() else { unreachable!() };
 
@@ -512,7 +551,8 @@ impl FunctionLinkingContext<'_> {
                 let mut used_fields = vec![false; field_types.len()];
                 for (field_name, value) in fields_values {
                     let Some(index) = field_names.get(&field_name.value) else {
-                        return Err(LinkingError::StructFieldNameNotFound { struct_name, field_name: field_name.value });
+                        self.add_diag(LinkingError::struct_field_name_not_found(struct_name.value, field_name));
+                        return Err(())
                     };
                     let index = *index as usize;
 
@@ -521,7 +561,8 @@ impl FunctionLinkingContext<'_> {
                     fields[index] = Some(value);
 
                     if used_fields[index] {
-                        return Err(LinkingError::StructFieldNameCollision { struct_name, field_name: field_name.value, in_construction: true });
+                        self.add_diag(LinkingError::struct_field_name_collision_in_construction(struct_name, field_name.value));
+                        return Err(())
                     }
                     used_fields[index] = true;
                 }
@@ -529,7 +570,8 @@ impl FunctionLinkingContext<'_> {
                     let index = used_fields.iter().position(|x| !*x).unwrap();
                     let (field_name, _) = field_names.iter().find(|(_, i)| **i == index as u32).unwrap();
                     let field_name = field_name.clone();
-                    return Err(LinkingError::StructFieldNameNotFound { struct_name, field_name });
+                    self.add_diag(LinkingError::struct_field_missing_in_construction(struct_name, field_name));
+                    return Err(())
                 }
 
                 let fields = fields.into_iter().map(Option::unwrap).collect::<Vec<_>>();
@@ -545,11 +587,12 @@ impl FunctionLinkingContext<'_> {
             }
         }
     }
-    fn parse_literal(&self, literal: LiteralExpression, expected_type: Option<&ObjType>) -> Result<TypedExpression, LinkingError> {
+    fn parse_literal(&self, literal: LiteralExpression, literal_range: Range, expected_type: Option<&ObjType>) -> Result<TypedExpression, ()> {
         match literal {
             LiteralExpression::Undefined => {
                 let Some(obj_type) = expected_type else {
-                    return Err(LinkingError::CantDetermineType);
+                    self.add_diag(LinkingError::cant_determine_type(literal_range));
+                    return Err(())
                 };
                 Ok(TypedExpression::new(
                     obj_type.clone(),
@@ -557,7 +600,7 @@ impl FunctionLinkingContext<'_> {
                 ))
             }
             LiteralExpression::NumberLiteral(string) => {
-                let result = parse_number_literal(string, expected_type)?;
+                let result = self.parse_number_literal(string, literal_range, expected_type)?;
                 self.try_autocast(result, expected_type)
             },
             LiteralExpression::BoolLiteral(value) => {
@@ -584,7 +627,7 @@ impl FunctionLinkingContext<'_> {
         }
     }
 
-    fn parse_type(&self, typee: &RTypee) -> Result<ObjType, LinkingError> {
+    fn parse_type(&self, typee: &RTypee) -> Result<ObjType, ()> {
         match &typee.value {
             Typee::String(string) => {
                 let primitive_option = parse_primitive_type(string);
@@ -594,7 +637,8 @@ impl FunctionLinkingContext<'_> {
 
                 if let Some(type_object) = self.object_context_window.get(string) {
                     let Some(statement) = self.context.result.type_statements.get(&type_object) else {
-                        return Err(LinkingError::NameNotFound { name: RString::new(string.clone(), typee.range), context: format!("{:?}", self.object_context_window) });
+                        self.add_diag(LinkingError::name_not_found(RString::new(string.clone(), typee.range)));
+                        return Err(())
                     };
                     match statement {
                         GlobalLinkedStatement::Struct { .. } => return Ok(ObjType::Struct(type_object)),
@@ -604,7 +648,8 @@ impl FunctionLinkingContext<'_> {
                     }
                 };
 
-                Err(LinkingError::NameNotFound { name: RString::new(string.clone(), typee.range), context: format!("{:?}", self.object_context_window) })
+                self.add_diag(LinkingError::name_not_found(RString::new(string.clone(), typee.range)));
+                Err(())
             }
             Typee::Pointer(obj_type) => {
                 let obj_type = self.parse_type(obj_type)?;
@@ -616,81 +661,57 @@ impl FunctionLinkingContext<'_> {
             }
         }
     }
-}
 
-pub fn parse_primitive_type(string: &str) -> Option<ObjType> {
-    match string {
-        "void" => Some(ObjType::Void),
+    fn parse_number_literal(&self, mut string: String, literal_range: Range, expected_type: Option<&ObjType>) -> Result<TypedExpression, ()> {
+        string = string.replace('_', "");
 
-        "bool" => Some(ObjType::BOOL),
-        "char" => Some(ObjType::Char),
+        let has_dot = string.find('.').is_some();
 
-        "i8"   => Some(ObjType::Integer(IntObjType::I8)),
-        "i16"  => Some(ObjType::Integer(IntObjType::I16)),
-        "i32"  => Some(ObjType::Integer(IntObjType::I32)),
-        "i64"  => Some(ObjType::Integer(IntObjType::I64)),
-        "i128" => Some(ObjType::Integer(IntObjType::I128)),
-        "isize" => Some(ObjType::Integer(IntObjType::ISize)),
-
-        "u8"   => Some(ObjType::Integer(IntObjType::U8)),
-        "u16"  => Some(ObjType::Integer(IntObjType::U16)),
-        "u32"  => Some(ObjType::Integer(IntObjType::U32)),
-        "u64"  => Some(ObjType::Integer(IntObjType::U64)),
-        "u128" => Some(ObjType::Integer(IntObjType::U128)),
-        "usize" => Some(ObjType::Integer(IntObjType::USize)),
-
-        "f32" => Some(ObjType::Float(FloatObjType::F32)),
-        "f64" => Some(ObjType::Float(FloatObjType::F64)),
-
-        _ => None,
-    }
-}
-
-fn parse_number_literal(mut string: String, expected_type: Option<&ObjType>) -> Result<TypedExpression, LinkingError> {
-    string = string.replace('_', "");
-
-    let has_dot = string.find('.').is_some();
-
-    let Some(index) = string.find(|c: char| !c.is_ascii_digit() && c != '.') else {
-        return if has_dot {
-            // 12.3
-            let mut num_type = ObjType::DEFAULT_FLOAT;
-            if let Some(obj_type) = expected_type && matches!(obj_type, ObjType::Float(..)) {
-                num_type = obj_type.clone();
+        let Some(index) = string.find(|c: char| !c.is_ascii_digit() && c != '.') else {
+            return if has_dot {
+                // 12.3
+                let mut num_type = ObjType::DEFAULT_FLOAT;
+                if let Some(obj_type) = expected_type && matches!(obj_type, ObjType::Float(..)) {
+                    num_type = obj_type.clone();
+                }
+                Ok(TypedExpression::new(
+                    num_type.clone(),
+                    LinkedLiteralExpression::FloatLiteral(string, num_type).into()
+                ))
+            } else {
+                // 123
+                let mut num_type = ObjType::DEFAULT_INTEGER;
+                if let Some(obj_type) = expected_type && matches!(obj_type, ObjType::Integer(..)) {
+                    num_type = obj_type.clone();
+                }
+                Ok(TypedExpression::new(
+                    num_type.clone(),
+                    LinkedLiteralExpression::IntLiteral(string, num_type).into()
+                ))
             }
-            Ok(TypedExpression::new(
-                num_type.clone(),
-                LinkedLiteralExpression::FloatLiteral(string, num_type).into()
-            ))
-        } else {
-            // 123
-            let mut num_type = ObjType::DEFAULT_INTEGER;
-            if let Some(obj_type) = expected_type && matches!(obj_type, ObjType::Integer(..)) {
-                num_type = obj_type.clone();
+        };
+
+        let suffix = string.split_off(index);
+        let option_type = parse_primitive_type(&suffix);
+        let Some(object_type) = option_type else {
+            self.add_diag(LinkingError::literal_unexpected_suffix(suffix, literal_range));
+            return Err(());
+        };
+
+        match object_type {
+            ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(
+                object_type.clone(),
+                LinkedLiteralExpression::IntLiteral(string, object_type).into()
+            )),
+            ObjType::Float(_) => Ok(TypedExpression::new(
+                object_type.clone(),
+                LinkedLiteralExpression::FloatLiteral(string, object_type).into()
+            )),
+            _ => {
+                self.add_diag(LinkingError::literal_unexpected_suffix(suffix, literal_range));
+                Err(())
             }
-            Ok(TypedExpression::new(
-                num_type.clone(),
-                LinkedLiteralExpression::IntLiteral(string, num_type).into()
-            ))
         }
-    };
-
-    let suffix = string.split_off(index);
-    let option_type = parse_primitive_type(&suffix);
-    let Some(object_type) = option_type else {
-        return Err(LinkingError::LiteralParseError { what: string + &suffix, error: format!("unexpected suffix {suffix}") });
-    };
-
-    match object_type {
-        ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(
-            object_type.clone(),
-            LinkedLiteralExpression::IntLiteral(string, object_type).into()
-        )),
-        ObjType::Float(_) => Ok(TypedExpression::new(
-            object_type.clone(),
-            LinkedLiteralExpression::FloatLiteral(string, object_type).into()
-        )),
-        _ => Err(LinkingError::LiteralParseError { what: string + &suffix, error: format!("unexpected suffix {suffix}") })
     }
 }
 
@@ -710,6 +731,9 @@ fn check_is_returns(statements: &[LinkedStatement]) -> bool {
 }
 
 impl ObjType {
+    fn to_str(&self, context: &FunctionLinkingContext) -> String {
+        self.to_string::<false>(&context.context.factory)
+    }
     fn check_can_cast(from: &Self, other: &Self) -> bool {
         if other == &Self::Char {
             return from == &Self::Integer(IntObjType::U8)
