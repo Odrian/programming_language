@@ -309,6 +309,11 @@ impl ParsingState<'_> {
             },
             Token::Bracket(_, BracketType::Round) => {
                 // name(..)
+                if is_global {
+                    self.add_diag(SyntacticError::from_text("global function call", name.range));
+                    return Err(());
+                }
+
                 let Some(RangedToken { token: _, range: range_bracket }) = self.peek() else { unreachable!() };
 
                 let range_call = Range::new(name.range.start, range_bracket.end);
@@ -321,6 +326,11 @@ impl ParsingState<'_> {
                 Ok(())
             }
             _ => {
+                if is_global {
+                    self.add_diag(SyntacticError::from_text("global expression", name.range));
+                    return Err(());
+                }
+
                 let range = name.range;
                 let left = Expression::Variable(name).add_range(range);
                 let left = self.parse_expression2_without_ops(left, true, false)?;
