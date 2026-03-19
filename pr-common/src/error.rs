@@ -11,6 +11,12 @@ impl DiagnosticString {
     pub fn from_text(text: &str) -> Self {
         Self::new(text.to_string())
     }
+    pub fn to_diag0(self) -> Diagnostic {
+        Diagnostic::new(None, self.message, DiagnosticSeverity::ERROR)
+    }
+    pub fn to_diag1(self, position: Position) -> Diagnostic {
+        Diagnostic::new(Some(Range::new(position, position)), self.message, DiagnosticSeverity::ERROR)
+    }
     pub fn to_diag(self, range: Range) -> Diagnostic {
         Diagnostic::new(Some(range), self.message, DiagnosticSeverity::ERROR)
     }
@@ -33,8 +39,11 @@ impl Diagnostic {
     pub fn new_error_unranged(message: String) -> Self {
         Self::new(None, message, DiagnosticSeverity::ERROR)
     }
+    pub fn to_string(&self) -> String {
+        format!("{}", self.message)
+    }
     pub fn print(&self) {
-        println!("error: {}", self.message)
+        println!("{}", self.to_string())
     }
 }
 
@@ -50,10 +59,10 @@ impl Default for ErrorQueue {
 }
 
 impl ErrorQueue {
-    pub fn new_single_error(text: &str) -> Self {
-        let mut errors = Self::default();
-        errors.add_diag(Diagnostic::new_error_unranged(text.to_string()));
-        errors
+    pub fn new_single_diag(diagnostic: Diagnostic) -> Self {
+        let mut queue = Self::default();
+        queue.add_diag(diagnostic);
+        queue
     }
     pub fn add_diag(&mut self, diagnostic: Diagnostic) {
         self.vec.push(diagnostic)
@@ -75,7 +84,6 @@ impl ErrorQueue {
         ).collect()
     }
 }
-
 
 pub fn pos_to_str(position: Position) -> String {
     format!("{}:{}", position.line + 1, position.character + 1)

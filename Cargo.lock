@@ -637,6 +637,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "inkwell",
+ "lsp-types",
  "pr-ast",
  "pr-ast-linked",
  "pr-common",

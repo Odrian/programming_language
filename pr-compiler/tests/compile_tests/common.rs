@@ -2,7 +2,7 @@ use std::process::{Command, ExitStatus, Stdio};
 use clap::builder::OsStr;
 use clap::Parser;
 use pr_compiler::{Args, compile_src};
-use pr_common::error::ErrorQueue;
+use pr_common::error::{DiagnosticString, ErrorQueue};
 
 use tempfile::TempDir;
 
@@ -31,7 +31,9 @@ fn compile_text(text: &str) -> Result<(TempDir, Command), ErrorQueue> {
 
 fn unwrap_code(exit_status: &ExitStatus) -> Result<i32, ErrorQueue> {
     let Some(code) = exit_status.code() else {
-        return Err(ErrorQueue::new_single_error("process was terminated by a signal"))
+        return Err(ErrorQueue::new_single_diag(DiagnosticString::from_text(
+            "process was terminated by a signal"
+        ).to_diag0()))
     };
     Ok(code)
 }
@@ -53,7 +55,9 @@ pub fn run_code_stdout(text: &str) -> Result<String, ErrorQueue> {
     let output = command.output().unwrap();
     let code = unwrap_code(&output.status)?;
     if code != 0 {
-        return Err(ErrorQueue::new_single_error(&format!("exit code {code}")))
+        return Err(ErrorQueue::new_single_diag(DiagnosticString::new(format!(
+            "exit code {code}"
+        )).to_diag0()))
     }
 
     let out_text = String::from_utf8_lossy(&output.stdout);

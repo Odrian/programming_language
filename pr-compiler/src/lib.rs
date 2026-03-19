@@ -6,11 +6,10 @@ use pr_tokenize::TokenizeResult;
 use pr_tokenize::token::{RangedToken, Token};
 use pr_ast::SyntacticResult;
 use pr_ast_linked::LinkedProgram;
+use crate::error::LLVMError;
 
 pub mod compiling;
-mod io_error;
-
-use io_error::FileError;
+mod error;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -59,8 +58,9 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
     let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
     let text = fs::read_to_string(&file_path)
         .map_err(|err| {
-            FileError::CantReadSourceFile { filepath: file_path, io_error: err.to_string() }.print();
-            ErrorQueue::new_single_error("file error")
+            ErrorQueue::new_single_diag(
+                LLVMError::source_file_reading_error(file_path, err.to_string())
+                    .to_diagnostic())
         })?;
     let mut errors = ErrorQueue::default();
 
@@ -78,7 +78,7 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
     if errors.has_errors() { return Err(errors) }
 
     compiling::parse_to_llvm(args, linked_program)
-        .map_err(|err| ErrorQueue::new_single_error(&err.to_string()))?;
+        .map_err(|err| ErrorQueue::new_single_diag(err.to_diagnostic()))?;
 
     Ok(())
 }
@@ -123,12 +123,12 @@ fn generate_tokens_file(filename: &String, tokens: &TokenizeResult) -> Result<()
     let filepath = format!("{ARTIFACT_DIR}/{filename}_tokens.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
-        FileError::CantWriteToFile {
-            filepath,
-            what: "tokens".to_owned(),
-            io_error: err.to_string()
-        }.print();
-        return Err(ErrorQueue::new_single_error("file error"))
+        return Err(ErrorQueue::new_single_diag(
+            LLVMError::file_writing_error(
+                filepath,
+                "tokens".to_owned(),
+                err.to_string()
+            ).to_diagnostic()))
     }
     Ok(())
 }
@@ -140,12 +140,9 @@ fn generate_ast_file(filename: &String, statements: &SyntacticResult) -> Result<
     let filepath = format!("{ARTIFACT_DIR}/{filename}_AST.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
-        FileError::CantWriteToFile {
-            filepath,
-            what: "unlinked AST".to_owned(),
-            io_error: err.to_string()
-        }.print();
-        return Err(ErrorQueue::new_single_error("file error"))
+        return Err(ErrorQueue::new_single_diag(LLVMError::file_writing_error(
+            filepath, "unlinked AST".to_owned(), err.to_string()
+        ).to_diagnostic()))
     }
     Ok(())
 }
@@ -161,12 +158,9 @@ fn generate_last_file(filename: &String, linked_program: &LinkedProgram) -> Resu
     let filepath = format!("{ARTIFACT_DIR}/{filename}_LAST.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
-        FileError::CantWriteToFile {
-            filepath,
-            what: "AST".to_owned(),
-            io_error: err.to_string()
-        }.print();
-        return Err(ErrorQueue::new_single_error("file error"));
+        return Err(ErrorQueue::new_single_diag(LLVMError::file_writing_error(
+            filepath, "AST".to_owned(), err.to_string()
+        ).to_diagnostic()))
     }
     Ok(())
 }

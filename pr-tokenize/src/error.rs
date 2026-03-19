@@ -1,56 +1,45 @@
-use std::fmt::{Display, Formatter};
-use lsp_types::{Position, Range};
-use pr_common::error::Diagnostic;
+use pr_common::error::DiagnosticString;
 use pr_common::BracketType;
 
-pub enum TokenizeError {
-    QuotesNotClosed,
-    UnexpectedChar,
-    BracketNotOpened(BracketType),
-    BracketNotClosed(BracketType),
-    WrongBracketClosed {
-        expected_bracket: BracketType,
-        actual_bracket: BracketType,
-    },
-    IncorrectEscape(Option<char>)
-}
+pub struct TokenizeError;
 
 impl TokenizeError {
-    pub fn diagnostic(self, position: Position) -> Diagnostic {
-        Diagnostic::new_error(
-            Range::new(position, position),
-            self.to_string(),
+    pub fn quotes_not_closed() -> DiagnosticString {
+        DiagnosticString::from_text(
+            "quotes not closed"
         )
     }
-}
-
-impl Display for TokenizeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::QuotesNotClosed => {
-                write!(f, "quotes not closed")
-            }
-            Self::UnexpectedChar => {
-                write!(f, "unexpected char")
-            }
-            Self::BracketNotClosed(bracket) => {
-                write!(f, "{} bracket not closed", bracket.to_string())
-            }
-            Self::BracketNotOpened(bracket) => {
-                write!(f, "{} bracket not opened", bracket.to_string())
-            }
-            Self::WrongBracketClosed { expected_bracket, actual_bracket } => {
-                write!(f, "expected '{}', got '{}' ",
-                       expected_bracket.to_close_string(),
-                       actual_bracket.to_close_string())
-            }
-            Self::IncorrectEscape(ch) => {
-                if let Some(ch) = ch {
-                    write!(f, "unexpected {ch} after \\")
-                } else {
-                    write!(f, "unexpected EOF after \\")
-                }
-            }
+    pub fn unexpected_char() -> DiagnosticString {
+        DiagnosticString::from_text(
+            "unexpected char"
+        )
+    }
+    pub fn bracket_not_closed(bracket: BracketType) -> DiagnosticString {
+        DiagnosticString::new(format!(
+            "{} bracket not closed", bracket.to_string()
+        ))
+    }
+    pub fn bracket_not_opened(bracket: BracketType) -> DiagnosticString {
+        DiagnosticString::new(format!(
+            "{} bracket not opened", bracket.to_string()
+        ))
+    }
+    pub fn wrong_bracket_closed(expected_bracket: BracketType, actual_bracket: BracketType) -> DiagnosticString {
+        DiagnosticString::new(format!(
+            "expected '{}', got '{}' ",
+            expected_bracket.to_close_string(),
+            actual_bracket.to_close_string()
+        ))
+    }
+    pub fn incorrect_escape(ch: Option<char>) -> DiagnosticString {
+        if let Some(ch) = ch {
+            DiagnosticString::new(format!(
+                "unexpected {ch} after \\"
+            ))
+        } else {
+            DiagnosticString::from_text(
+                "unexpected EOF after \\"
+            )
         }
     }
 }

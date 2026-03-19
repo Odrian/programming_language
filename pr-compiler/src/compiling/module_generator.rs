@@ -9,7 +9,7 @@ use pr_common::operations::*;
 use pr_ast_linked::LinkedProgram;
 use pr_ast_linked::object::*;
 use pr_ast_linked::linked_statement::*;
-use super::error::LLVMError;
+use crate::error::LLVMError;
 use super::context_window::ValueContextWindow;
 
 pub fn parse_module<'ctx>(
@@ -159,7 +159,7 @@ mod module_parsing {
         fn get_const_value(&self, object: Object, value: TypedExpression) -> Result<BasicValueEnum<'ctx>, LLVMError> {
             let TypedExpression { object_type: _, expr } = value;
             let LinkedExpression::Literal(LinkedLiteralExpression::Undefined(obj_type)) = expr else {
-                return Err(LLVMError::GlobalWithValue { name: self.get_object_name(object).value.clone()});
+                return Err(LLVMError::global_with_value(self.get_object_name(object).value.clone()));
             };
             Ok(get_undef(self.parse_type(&obj_type)))
         }
@@ -192,7 +192,7 @@ mod module_parsing {
             self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
-                return Err(LLVMError::LLVMVerifyFunctionError { name: self.linked_program.factory.get_name(object).value.clone() });
+                return Err(LLVMError::llvm_verify_function_error(self.linked_program.factory.get_name(object).value.clone()));
             }
             self.current_function = None;
 

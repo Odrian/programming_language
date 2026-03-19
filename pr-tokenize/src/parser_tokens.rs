@@ -89,8 +89,8 @@ fn parse_inside_brackets(
             loop { // here index map to previous char in start of loop
                 let Some(next_char) = text.next() else {
                     errors.add_diag(
-                        TokenizeError::QuotesNotClosed
-                            .diagnostic(quotes_start_position)
+                        TokenizeError::quotes_not_closed()
+                            .to_diag1(quotes_start_position)
                     );
                     break
                 };
@@ -111,15 +111,15 @@ fn parse_inside_brackets(
                         Some('x') => unimplemented!("8bit escapes"),
                         Some(ch) => {
                             errors.add_diag(
-                                TokenizeError::IncorrectEscape(Some(ch))
-                                    .diagnostic(buffer.index)
+                                TokenizeError::incorrect_escape(Some(ch))
+                                    .to_diag1(buffer.index)
                             );
                             buffer.add_char(ch);
                         }
                         None => {
                             errors.add_diag(
-                                TokenizeError::IncorrectEscape(None)
-                                    .diagnostic(buffer.index)
+                                TokenizeError::incorrect_escape(None)
+                                    .to_diag1(buffer.index)
                             );
                         }
                     }
@@ -151,8 +151,8 @@ fn parse_inside_brackets(
             // close bracket
             let Some(open_bracket_type) = open_bracket_type else {
                 errors.add_diag(
-                    TokenizeError::BracketNotOpened(bracket_type)
-                        .diagnostic(buffer.index)
+                    TokenizeError::bracket_not_opened(bracket_type)
+                        .to_diag1(buffer.index)
                 );
                 buffer.skip_char();
                 continue;
@@ -160,8 +160,8 @@ fn parse_inside_brackets(
 
             if bracket_type != open_bracket_type {
                 errors.add_diag(
-                    TokenizeError::WrongBracketClosed { expected_bracket: open_bracket_type, actual_bracket: bracket_type }
-                        .diagnostic(buffer.index)
+                    TokenizeError::wrong_bracket_closed(open_bracket_type, bracket_type)
+                        .to_diag1(buffer.index)
                 );
 
                 // expect {  [  }, so unconsume close bracket and step out
@@ -185,8 +185,8 @@ fn parse_inside_brackets(
 
     if let Some(open_bracket_type) = open_bracket_type {
         errors.add_diag(
-            TokenizeError::BracketNotClosed(open_bracket_type)
-                .diagnostic(start_position)
+            TokenizeError::bracket_not_closed(open_bracket_type)
+                .to_diag1(start_position)
         );
     }
 
@@ -358,8 +358,8 @@ pub fn split_text_without_brackets(
             }
             _ => {
                 errors.add_diag(
-                    TokenizeError::UnexpectedChar
-                        .diagnostic(state.buffer_end)
+                    TokenizeError::unexpected_char()
+                        .to_diag1(state.buffer_end)
                 );
                 state.use_char_in_string(char);
             }

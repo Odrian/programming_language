@@ -1,6 +1,5 @@
 mod context_window;
 mod module_generator;
-mod error;
 
 use std::path::Path;
 use std::process::Command;
@@ -9,7 +8,7 @@ use pr_ast_linked::linked_statement::GlobalLinkedStatement;
 use pr_ast_linked::object::{IntObjType, ObjType};
 use pr_ast_linked::LinkedProgram;
 use crate::Args;
-use error::LLVMError;
+use crate::error::LLVMError;
 
 /// previous steps guarantees that every used variables is valid
 pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), LLVMError> {
@@ -25,7 +24,7 @@ pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), L
     module.set_triple(&target_machine.get_triple());
 
     if let Err(err) = module.verify() {
-        return Err(LLVMError::LLVMVerifyModuleError { llvm_error: err.to_string() });
+        return Err(LLVMError::llvm_verify_module_error(err.to_string()));
     }
 
     create_executable(args, &target_machine, &module)?;
@@ -35,18 +34,19 @@ pub fn parse_to_llvm(args: &Args, linked_program: LinkedProgram) -> Result<(), L
 fn verify_main_signature(linked_program: &LinkedProgram) -> Result<(), LLVMError> {
     for (object, statement) in &linked_program.function_statement {
         if let GlobalLinkedStatement::Function { returns, args, body: _body } = statement {
-            if linked_program.factory.get_name(*object).value == "main" {
+            let name = linked_program.factory.get_name(*object);
+            if name.value == "main" {
                 if returns != &ObjType::Integer(IntObjType::I32) {
-                    return Err(LLVMError::IncorrectMainSignature)
+                    return Err(LLVMError::incorrect_main_signature(name.range))
                 }
                 if args != &vec![] {
-                    return Err(LLVMError::IncorrectMainSignature)
+                    return Err(LLVMError::incorrect_main_signature(name.range))
                 }
                 return Ok(())
             }
         }
     }
-    Err(LLVMError::NoMainFunction)
+    Err(LLVMError::no_main_function())
 }
 
 fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result<(), LLVMError> {
@@ -57,7 +57,7 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
     // create assembly file
     if args.gen_llvm {
         if let Err(err) = module.print_to_file(assembly_name) {
-            return Err(LLVMError::LLVMFailedToCreateAssembly { llvm_error: err.to_string() });
+            return Err(LLVMError::llvm_failed_to_create_assembly(err.to_string()));
         }
     }
 
@@ -78,7 +78,7 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
 
     if !args.gen_object {
         if let Err(err) = std::fs::remove_file(object_name.clone()) {
-            return Err(LLVMError::CantDeleteObjectFile { filepath: object_name, io_error: err.to_string() });
+            return Err(LLVMError::cant_delete_object_file(object_name, err.to_string()));
         }
     }
 
@@ -88,11 +88,11 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
             Ok(exit_status) => {
                 if !exit_status.success() {
                     let description = format!("exit with code {}", exit_status.code().unwrap());
-                    return Err(LLVMError::FailedToRunLinker { description })
+                    return Err(LLVMError::linker_error(description))
                 }
             }
             Err(err) => {
-                return Err(LLVMError::FailedToRunLinker { description: err.to_string() })
+                return Err(LLVMError::linker_error(err.to_string()))
             }
         }
     }
