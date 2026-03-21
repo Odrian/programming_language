@@ -54,6 +54,10 @@ impl IndexedTextBuffer {
         self.text.push(ch);
         add_one(Some(ch), &mut self.index);
     }
+    fn add_escape_char(&mut self, ch: char) {
+        self.text.push(ch);
+        self.skip_char();
+    }
     fn skip_char(&mut self) {
         add_one(Some('a'), &mut self.index)
     }
@@ -102,10 +106,10 @@ fn parse_inside_brackets(
                     let escape_char = text.next();
                     match escape_char {
                         Some('\\') => buffer.add_char('\\'),
-                        Some('0') => buffer.add_char('\0'),
-                        Some('t') => buffer.add_char('\t'),
-                        Some('n') => buffer.add_char('\n'),
-                        Some('r') => buffer.add_char('\r'),
+                        Some('0') => buffer.add_escape_char('\0'),
+                        Some('t') => buffer.add_escape_char('\t'),
+                        Some('n') => buffer.add_escape_char('\n'),
+                        Some('r') => buffer.add_escape_char('\r'),
                         Some('"') => buffer.add_char('"'),
                         Some('\'') => buffer.add_char('\''),
                         Some('x') => unimplemented!("8bit escapes"),
