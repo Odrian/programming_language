@@ -12,6 +12,16 @@ impl SyntacticError {
     pub fn new_local_global(name: &str, range: Range) -> Diagnostic {
         Diagnostic::new_error(range, format!("local {name} not supported"))
     }
+
+    pub fn unnecessary_semicolon(range: Range) -> Diagnostic {
+        Diagnostic::new_hint(range, "unnecessary semicolon".to_string())
+    }
+    pub fn expected_semicolon(mut range_before: Range) -> Diagnostic {
+        range_before.start = range_before.end;
+        range_before.end.character += 1;
+
+        Diagnostic::new_error(range_before, "expected semicolon".to_string())
+    }
 }
 
 pub struct ExpectedError {
@@ -29,8 +39,16 @@ pub enum ExpectedEnum {
     Arrow,
     CurlyBracket,
     RoundBracket,
+    CloseRoundBracket,
     Equal,
     As,
+    DoubleDot,
+    TripleDot,
+    Undefined,
+    #[allow(non_camel_case_types)]
+    In_KW,
+    #[allow(non_camel_case_types)]
+    Struct_KW,
 }
 
 impl ExpectedError {
@@ -92,8 +110,14 @@ impl Display for ExpectedEnum {
             Self::Arrow => write!(f, "->"),
             Self::CurlyBracket => write!(f, "{{"),
             Self::RoundBracket => write!(f, "("),
+            Self::CloseRoundBracket => write!(f, ")"),
             Self::Equal => write!(f, "="),
             Self::As => write!(f, "'as'"),
+            Self::DoubleDot => write!(f, ".."),
+            Self::TripleDot => write!(f, "..."),
+            Self::Undefined => write!(f, "---"),
+            Self::In_KW => write!(f, "`in`"),
+            Self::Struct_KW => write!(f, "`struct`"),
         }
     }
 }

@@ -56,25 +56,18 @@ impl ParsingState<'_> {
     fn parse_statements_inplace(&mut self, is_global: bool) -> Vec<RStatement> {
         let mut statements = Vec::new();
 
-        self.skip_semicolons();
-
         while !self.at_end() {
             let result = self.parse_statement(is_global, &mut statements);
+
             if result.is_err() {
                 while let Some(RangedToken { token, range: _ }) = self.peek() && token != &Token::Semicolon {
                     let _ = self.next();
                 }
+                let _ = self.next();
             }
-
-            self.skip_semicolons();
         }
 
         statements
-    }
-    fn skip_semicolons(&mut self) {
-        while let Some(RangedToken { token: Token::Semicolon, range: _ }) = self.peek() {
-            let _ = self.next();
-        }
     }
     fn parse_statement(&mut self, is_global: bool, result: &mut Vec<RStatement>) -> Result<(), ()> {
         let (token, range0) = self.next_unwrap(|_| unreachable!())?;
@@ -109,18 +102,18 @@ impl ParsingState<'_> {
                     let name = RString::new(name, range);
 
                     let (token, range) = self.next_unwrap(|s|
-                        ExpectedEnum::new_string("'in'").diagnostic_after(s.all_range))?;
+                        ExpectedEnum::In_KW.diagnostic_after(s.all_range))?;
                     if !matches!(token, Token::String(s) if s == "in") {
-                        self.add_diag(ExpectedEnum::new_string("'in'").diagnostic(range));
+                        self.add_diag(ExpectedEnum::In_KW.diagnostic(range));
                         return Err(());
                     }
 
                     let from_value = self.parse_expression_without_ops(true, true)?;
 
                     let (token, range) = self.next_unwrap(|s|
-                        ExpectedEnum::new_string("..").diagnostic_after(s.all_range))?;
+                        ExpectedEnum::DoubleDot.diagnostic_after(s.all_range))?;
                     if token != Token::DoubleDot {
-                        self.add_diag(ExpectedEnum::new_string("..").diagnostic(range));
+                        self.add_diag(ExpectedEnum::DoubleDot.diagnostic(range));
                         return Err(());
                     };
 
@@ -193,13 +186,16 @@ impl ParsingState<'_> {
 
                         let mut state = self.new_state(vec, range);
                         while !state.at_end() {
-                            state.skip_semicolons();
-                            result.push(state.parse_extern(range0)?)
+                            if let Ok(ext) = state.parse_extern(range0) {
+                                result.push(ext)
+                            }
                         }
 
                         Ok(())
                     } else {
-                        result.push(self.parse_extern(range0)?);
+                        if let Ok(ext) = self.parse_extern(range0) {
+                            result.push(ext)
+                        }
                         Ok(())
                     }
                 },
@@ -226,16 +222,22 @@ impl ParsingState<'_> {
                 result.push(Statement::new_brackets(body).add_range(range0));
                 Ok(())
             }
-            Token::Semicolon => unreachable!(),
+            Token::Semicolon => {
+                self.add_diag(SyntacticError::unnecessary_semicolon(range0));
+                Ok(())
+            }
+            Token::NumberLiteral(token) => {
+                let expression1 = Expression::from(LiteralExpression::NumberLiteral(token)).add_range(range0);
+                self.parse_statement3(result, expression1)
+            }
             _ => {
-                self.add_diag((ExpectedEnum::new_string("keyword") | ExpectedEnum::Name |
-                    ExpectedEnum::new_string("*") | ExpectedEnum::Semicolon)
+                self.add_diag(ExpectedEnum::new_string("statement")
                     .diagnostic(range0));
                 Err(())
             }
         }
     }
-    /// parse "name .." as definition
+    /// parse `name ..` as definition
     fn parse_statement2(&mut self, name: RString, result: &mut Vec<RStatement>, is_global: bool) -> Result<(), ()> {
         let Some(RangedToken { token, range: _ }) = self.peek() else {
             self.add_diag(SyntacticError::from_text("unexpected EOF", self.all_range));
@@ -247,7 +249,7 @@ impl ParsingState<'_> {
                 let (_, range) = self.next_unwrap(|_| unreachable!())?;
 
                 let Some(RangedToken { token, range }) = self.peek() else {
-                    self.add_diag((ExpectedEnum::RoundBracket | ExpectedEnum::new_string("struct"))
+                    self.add_diag((ExpectedEnum::RoundBracket | ExpectedEnum::Struct_KW)
                         .diagnostic(range));
                     return Err(())
                 };
@@ -271,7 +273,7 @@ impl ParsingState<'_> {
                         self.parse_struct(name, result)
                     }
                     _ => {
-                        self.add_diag((ExpectedEnum::RoundBracket | ExpectedEnum::new_string("struct"))
+                        self.add_diag((ExpectedEnum::RoundBracket | ExpectedEnum::Struct_KW)
                             .diagnostic(*range));
                         Err(())
                     }
@@ -298,6 +300,8 @@ impl ParsingState<'_> {
                 }
 
                 let expression = self.parse_expression(false)?;
+                self.consume_semicolon(expression.range);
+
                 let range_st = Range::new(name.range.start, expression.range.end);
                 let statement = Statement::new_variable(name, Some(typee), expression);
                 result.push(statement.add_range(range_st));
@@ -307,6 +311,8 @@ impl ParsingState<'_> {
                 let _ = self.next();
 
                 let expression2 = self.parse_expression(false)?;
+                self.consume_semicolon(expression2.range);
+
                 let range_st = Range::new(name.range.start, expression2.range.end);
                 let statement = Statement::new_variable(name, None, expression2);
                 result.push(statement.add_range(range_st));
@@ -326,6 +332,8 @@ impl ParsingState<'_> {
                 let args = self.parse_function_arguments()?;
                 let left = Expression::new_function_call(name, args).add_range(range_call);
                 let expression = self.parse_expression2_without_ops(left, false, false)?;
+                self.consume_semicolon(expression.range);
+
                 let statement = Statement::Expression(expression.value).add_range(expression.range);
                 result.push(statement);
                 Ok(())
@@ -343,15 +351,21 @@ impl ParsingState<'_> {
             }
         }
     }
-    /// parse left .. ;
+    /// parse `left .. ;`
     fn parse_statement3(&mut self, result: &mut Vec<RStatement>, left: RExpression) -> Result<(), ()> {
-        let (token, range0) = self.next_unwrap(|s|
-            SyntacticError::from_text("unexpected EOF", s.all_range))?;
+        let Some(RangedToken { token, range: _ }) = self.peek() else {
+            result.push(Statement::Expression(left.value).add_range(left.range));
+            return Ok(())
+        };
 
         match token {
-            Token::EqualOperation(equal_operation) => {
+            Token::EqualOperation(..) => {
+                let Some(RangedToken { token: Token::EqualOperation(equal_operation), range: range0 }) = self.next() else { unreachable!() };
+
                 // name _=
                 let expression2 = self.parse_expression(false)?;
+                self.consume_semicolon(expression2.range);
+
                 let range_st = Range::new(left.range.start, expression2.range.end);
                 let statement = match equal_operation {
                     EqualOperation::ColonEqual => unreachable!(),
@@ -363,15 +377,10 @@ impl ParsingState<'_> {
                 result.push(statement.add_range(range_st));
                 Ok(())
             }
-            Token::Semicolon => {
+            _ => {
+                self.consume_semicolon(left.range);
                 result.push(Statement::Expression(left.value).add_range(left.range));
                 Ok(())
-            }
-            _ => {
-                self.add_diag((ExpectedEnum::DoubleColon | ExpectedEnum::Colon |
-                    ExpectedEnum::Equal | ExpectedEnum::RoundBracket | ExpectedEnum::Semicolon)
-                    .diagnostic(range0));
-                Err(())
             }
         }
     }
@@ -388,18 +397,11 @@ impl ParsingState<'_> {
             let Some(RangedToken { token, range: _ }) = self.peek() else {
                 break;
             };
-            if matches!(token, Token::Semicolon | Token::Comma | Token::Bracket(_, _) | Token::EqualOperation(_)) {
+            if !matches!(token, Token::Operation(..)) {
                 break
             }
-
             let (token, range) = self.next_unwrap(|_| unreachable!())?;
-            let Token::Operation(op) = token else {
-                self.add_diag((
-                    ExpectedEnum::new_string("operation") | ExpectedEnum::Equal | ExpectedEnum::Semicolon |
-                        ExpectedEnum::Comma | ExpectedEnum::RoundBracket)
-                    .diagnostic(range));
-                return Err(())
-            };
+            let Token::Operation(op) = token else { unreachable!() };
             // range = range2;
             operations.push(op.add_range(range));
         }
@@ -452,7 +454,7 @@ impl ParsingState<'_> {
                 let expression = new_state.parse_expression(false)?;
                 if !new_state.at_end() {
                     let (_, range) = new_state.next_unwrap(|_| unreachable!())?;
-                    new_state.add_diag(ExpectedEnum::new_string(")").diagnostic(range))
+                    new_state.add_diag(ExpectedEnum::CloseRoundBracket.diagnostic(range))
                 }
                 let expression1 = Expression::new_round_bracket(expression).add_range(range);
                 self.parse_expression2_without_ops(expression1, was_unary, in_cond)
@@ -461,7 +463,7 @@ impl ParsingState<'_> {
                 if let Some(RangedToken { token: Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)), range: _ }) = self.peek() {
                     let _ = self.next();
                     let Some(RangedToken { token: Token::Operation(TwoSidedOperation::Number(NumberOperation::Sub)), range: range2 }) = self.next() else {
-                        self.add_diag(ExpectedEnum::new_string("---").diagnostic(range));
+                        self.add_diag(ExpectedEnum::Undefined.diagnostic(range));
                         return Err(())
                     };
 
@@ -516,13 +518,13 @@ impl ParsingState<'_> {
                 self.parse_expression2_without_ops(expression, was_unary, in_cond)
             }
             _ => {
-                self.add_diag(ExpectedEnum::new_string(&format!("expression, got {token:?}"))
+                self.add_diag(ExpectedEnum::new_string("expression")
                     .diagnostic(range));
                 Err(())
             }
         }
     }
-    // parse "expression .."
+    // parse `expression ..`
     fn parse_expression2_without_ops(
         &mut self,
         expression1: RExpression,
@@ -595,13 +597,8 @@ impl ParsingState<'_> {
                 };
                 Ok(expression.add_range(range_st))
             }
-            Token::Semicolon | Token::Comma | Token::Bracket(_, _) | Token::EqualOperation(_) | Token::DoubleDot => {
-                Ok(expression1)
-            }
             _ => {
-                let (token, range) = self.next_unwrap(|_| unreachable!())?;
-                self.add_diag(SyntacticError::from_text(&format!("unexpected token {token:?}"), range));
-                Err(())
+                Ok(expression1)
             }
         }
     }
@@ -721,6 +718,10 @@ impl ParsingState<'_> {
     fn parse_extern(&mut self, range0: Range) -> Result<RStatement, ()> {
         let (token, range) = self.next_unwrap(|_|
             ExpectedEnum::Name.diagnostic_after(range0))?;
+        if token == Token::Semicolon {
+            self.add_diag(SyntacticError::unnecessary_semicolon(range0));
+            return Err(());
+        }
         let Token::String(name) = token else {
             self.add_diag(ExpectedEnum::Name.diagnostic(range));
             return Err(());
@@ -758,12 +759,7 @@ impl ParsingState<'_> {
             } else if token == Token::Arrow {
                 let returns = self.parse_type(range)?;
 
-                let (token, range) = self.next_unwrap(|s|
-                    ExpectedEnum::Semicolon.diagnostic_after(s.all_range))?;
-                if token != Token::Semicolon {
-                    self.add_diag(ExpectedEnum::Semicolon.diagnostic(range));
-                    return Err(())
-                }
+                self.consume_semicolon(returns.range);
 
                 let range_st = name.range;
                 let statement = Statement::new_extern(ExternStatement::Function { name, args, is_vararg, returns: Some(returns) });
@@ -787,18 +783,21 @@ impl ParsingState<'_> {
 
         let mut from: Vec<RString> = vec![RString::new(string, range)];
         loop {
-            let (token, range) = self.next_unwrap(|s|
-                (ExpectedEnum::DoubleColon | ExpectedEnum::Semicolon | ExpectedEnum::As)
-                    .diagnostic(s.all_range))?;
+            let Some(RangedToken { token, range: _ }) = self.peek() else {
+                self.add_diag(SyntacticError::expected_semicolon(from.last().unwrap().range));
+
+                let what = vec![(from.pop().unwrap(), None)];
+                result.push(Statement::new_import(from, what).add_range(range_st));
+                return Ok(())
+            };
 
             match token {
-                Token::DoubleColon => {}
-                Token::Semicolon => { // ::x;
-                    let what = vec![(from.pop().unwrap(), None)];
-                    result.push(Statement::new_import(from, what).add_range(range_st));
-                    return Ok(())
+                Token::DoubleColon => {
+                    let _ = self.next();
                 }
                 Token::String(as_string) if as_string == "as" => { // ::x as x;
+                    let _ = self.next();
+
                     let (token, range) = self.next_unwrap(|s|
                         ExpectedEnum::Name.diagnostic(s.all_range))?;
                     let Token::String(as_name) = token else {
@@ -807,21 +806,18 @@ impl ParsingState<'_> {
                     };
                     let as_name = RString::new(as_name, range);
 
-                    let (token, range) = self.next_unwrap(|s|
-                        ExpectedEnum::Semicolon.diagnostic(s.all_range))?;
-                    if token != Token::Semicolon {
-                        self.add_diag(ExpectedEnum::Semicolon.diagnostic(range));
-                        return Err(())
-                    };
+                    self.consume_semicolon(as_name.range);
 
                     let what = vec![(from.pop().unwrap(), Some(as_name))];
                     result.push(Statement::new_import(from, what).add_range(range_st));
                     return Ok(())
                 }
-                _ => {
-                    self.add_diag((ExpectedEnum::DoubleColon | ExpectedEnum::Semicolon | ExpectedEnum::As)
-                        .diagnostic(range));
-                    return Err(())
+                _ => { // ::x
+                    self.consume_semicolon(from.last().unwrap().range);
+
+                    let what = vec![(from.pop().unwrap(), None)];
+                    result.push(Statement::new_import(from, what).add_range(range_st));
+                    return Ok(())
                 }
             }
 
@@ -835,15 +831,15 @@ impl ParsingState<'_> {
         }
 
         // ::{x, .., x as x, ..};
-        let (token, range) = self.next_unwrap(|s|
+        let (token, range_br) = self.next_unwrap(|s|
             (ExpectedEnum::Name | ExpectedEnum::CurlyBracket).diagnostic(s.all_range))?;
         let Token::Bracket(whats, BracketType::Curly) = token else {
-            self.add_diag((ExpectedEnum::Name | ExpectedEnum::CurlyBracket).diagnostic(range));
+            self.add_diag((ExpectedEnum::Name | ExpectedEnum::CurlyBracket).diagnostic(range_br));
             return Err(())
         };
 
         let mut what = Vec::with_capacity(whats.len());
-        let mut state = self.new_state(whats, range);
+        let mut state = self.new_state(whats, range_br);
         while !state.at_end() {
             let (token, range) = state.next_unwrap(|_| unreachable!())?;
             let Token::String(name) = token else {
@@ -878,11 +874,8 @@ impl ParsingState<'_> {
                 state.add_diag(ExpectedEnum::Comma.diagnostic(range));
             }
         }
-        let (token, range) = self.next_unwrap(|s|
-            ExpectedEnum::Semicolon.diagnostic(s.all_range))?;
-        if token != Token::Semicolon {
-            self.add_diag(ExpectedEnum::Semicolon.diagnostic(range));
-        };
+
+        self.consume_semicolon(range_br);
 
         result.push(Statement::new_import(from, what).add_range(range_st));
         Ok(())
@@ -893,9 +886,9 @@ impl ParsingState<'_> {
             unreachable!()
         };
         let (token, range) = self.next_unwrap(|s|
-            ExpectedEnum::new_string("...").diagnostic_after(s.all_range))?;
+            ExpectedEnum::TripleDot.diagnostic_after(s.all_range))?;
         if token != Token::Dot {
-            self.add_diag(ExpectedEnum::new_string("...").diagnostic(range));
+            self.add_diag(ExpectedEnum::TripleDot.diagnostic(range));
         }
 
         Ok(())
@@ -967,7 +960,7 @@ impl ParsingState<'_> {
 
                 if !state.at_end() {
                     let (_, range) = state.next_unwrap(|_| unreachable!())?;
-                    state.add_diag(ExpectedEnum::new_string(")").diagnostic(range));
+                    state.add_diag(ExpectedEnum::CloseRoundBracket.diagnostic(range));
                     return Err(());
                 }
                 return Ok((arguments, true))
@@ -1069,5 +1062,18 @@ impl ParsingState<'_> {
             return b'?';
         }
         first_char as u8
+    }
+
+    fn consume_semicolon(&mut self, range_before: Range) {
+        let Some(RangedToken { token, range: _ }) = self.peek() else {
+            return;
+        };
+
+        if token != &Token::Semicolon {
+            self.add_diag(SyntacticError::expected_semicolon(range_before));
+            return;
+        }
+
+        let _ = self.next();
     }
 }

@@ -56,8 +56,8 @@ fn test_set() {
     assert_no_error("cat = cat + cat + cat + cat");
     assert_no_error("cat := cat + cat + cat + cat");
     assert_no_error("cat : i32 = cat");
+    assert_no_error("4 = cat");
 
-    assert_has_error("4 = cat");
     assert_has_error("cat = cat = cat");
     assert_has_error("cat + cat = cat");
     assert_has_error("cat + 4 = cat");
@@ -398,4 +398,13 @@ fn test_struct() {
 
     assert_has_error_global("x :: struct");
     assert_has_error_global("x :: struct { x }");
+}
+
+#[test]
+fn test_semicolons_corectness() {
+    assert_has_error("cat : i32 = 0 cat : i32 = 0");
+    assert_has_error("a := 0 a := 0");
+    assert_has_error("a = 0 a = 0");
+    assert_has_error("foo() foo()");
+    assert_has_error_global("import x import x");
 }

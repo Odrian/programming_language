@@ -30,8 +30,14 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    fn new(range: Option<Range>, message: String, severity: DiagnosticSeverity) -> Self {
+    pub fn new(range: Option<Range>, message: String, severity: DiagnosticSeverity) -> Self {
         Self { range, severity, message }
+    }
+    pub fn new_hint(range: Range, message: String) -> Self {
+        Self::new(Some(range), message, DiagnosticSeverity::HINT)
+    }
+    pub fn new_warning(range: Range, message: String) -> Self {
+        Self::new(Some(range), message, DiagnosticSeverity::WARNING)
     }
     pub fn new_error(range: Range, message: String) -> Self {
         Self::new(Some(range), message, DiagnosticSeverity::ERROR)
