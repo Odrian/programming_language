@@ -193,7 +193,7 @@ impl FunctionLinkingContext<'_> {
 
         if !check_is_returns(&body) {
             if return_type == ObjType::Void {
-                body.push(LinkedStatement::Return(None));
+                body.push(LinkedStatement::Return(None).add_no_range());
             } else {
                 self.add_diag(
                     LinkingError::function_must_return(name));
@@ -205,14 +205,14 @@ impl FunctionLinkingContext<'_> {
         self.context.result.function_statement.insert(object, linked_statement);
         Ok(())
     }
-    fn link_statements_recursive(&mut self, statements: Vec<RStatement>) -> Result<Vec<LinkedStatement>, ()> {
+    fn link_statements_recursive(&mut self, statements: Vec<RStatement>) -> Result<Vec<RLinkedStatement>, ()> {
         let mut result = Vec::with_capacity(statements.len());
         for statement in statements {
             self.parse_statement(statement, &mut result)?;
         }
         Ok(result)
     }
-    fn parse_statement(&mut self, statement: RStatement, result: &mut Vec<LinkedStatement>) -> Result<(), ()> {
+    fn parse_statement(&mut self, statement: RStatement, result: &mut Vec<RLinkedStatement>) -> Result<(), ()> {
         match statement.value {
             Statement::Brackets(body) => {
                 self.object_context_window.step_in();
@@ -224,25 +224,27 @@ impl FunctionLinkingContext<'_> {
             }
             Statement::SetVariable { what, value, op } => {
                 let what = self.parse_expression(what, None)?;
-                if let ObjType::Reference { obj_type: what_ref, is_weak: _ } = &what.object_type {
+                self.check_lvalue(&what);
+                if let ObjType::Reference { obj_type: what_ref, is_weak: _ } = &what.value.object_type {
                     // &T = T
                     let value = self.parse_expression(value, Some(what_ref))?;
+                    let what_range = what.range;
                     let new_what = TypedExpression {
                         object_type: what_ref.as_ref().clone(),
-                        expr: LinkedExpression::new_unary_operation(what, OneSidedOperation::Dereference)
-                    };
-                    result.push(LinkedStatement::new_set(new_what, value, op));
+                        expr: LinkedExpression::new_unary_operation(what, OneSidedOperation::Dereference.add_no_range())
+                    }.add_range(what_range);
+                    result.push(LinkedStatement::new_set(new_what, value, op).add_range(statement.range));
                     Ok(())
                 } else {
                     // T = T
-                    let value = self.parse_expression(value, Some(&what.object_type))?;
-                    result.push(LinkedStatement::new_set(what, value, op));
+                    let value = self.parse_expression(value, Some(&what.value.object_type))?;
+                    result.push(LinkedStatement::new_set(what, value, op).add_range(statement.range));
                     Ok(())
                 }
             }
             Statement::Expression(expression) => {
                 let expression = self.parse_expression(expression.add_range(statement.range), None)?;
-                result.push(LinkedStatement::Expression(expression));
+                result.push(LinkedStatement::Expression(expression).add_range(statement.range));
                 Ok(())
             }
             Statement::If { condition, body } => {
@@ -250,7 +252,7 @@ impl FunctionLinkingContext<'_> {
                 self.object_context_window.step_in();
                 let body = self.link_statements_recursive(body)?;
                 self.object_context_window.step_out();
-                result.push(LinkedStatement::new_if(condition, body));
+                result.push(LinkedStatement::new_if(condition, body).add_range(statement.range));
                 Ok(())
             }
             Statement::While { condition, body } => {
@@ -258,7 +260,7 @@ impl FunctionLinkingContext<'_> {
                 self.object_context_window.step_in();
                 let body = self.link_statements_recursive(body)?;
                 self.object_context_window.step_out();
-                result.push(LinkedStatement::new_while(condition, body));
+                result.push(LinkedStatement::new_while(condition, body).add_range(statement.range));
                 Ok(())
             }
             Statement::Return(option_expression) => {
@@ -269,7 +271,7 @@ impl FunctionLinkingContext<'_> {
                     None => None,
                 };
                 let expression_type = match &expression {
-                    Some(expr) => &expr.object_type,
+                    Some(expr) => &expr.value.object_type,
                     None => &ObjType::Void,
                 };
                 if Some(expression_type) != self.current_function_returns.as_ref() {
@@ -279,7 +281,7 @@ impl FunctionLinkingContext<'_> {
                         statement.range));
                     return Err(())
                 }
-                result.push(LinkedStatement::Return(expression));
+                result.push(LinkedStatement::Return(expression).add_range(statement.range));
                 Ok(())
             }
             Statement::DeclarationStatement { name, statement } => match &statement {
@@ -295,7 +297,7 @@ impl FunctionLinkingContext<'_> {
             Statement::ExternStatement { .. } => unimplemented!("local extern"),
         }
     }
-    fn parse_variable_declaration(&mut self, name: RString, declaration: DeclarationStatement, result: &mut Vec<LinkedStatement>) -> Result<(), ()> {
+    fn parse_variable_declaration(&mut self, name: RString, declaration: DeclarationStatement, result: &mut Vec<RLinkedStatement>) -> Result<(), ()> {
         let DeclarationStatement::VariableDeclaration { typee, value: expr } = declaration else { unreachable!() };
         let objet_type_option = match typee {
             Some(typee) => Some(self.parse_type(&typee)?),
@@ -303,79 +305,82 @@ impl FunctionLinkingContext<'_> {
         };
         let expr_range = expr.range;
         let typed_expr = self.parse_expression(expr, objet_type_option.as_ref())?;
-        if typed_expr.object_type.is_void() {
+        if typed_expr.value.object_type.is_void() {
             self.add_diag(
                 LinkingError::unexpected_void_use(expr_range));
             return Err(())
         }
 
-        let object = self.context.factory.create_object(name.clone(), typed_expr.object_type.clone());
+        let object = self.context.factory.create_object(name.clone(), typed_expr.value.object_type.clone());
+        let name_range = name.range;
         self.object_context_window.add(name, object);
-        result.push(LinkedStatement::new_variable(object, typed_expr));
+        result.push(LinkedStatement::new_variable(object, typed_expr).add_range(name_range));
         Ok(())
     }
-    fn try_autocast(&self, mut typed_expression: TypedExpression, expected_type: Option<&ObjType>) -> Result<TypedExpression, ()> {
+    fn try_autocast(&self, mut typed_expression: RTypedExpression, expected_type: Option<&ObjType>) -> Result<RTypedExpression, ()> {
         let Some(expected_type) = expected_type else {
             return Ok(typed_expression)
         };
-        if &typed_expression.object_type == expected_type {
+        if &typed_expression.value.object_type == expected_type {
             return Ok(typed_expression)
         }
         // &T <-> *T
-        if typed_expression.object_type.is_different_pointers(expected_type) {
-            typed_expression.object_type = expected_type.clone();
+        if typed_expression.value.object_type.is_different_pointers(expected_type) {
+            typed_expression.value.object_type = expected_type.clone();
             return Ok(typed_expression)
         }
         // &T/&weakT -> T
-        if let ObjType::Reference { obj_type, is_weak: _ } = &typed_expression.object_type && expected_type == obj_type.as_ref() {
+        if let ObjType::Reference { obj_type, is_weak: _ } = &typed_expression.value.object_type && expected_type == obj_type.as_ref() {
+            let expression_range = typed_expression.range;
             return Ok(TypedExpression {
                 object_type: expected_type.clone(),
-                expr: LinkedExpression::new_unary_operation(typed_expression, OneSidedOperation::Dereference)
-            })
+                expr: LinkedExpression::new_unary_operation(typed_expression, OneSidedOperation::Dereference.add_no_range())
+            }.add_range(expression_range))
         }
         self.add_diag(LinkingError::incorrect_type(
-            expected_type.to_str(self), typed_expression.object_type.to_str(self),
-            Range::default()));
+            expected_type.to_str(self), typed_expression.value.object_type.to_str(self),
+            typed_expression.range));
         Err(())
     }
-    fn try_deref_reference(expression: TypedExpression) -> TypedExpression {
-        if !matches!(expression.object_type, ObjType::Reference { .. }) {
+    fn try_deref_reference(expression: RTypedExpression) -> RTypedExpression {
+        if !matches!(expression.value.object_type, ObjType::Reference { .. }) {
             return expression;
         }
-        let ObjType::Reference { obj_type, is_weak: _ } = &expression.object_type else { unreachable!() };
+        let ObjType::Reference { obj_type, is_weak: _ } = &expression.value.object_type else { unreachable!() };
         let object_type = obj_type.as_ref().clone();
 
+        let expression_range = expression.range;
         TypedExpression {
             object_type,
-            expr: LinkedExpression::new_unary_operation(expression, OneSidedOperation::Dereference)
-        }
+            expr: LinkedExpression::new_unary_operation(expression, OneSidedOperation::Dereference.add_no_range())
+        }.add_range(expression_range)
     }
-    fn parse_expression(&self, expression: RExpression, expected_type: Option<&ObjType>) -> Result<TypedExpression, ()> {
-        match expression.value {
+    fn parse_expression(&self, expression0: RExpression, expected_type: Option<&ObjType>) -> Result<RTypedExpression, ()> {
+        match expression0.value {
             Expression::Operation(expression1, expression2, op) => {
                 let ex1 = self.parse_expression(*expression1, None)?;
                 let ex1 = Self::try_deref_reference(ex1);
-                let ex2 = self.parse_expression(*expression2, Some(&ex1.object_type))?;
+                let ex2 = self.parse_expression(*expression2, Some(&ex1.value.object_type))?;
                 // ex2 will deref if can in [self.try_autocast]
 
-                let Some(result_type) = ObjType::from_operation(&ex1.object_type, &ex2.object_type, op.value) else {
+                let Some(result_type) = ObjType::from_operation(&ex1.value.object_type, &ex2.value.object_type, op.value) else {
                     self.add_diag(LinkingError::incorrect_two_oper(
-                        ex1.object_type.to_str(self), ex2.object_type.to_str(self), op));
+                        ex1.value.object_type.to_str(self), ex2.value.object_type.to_str(self), op));
                     return Err(())
                 };
                 let result = TypedExpression::new(
                     result_type,
-                    LinkedExpression::new_operation(ex1, ex2, op.value)
-                );
+                    LinkedExpression::new_operation(ex1, ex2, op)
+                ).add_range(expression0.range);
                 self.try_autocast(result, expected_type)
             }
             Expression::UnaryOperation(expression, op) => {
                 let ex = match op.value {
                     OneSidedOperation::GetReference => {
                         let mut exp = self.parse_expression(*expression, None)?;
-                        if let ObjType::Reference { obj_type, is_weak: true } = exp.object_type {
+                        if let ObjType::Reference { obj_type, is_weak: true } = exp.value.object_type {
                             // & of &weak T is &T
-                            exp.object_type = ObjType::new_reference(*obj_type);
+                            exp.value.object_type = ObjType::new_reference(*obj_type);
                             return self.try_autocast(exp, expected_type)
                         } else {
                             exp
@@ -393,14 +398,14 @@ impl FunctionLinkingContext<'_> {
                         Self::try_deref_reference(ex)
                     },
                 };
-                let Some(result_type) = ObjType::from_unary_operation(&ex.object_type, op.value) else {
-                    self.add_diag(LinkingError::incorrect_one_oper(ex.object_type.to_str(self), op));
+                let Some(result_type) = ObjType::from_unary_operation(&ex.value.object_type, op.value) else {
+                    self.add_diag(LinkingError::incorrect_one_oper(ex.value.object_type.to_str(self), op));
                     return Err(())
                 };
                 let result = TypedExpression::new(
                     result_type,
-                    LinkedExpression::new_unary_operation(ex, op.value)
-                );
+                    LinkedExpression::new_unary_operation(ex, op)
+                ).add_range(expression0.range);
                 self.try_autocast(result, expected_type)
             }
             Expression::As(expression, typee) => {
@@ -409,10 +414,10 @@ impl FunctionLinkingContext<'_> {
                 let ex = Self::try_deref_reference(ex); // FIXME: maybe not do it for * and &?
                 let object_type = self.parse_type(&typee)?;
 
-                let can_cast = ObjType::check_can_cast(&ex.object_type, &object_type);
+                let can_cast = ObjType::check_can_cast(&ex.value.object_type, &object_type);
                 if !can_cast {
                     self.add_diag(LinkingError::incorrect_as(
-                        ex.object_type.to_str(self), object_type.to_str(self),
+                        ex.value.object_type.to_str(self), object_type.to_str(self),
                         expr_range));
                     return Err(())
                 }
@@ -420,15 +425,15 @@ impl FunctionLinkingContext<'_> {
                 let result = TypedExpression::new(
                     object_type.clone(),
                     LinkedExpression::new_as(ex, object_type),
-                );
+                ).add_range(expression0.range);
                 self.try_autocast(result, expected_type)
             }
             Expression::RoundBracket(ex1) => {
                 let ex1 = self.parse_expression(*ex1, expected_type)?;
                 Ok(TypedExpression::new(
-                    ex1.object_type.clone(),
+                    ex1.value.object_type.clone(),
                     LinkedExpression::new_round_bracket(ex1)
-                ))
+                ).add_range(expression0.range))
             }
             Expression::Variable(name) => {
                 let object = self.object_context_window.get_or_error(&name)
@@ -443,7 +448,7 @@ impl FunctionLinkingContext<'_> {
                 let result = TypedExpression::new(
                     obj_type.clone(),
                     LinkedExpression::Variable(object)
-                );
+                ).add_range(expression0.range);
                 self.try_autocast(result, expected_type)
             },
             Expression::FunctionCall { object: name, args: args_values } => {
@@ -470,9 +475,9 @@ impl FunctionLinkingContext<'_> {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 for index in 0..arguments.len() {
-                    if args[index].object_type != arguments[index] {
+                    if args[index].value.object_type != arguments[index] {
                         self.add_diag(LinkingError::incorrect_type(
-                            args[index].object_type.to_str(self), arguments[index].to_str(self),
+                            args[index].value.object_type.to_str(self), arguments[index].to_str(self),
                             args_ranges[index]));
                         return Err(())
                     }
@@ -481,13 +486,13 @@ impl FunctionLinkingContext<'_> {
                 let result = TypedExpression::new(
                     returns.as_ref().clone(),
                     LinkedExpression::new_function_call(object, args)
-                );
+                ).add_range(expression0.range);
                 self.try_autocast(result, expected_type)
             }
             Expression::StructField { left, field } => {
                 let left = self.parse_expression(*left, None)?;
 
-                match &left.object_type {
+                match &left.value.object_type {
                     ObjType::Reference { obj_type: object, is_weak: _ } if matches!(object.as_ref(), ObjType::Struct(..)) => {
                         let ObjType::Struct(object) = object.as_ref() else { unreachable!() };
 
@@ -503,7 +508,7 @@ impl FunctionLinkingContext<'_> {
                         let result = TypedExpression {
                             object_type: ObjType::new_weak_reference(obj_type),
                             expr: LinkedExpression::new_struct_field(left, index)
-                        };
+                        }.add_range(expression0.range);
                         self.try_autocast(result, expected_type)
                     }
                     ObjType::Struct(object) => {
@@ -518,22 +523,22 @@ impl FunctionLinkingContext<'_> {
                         let obj_type = fields.get(index as usize).unwrap().clone();
 
                         let struct_expr = TypedExpression {
-                            object_type: ObjType::new_weak_reference(left.object_type.clone()),
-                            expr: LinkedExpression::new_unary_operation(left, OneSidedOperation::GetReference)
-                        };
+                            object_type: ObjType::new_weak_reference(left.value.object_type.clone()),
+                            expr: LinkedExpression::new_unary_operation(left, OneSidedOperation::GetReference.add_no_range())
+                        }.add_range(expression0.range);
                         let result = TypedExpression {
                             object_type: ObjType::new_weak_reference(obj_type),
                             expr: LinkedExpression::new_struct_field(struct_expr, index)
-                        };
+                        }.add_range(expression0.range);
                         self.try_autocast(result, expected_type)
                     }
                     _ => {
-                        self.add_diag(LinkingError::dot_not_on_struct(left.object_type.to_str(self), field.range));
+                        self.add_diag(LinkingError::dot_not_on_struct(left.value.object_type.to_str(self), field.range));
                         Err(())
                     }
                 }
             }
-            Expression::Literal(literal) => self.parse_literal(literal, expression.range, expected_type),
+            Expression::Literal(literal) => self.parse_literal(literal, expression0.range, expected_type),
             Expression::StructConstruct { struct_name, fields: fields_values } => {
                 let struct_type = self.parse_type(&Typee::String(struct_name.value.clone()).add_range(struct_name.range))?;
                 let ObjType::Struct(object) = &struct_type else {
@@ -582,12 +587,12 @@ impl FunctionLinkingContext<'_> {
                         object,
                         fields,
                     )
-                );
+                ).add_range(expression0.range);
                 self.try_autocast(result, expected_type)
             }
         }
     }
-    fn parse_literal(&self, literal: LiteralExpression, literal_range: Range, expected_type: Option<&ObjType>) -> Result<TypedExpression, ()> {
+    fn parse_literal(&self, literal: LiteralExpression, literal_range: Range, expected_type: Option<&ObjType>) -> Result<RTypedExpression, ()> {
         match literal {
             LiteralExpression::Undefined => {
                 let Some(obj_type) = expected_type else {
@@ -597,7 +602,7 @@ impl FunctionLinkingContext<'_> {
                 Ok(TypedExpression::new(
                     obj_type.clone(),
                     LinkedLiteralExpression::Undefined(obj_type.clone()).into(),
-                ))
+                ).add_range(literal_range))
             }
             LiteralExpression::NumberLiteral(string) => {
                 let result = self.parse_number_literal(string, literal_range, expected_type)?;
@@ -607,21 +612,21 @@ impl FunctionLinkingContext<'_> {
                 let result = TypedExpression::new(
                     ObjType::BOOL,
                     LinkedLiteralExpression::BoolLiteral(value).into(),
-                );
+                ).add_range(literal_range);
                 self.try_autocast(result, expected_type)
             }
             LiteralExpression::CharLiteral(value) => {
                 let result = TypedExpression::new(
                     ObjType::Char,
                     LinkedLiteralExpression::CharLiteral(value).into(),
-                );
+                ).add_range(literal_range);
                 self.try_autocast(result, expected_type)
             }
             LiteralExpression::StringLiteral(string) => {
                 let result = TypedExpression::new(
                     ObjType::new_pointer(ObjType::Char),
                     LinkedLiteralExpression::StringLiteral(string).into(),
-                );
+                ).add_range(literal_range);
                 self.try_autocast(result, expected_type)
             }
         }
@@ -662,7 +667,7 @@ impl FunctionLinkingContext<'_> {
         }
     }
 
-    fn parse_number_literal(&self, mut string: String, literal_range: Range, expected_type: Option<&ObjType>) -> Result<TypedExpression, ()> {
+    fn parse_number_literal(&self, mut string: String, literal_range: Range, expected_type: Option<&ObjType>) -> Result<RTypedExpression, ()> {
         string = string.replace('_', "");
 
         let has_dot = string.find('.').is_some();
@@ -677,7 +682,7 @@ impl FunctionLinkingContext<'_> {
                 Ok(TypedExpression::new(
                     num_type.clone(),
                     LinkedLiteralExpression::FloatLiteral(string, num_type).into()
-                ))
+                ).add_range(literal_range))
             } else {
                 // 123
                 let mut num_type = ObjType::DEFAULT_INTEGER;
@@ -687,7 +692,7 @@ impl FunctionLinkingContext<'_> {
                 Ok(TypedExpression::new(
                     num_type.clone(),
                     LinkedLiteralExpression::IntLiteral(string, num_type).into()
-                ))
+                ).add_range(literal_range))
             }
         };
 
@@ -702,22 +707,35 @@ impl FunctionLinkingContext<'_> {
             ObjType::Integer(_) if !has_dot => Ok(TypedExpression::new(
                 object_type.clone(),
                 LinkedLiteralExpression::IntLiteral(string, object_type).into()
-            )),
+            ).add_range(literal_range)),
             ObjType::Float(_) => Ok(TypedExpression::new(
                 object_type.clone(),
                 LinkedLiteralExpression::FloatLiteral(string, object_type).into()
-            )),
+            ).add_range(literal_range)),
             _ => {
                 self.add_diag(LinkingError::literal_unexpected_suffix(suffix, literal_range));
                 Err(())
             }
         }
     }
+
+    fn check_lvalue(&mut self, lvalue: &RTypedExpression) {
+        match &lvalue.value.expr {
+            LinkedExpression::Variable(..) => {},
+            LinkedExpression::StructField {..} => {}
+            LinkedExpression::RoundBracket(inside) => self.check_lvalue(inside),
+            LinkedExpression::UnaryOperation(inside, op)
+                if op.value == OneSidedOperation::Dereference => self.check_lvalue(inside),
+            _ => {
+                self.add_diag(LinkingError::incorrect_lvalue(lvalue.range))
+            }
+        }
+    }
 }
 
-fn check_is_returns(statements: &[LinkedStatement]) -> bool {
+fn check_is_returns(statements: &[RLinkedStatement]) -> bool {
     for statement in statements {
-        match statement {
+        match &statement.value {
             LinkedStatement::Return(_) => return true,
             LinkedStatement::If { condition: _, body } | LinkedStatement::While { condition: _, body } => {
                 if check_is_returns(body) {

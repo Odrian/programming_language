@@ -1,7 +1,21 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use pr_common::operations::{OneSidedOperation, RTwoSidedOperation, TwoSidedOperation};
+use lsp_types::Range;
+use pr_common::operations::{ROneSidedOperation, RTwoSidedOperation};
+use pr_common::ranged::Ranged;
 use crate::object::{Object, ObjType, FloatObjType, IntObjType, ObjectFactory};
+
+pub type RTypedExpression = Ranged<TypedExpression>;
+pub type RLinkedStatement = Ranged<LinkedStatement>;
+
+impl TypedExpression {
+    pub fn add_range(self, range: Range) -> RTypedExpression { RTypedExpression { value: self, range } }
+    pub fn add_no_range(self) -> RTypedExpression { self.add_range(Range::default()) }
+}
+impl LinkedStatement {
+    pub fn add_range(self, range: Range) -> RLinkedStatement { RLinkedStatement { value: self, range } }
+    pub fn add_no_range(self) -> RLinkedStatement { self.add_range(Range::default()) }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypedExpression {
@@ -11,8 +25,8 @@ pub struct TypedExpression {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum GlobalLinkedStatement {
-    VariableDeclaration { value: TypedExpression },
-    Function { args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement> },
+    VariableDeclaration { value: RTypedExpression },
+    Function { args: Vec<Object>, returns: ObjType, body: Vec<RLinkedStatement> },
     Struct { fields: Vec<ObjType>, field_names: HashMap<String, u32> },
 
     ExternStatement { statement: ExternLinkedStatement },
@@ -20,28 +34,28 @@ pub enum GlobalLinkedStatement {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedStatement {
-    VariableDeclaration { object: Object, value: TypedExpression },
-    SetVariable { what: TypedExpression, value: TypedExpression, op: Option<RTwoSidedOperation> },
+    VariableDeclaration { object: Object, value: RTypedExpression },
+    SetVariable { what: RTypedExpression, value: RTypedExpression, op: Option<RTwoSidedOperation> },
 
-    Expression(TypedExpression),
-    If { condition: TypedExpression, body: Vec<Self> },
-    While { condition: TypedExpression, body: Vec<Self> },
-    Return(Option<TypedExpression>),
+    Expression(RTypedExpression),
+    If { condition: RTypedExpression, body: Vec<RLinkedStatement> },
+    While { condition: RTypedExpression, body: Vec<RLinkedStatement> },
+    Return(Option<RTypedExpression>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedExpression {
-    Operation(Box<TypedExpression>, Box<TypedExpression>, TwoSidedOperation),
-    UnaryOperation(Box<TypedExpression>, OneSidedOperation),
-    As(Box<TypedExpression>, ObjType),
-    StructField { left: Box<TypedExpression>, field_index: u32 },
+    Operation(Box<RTypedExpression>, Box<RTypedExpression>, RTwoSidedOperation),
+    UnaryOperation(Box<RTypedExpression>, ROneSidedOperation),
+    As(Box<RTypedExpression>, ObjType),
+    StructField { left: Box<RTypedExpression>, field_index: u32 },
 
     Literal(LinkedLiteralExpression),
-    StructConstruct { object: Object, fields: Vec<TypedExpression> },
+    StructConstruct { object: Object, fields: Vec<RTypedExpression> },
 
     Variable(Object),
-    RoundBracket(Box<TypedExpression>),
-    FunctionCall { object: Object, args: Vec<TypedExpression> },
+    RoundBracket(Box<RTypedExpression>),
+    FunctionCall { object: Object, args: Vec<RTypedExpression> },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -72,50 +86,50 @@ impl GlobalLinkedStatement {
     pub const fn new_struct(fields: Vec<ObjType>, field_names: HashMap<String, u32>) -> Self {
         Self::Struct { fields, field_names }
     }
-    pub const fn new_function(args: Vec<Object>, returns: ObjType, body: Vec<LinkedStatement>) -> Self {
+    pub const fn new_function(args: Vec<Object>, returns: ObjType, body: Vec<RLinkedStatement>) -> Self {
         Self::Function { args, returns, body }
     }
-    pub const fn new_variable(value: TypedExpression) -> Self {
+    pub const fn new_variable(value: RTypedExpression) -> Self {
         Self::VariableDeclaration { value }
     }
 }
 
 impl LinkedStatement {
-    pub const fn new_variable(object: Object, value: TypedExpression) -> Self {
+    pub const fn new_variable(object: Object, value: RTypedExpression) -> Self {
         Self::VariableDeclaration { object, value }
     }
-    pub const fn new_set(what: TypedExpression, value: TypedExpression, op: Option<RTwoSidedOperation>) -> Self {
+    pub const fn new_set(what: RTypedExpression, value: RTypedExpression, op: Option<RTwoSidedOperation>) -> Self {
         Self::SetVariable { what, value, op }
     }
-    pub const fn new_if(condition: TypedExpression, body: Vec<Self>) -> Self {
+    pub const fn new_if(condition: RTypedExpression, body: Vec<RLinkedStatement>) -> Self {
         Self::If { condition, body }
     }
-    pub const fn new_while(condition: TypedExpression, body: Vec<Self>) -> Self {
+    pub const fn new_while(condition: RTypedExpression, body: Vec<RLinkedStatement>) -> Self {
         Self::While { condition, body }
     }
 }
 
 impl LinkedExpression {
-    pub fn new_operation(expression1: TypedExpression, expression2: TypedExpression, op: TwoSidedOperation) -> Self {
+    pub fn new_operation(expression1: RTypedExpression, expression2: RTypedExpression, op: RTwoSidedOperation) -> Self {
         Self::Operation(Box::new(expression1), Box::new(expression2), op)
     }
-    pub fn new_unary_operation(expression: TypedExpression, op: OneSidedOperation) -> Self {
+    pub fn new_unary_operation(expression: RTypedExpression, op: ROneSidedOperation) -> Self {
         Self::UnaryOperation(Box::new(expression), op)
     }
-    pub fn new_as(expression: TypedExpression, object_type: ObjType) -> Self {
+    pub fn new_as(expression: RTypedExpression, object_type: ObjType) -> Self {
         Self::As(Box::new(expression), object_type)
     }
-    pub fn new_round_bracket(expression: TypedExpression) -> Self {
+    pub fn new_round_bracket(expression: RTypedExpression) -> Self {
         Self::RoundBracket(Box::new(expression))
     }
-    pub const fn new_function_call(object: Object, args: Vec<TypedExpression>) -> Self {
+    pub const fn new_function_call(object: Object, args: Vec<RTypedExpression>) -> Self {
         Self::FunctionCall { object, args }
     }
-    pub fn new_struct_field(left: TypedExpression, field_index: u32) -> Self {
+    pub fn new_struct_field(left: RTypedExpression, field_index: u32) -> Self {
         let left = Box::new(left);
         Self::StructField { left, field_index }
     }
-    pub fn new_struct_construction(object: Object, fields: Vec<TypedExpression>) -> Self {
+    pub fn new_struct_construction(object: Object, fields: Vec<RTypedExpression>) -> Self {
         Self::StructConstruct { object, fields }
     }
 }
@@ -157,7 +171,7 @@ impl GlobalLinkedStatement {
                 format!("{name} :: struct {{ ({fields}) }}")
             }
             Self::Function { args, returns, body } => {
-                let inside = to_string_with_tabs(body, |x| x.to_string::<WITH_ID>(factory));
+                let inside = to_string_with_tabs(body, |x| x.value.to_string::<WITH_ID>(factory));
                 let args = args.iter().map(|x| factory.get_out_name::<WITH_ID>(*x)).collect::<Vec<_>>().join(", ");
                 let name = factory.get_out_name::<WITH_ID>(object);
                 let returns = returns.to_string::<WITH_ID>(factory);
@@ -165,8 +179,8 @@ impl GlobalLinkedStatement {
             }
             Self::VariableDeclaration { value } => {
                 let name = factory.get_out_name::<WITH_ID>(object);
-                let obj_type = value.object_type.to_string::<WITH_ID>(factory);
-                let expr = value.expr.to_string::<WITH_ID>(factory);
+                let obj_type = value.value.object_type.to_string::<WITH_ID>(factory);
+                let expr = value.value.expr.to_string::<WITH_ID>(factory);
                 format!("{name} : {obj_type} = {expr}")
             }
             Self::ExternStatement { statement } => statement.to_string::<WITH_ID>(factory, object)
@@ -196,34 +210,34 @@ impl LinkedStatement {
         match self {
             Self::VariableDeclaration { object, value } => {
                 let name = factory.get_out_name::<WITH_ID>(*object);
-                let obj_type = value.object_type.to_string::<WITH_ID>(factory);
-                let expr = value.expr.to_string::<WITH_ID>(factory);
+                let obj_type = value.value.object_type.to_string::<WITH_ID>(factory);
+                let expr = value.value.expr.to_string::<WITH_ID>(factory);
                 format!("{name} : {obj_type} = {expr}")
             }
             Self::SetVariable { what, value, op } => {
-                let what = what.to_string::<WITH_ID>(factory);
-                let value = value.to_string::<WITH_ID>(factory);
+                let what = what.value.to_string::<WITH_ID>(factory);
+                let value = value.value.to_string::<WITH_ID>(factory);
                 match op {
                     Some(op) => format!("{what} {op}= {value}"),
                     None => format!("{what} = {value}"),
                 }
             }
             Self::Expression(expression) => {
-                expression.to_string::<WITH_ID>(factory)
+                expression.value.to_string::<WITH_ID>(factory)
             }
             Self::If { condition, body } => {
-                let inside = to_string_with_tabs(body, |x| x.to_string::<WITH_ID>(factory));
-                let condition = condition.to_string::<WITH_ID>(factory);
+                let inside = to_string_with_tabs(body, |x| x.value.to_string::<WITH_ID>(factory));
+                let condition = condition.value.to_string::<WITH_ID>(factory);
                 format!("if {condition} {{\n{inside}\n}}")
             }
             Self::While { condition, body } => {
-                let inside = to_string_with_tabs(body, |x| x.to_string::<WITH_ID>(factory));
-                let condition = condition.to_string::<WITH_ID>(factory);
+                let inside = to_string_with_tabs(body, |x| x.value.to_string::<WITH_ID>(factory));
+                let condition = condition.value.to_string::<WITH_ID>(factory);
                 format!("while {condition} {{\n{inside}\n}}")
             }
             Self::Return(exp) => {
                 match exp {
-                    Some(exp) => format!("return {}", exp.to_string::<WITH_ID>(factory)),
+                    Some(exp) => format!("return {}", exp.value.to_string::<WITH_ID>(factory)),
                     None => "return".to_string()
                 }
             }
@@ -241,37 +255,37 @@ impl LinkedExpression {
     pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
         match self {
             Self::Operation(a, b, op) => {
-                let a = a.to_string::<WITH_ID>(factory);
-                let b = b.to_string::<WITH_ID>(factory);
+                let a = a.value.to_string::<WITH_ID>(factory);
+                let b = b.value.to_string::<WITH_ID>(factory);
                 format!("({a} {op} {b})")
             },
             Self::UnaryOperation(ex, op) => {
-                let ex = ex.to_string::<WITH_ID>(factory);
+                let ex = ex.value.to_string::<WITH_ID>(factory);
                 format!("{op}({ex})")
             }
             Self::As(expression, object_type) => {
-                let expression = expression.to_string::<WITH_ID>(factory);
+                let expression = expression.value.to_string::<WITH_ID>(factory);
                 let object_type = object_type.to_string::<WITH_ID>(factory);
                 format!("({expression} as {object_type})")
             }
             Self::Literal(literal) => literal.to_string::<WITH_ID>(factory),
             Self::Variable(object) => factory.get_out_name::<WITH_ID>(*object),
             Self::RoundBracket(expression) => {
-                let expression = expression.to_string::<WITH_ID>(factory);
+                let expression = expression.value.to_string::<WITH_ID>(factory);
                 format!("({expression})")
             },
             Self::FunctionCall { object, args } => {
-                let args = args.iter().map(|x| x.to_string::<WITH_ID>(factory)).collect::<Vec<_>>();
+                let args = args.iter().map(|x| x.value.to_string::<WITH_ID>(factory)).collect::<Vec<_>>();
                 let name = factory.get_out_name::<WITH_ID>(*object);
                 format!("{name} ({})", args.join(", "))
             },
             Self::StructField { left, field_index } => {
-                let left = left.to_string::<WITH_ID>(factory);
+                let left = left.value.to_string::<WITH_ID>(factory);
                 format!("{left}.[{field_index}]")
             },
             Self::StructConstruct { object, fields } => {
                 let name = factory.get_out_name::<WITH_ID>(*object);
-                let fields = to_string_with_tabs(fields, |x| x.to_string::<WITH_ID>(factory));
+                let fields = to_string_with_tabs(fields, |x| x.value.to_string::<WITH_ID>(factory));
                 format!("{name} {{\n{fields}\n}}")
             }
         }

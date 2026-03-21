@@ -49,6 +49,9 @@ fn test_variables() {
     assert_no_error("cat := 0; dog := cat");
     assert_no_error("cat := 0; dog := (cat + cat)");
     assert_no_error("cat := 0; dog := (cat + cat)");
+
+    assert_has_error("5 = 4");
+    assert_has_error("5 := 4");
 }
 
 #[test]
@@ -224,26 +227,26 @@ fn test_function_with_while() {
 
     let mut body_iter = body.into_iter();
 
-    let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = body_iter.next().unwrap() else { panic!() };
-    let LinkedExpression::Variable(value1) = value1.expr else { panic!() };
+    let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = body_iter.next().unwrap().value else { panic!() };
+    let LinkedExpression::Variable(value1) = value1.value.expr else { panic!() };
 
-    let LinkedStatement::While { condition, body: mut while_body } = body_iter.next().unwrap() else { panic!() };
-    let LinkedExpression::Operation(left, right, op) = condition.expr else { panic!() };
-    let LinkedExpression::Variable(condition_var) = left.expr else { panic!() };
+    let LinkedStatement::While { condition, body: mut while_body } = body_iter.next().unwrap().value else { panic!() };
+    let LinkedExpression::Operation(left, right, op) = condition.value.expr else { panic!() };
+    let LinkedExpression::Variable(condition_var) = left.value.expr else { panic!() };
     
-    let LinkedExpression::Literal(LinkedLiteralExpression::IntLiteral(zero, _)) = right.expr else { panic!() };
+    let LinkedExpression::Literal(LinkedLiteralExpression::IntLiteral(zero, _)) = right.value.expr else { panic!() };
     assert_eq!(zero, "0");
 
-    assert_eq!(op, CompareOperator::NotEqual.into());
+    assert_eq!(op.value, CompareOperator::NotEqual.into());
 
-    let LinkedStatement::Return(option_return) = body_iter.next().unwrap() else { panic!() };
-    let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().expr else { panic!() };
+    let LinkedStatement::Return(option_return) = body_iter.next().unwrap().value else { panic!() };
+    let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().value.expr else { panic!() };
     assert_eq!(linked_program.factory.get_name(c_var).value, "c");
 
     assert_eq!(while_body.len(), 1);
-    let LinkedStatement::SetVariable { what, value: value2, op: Option::None } = while_body.pop().unwrap() else { panic!() };
-    let LinkedExpression::Variable(var2) = what.expr else { panic!() };
-    let LinkedExpression::Variable(value2) = value2.expr else { panic!() };
+    let LinkedStatement::SetVariable { what, value: value2, op: Option::None } = while_body.pop().unwrap().value else { panic!() };
+    let LinkedExpression::Variable(var2) = what.value.expr else { panic!() };
+    let LinkedExpression::Variable(value2) = value2.value.expr else { panic!() };
     // arg = b
     // var1 = c
     // value1 = b

@@ -22,6 +22,13 @@ impl SyntacticError {
 
         Diagnostic::new_error(range_before, "expected semicolon".to_string())
     }
+    
+    pub fn incorrect_variable_definition(range: Range) -> Diagnostic {
+        Diagnostic::new_error(range, "incorrect variable definition".to_string())
+    }
+    pub fn incorrect_call(range: Range) -> Diagnostic {
+        Diagnostic::new_error(range, "incorrect function call".to_string())
+    }
 }
 
 pub struct ExpectedError {

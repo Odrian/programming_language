@@ -110,4 +110,9 @@ impl LinkingError {
             format!("can't use function {name} as variable value")
         ).to_diag(name.range)
     }
+    pub fn incorrect_lvalue(range: Range) -> Diagnostic {
+        DiagnosticString::from_text(
+            "incorrect value before ="
+        ).to_diag(range)
+    }
 }

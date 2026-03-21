@@ -318,26 +318,6 @@ impl ParsingState<'_> {
                 result.push(statement.add_range(range_st));
                 Ok(())
             },
-            Token::Bracket(_, BracketType::Round) => {
-                // name(..)
-                if is_global {
-                    self.add_diag(SyntacticError::from_text("global function call", name.range));
-                    return Err(());
-                }
-
-                let Some(RangedToken { token: _, range: range_bracket }) = self.peek() else { unreachable!() };
-
-                let range_call = Range::new(name.range.start, range_bracket.end);
-
-                let args = self.parse_function_arguments()?;
-                let left = Expression::new_function_call(name, args).add_range(range_call);
-                let expression = self.parse_expression2_without_ops(left, false, false)?;
-                self.consume_semicolon(expression.range);
-
-                let statement = Statement::Expression(expression.value).add_range(expression.range);
-                result.push(statement);
-                Ok(())
-            }
             _ => {
                 if is_global {
                     self.add_diag(SyntacticError::from_text("global expression", name.range));
@@ -368,7 +348,10 @@ impl ParsingState<'_> {
 
                 let range_st = Range::new(left.range.start, expression2.range.end);
                 let statement = match equal_operation {
-                    EqualOperation::ColonEqual => unreachable!(),
+                    EqualOperation::ColonEqual => {
+                        self.add_diag(SyntacticError::incorrect_variable_definition(range0));
+                        return Err(())
+                    }
                     EqualOperation::Equal => Statement::new_set(left, expression2, None),
                     EqualOperation::OperationEqual(op) => {
                         Statement::new_set(left, expression2, Some(op.add_range(range0)))
@@ -377,9 +360,30 @@ impl ParsingState<'_> {
                 result.push(statement.add_range(range_st));
                 Ok(())
             }
+            Token::Bracket(_, BracketType::Round) => {
+                // name(..)
+                let Some(RangedToken { token: _, range: range_bracket }) = self.peek() else { unreachable!() };
+
+                let Expression::Variable(name) = left.value else {
+                    self.add_diag(SyntacticError::incorrect_call(left.range));
+                    return Err(())
+                };
+
+                let range_call = Range::new(name.range.start, range_bracket.end);
+
+                let args = self.parse_function_arguments()?;
+                let left = Expression::new_function_call(name, args).add_range(range_call);
+                let expression = self.parse_expression2_without_ops(left, false, false)?;
+                self.consume_semicolon(expression.range);
+
+                let statement = Statement::Expression(expression.value).add_range(expression.range);
+                result.push(statement);
+                Ok(())
+            }
             _ => {
                 self.consume_semicolon(left.range);
-                result.push(Statement::Expression(left.value).add_range(left.range));
+                let expression = Statement::Expression(left.value).add_range(left.range);
+                result.push(expression);
                 Ok(())
             }
         }
