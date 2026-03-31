@@ -1,0 +1,6 @@
+[package]
+name = "linear_tree"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
