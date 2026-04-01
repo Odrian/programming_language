@@ -1,7 +1,7 @@
 use crate::{LinearTree, TreeNode, NodeBlock};
 
 #[derive(Clone)]
-pub struct TreeConstructor<Elem, Block> {
+pub struct TreeBuilder<Elem, Block> {
     tree: Vec<TreeNode<Elem, Block>>,
     start: usize,
 
@@ -13,13 +13,13 @@ struct BlockStart {
     start: usize,
 }
 
-impl<Elem, Block> Default for TreeConstructor<Elem, Block> {
+impl<Elem, Block> Default for TreeBuilder<Elem, Block> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Elem, Block> TreeConstructor<Elem, Block> {
+impl<Elem, Block> TreeBuilder<Elem, Block> {
     pub fn new() -> Self {
         Self { tree: Vec::default(), start: 0, steps: Vec::default()}
     }

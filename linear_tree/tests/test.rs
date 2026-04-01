@@ -1,4 +1,4 @@
-use linear_tree::{LinearTree, Node, NodeRef, TreeConstructor};
+use linear_tree::{LinearTree, Node, NodeRef, TreeBuilder};
 
 struct Elem {
     data: usize,
@@ -43,7 +43,7 @@ impl TreeCollector {
 
 #[test]
 fn test_iter() {
-    let mut construction = TreeConstructor::<Elem, Block>::new();
+    let mut construction = TreeBuilder::<Elem, Block>::new();
 
     construction.add_elem(Elem::from(0));
     construction.add_elem(Elem::from(1));
@@ -61,7 +61,7 @@ fn test_iter() {
 
 #[test]
 fn test_into_iter() {
-    let mut construction = TreeConstructor::<Elem, Block>::new();
+    let mut construction = TreeBuilder::<Elem, Block>::new();
 
     construction.add_elem(Elem::from(3));
     construction.start_new_block(Block::from(2));

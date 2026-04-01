@@ -36,7 +36,7 @@ pub struct NodeIntoIterator<T, Elem, Block> {
 }
 
 impl<T, Elem, Block> NodeIntoIterator<T, Elem, Block> {
-    pub fn next(&mut self) -> Option<Node<&T, Elem, Block>> {
+    pub fn next<'a>(&'a mut self) -> Option<Node<&'a T, Elem, Block>> {
         self.iterator.next()
     }
 }
@@ -55,7 +55,7 @@ pub struct SubNodeIntoIterator<T, Elem, Block> {
 }
 
 impl<T, Elem, Block> SubNodeIntoIterator<T, Elem, Block> {
-    pub fn next(&mut self) -> Option<Node<&T, Elem, Block>> {
+    pub fn next<'a>(&'a mut self) -> Option<Node<&'a T, Elem, Block>> {
         if self.begin == self.end {
             return None;
         }

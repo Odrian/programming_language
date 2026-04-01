@@ -1,4 +1,3 @@
-
 //! This crate allows to construct tree from left to right inside single Vec
 //!
 //! Due to limitations of train Iterator IntoIter can't implement it (it needs lifetime parameter of &mut self in return type to guarantee drop order)
@@ -6,23 +5,23 @@
 //! # Example
 //!
 //! ```rust
-//! use linear_tree::{TreeConstructor, NodeRef, Node};
+//! use linear_tree::{TreeBuilder, NodeRef, Node};
 //!
 //! struct Elem { data: usize }
 //! struct Block { data: usize }
 //!
-//! let mut construction = TreeConstructor::<Elem, Block>::new();
-//! construction.add_elem(Elem { data: 1 });
-//! construction.start_new_block(Block { data: 2 });
+//! let mut builder = TreeBuilder::<Elem, Block>::new();
+//! builder.add_elem(Elem { data: 1 });
+//! builder.start_new_block(Block { data: 2 });
 //!
-//! construction.start_new_block(Block { data: 3 });
-//! construction.close_block();
+//! builder.start_new_block(Block { data: 3 });
+//! builder.close_block();
 //!
-//! construction.add_elem(Elem { data: 4 });
-//! construction.close_block();
-//! construction.add_elem(Elem { data: 5 });
+//! builder.add_elem(Elem { data: 4 });
+//! builder.close_block();
+//! builder.add_elem(Elem { data: 5 });
 //!
-//! let tree = construction.finish_building();
+//! let tree = builder.finish_building();
 //!
 //! let mut vec = Vec::new();
 //! for node in &tree {
@@ -51,8 +50,8 @@
 //! }
 //! ```
 
-mod construct;
-pub use construct::TreeConstructor;
+mod builder;
+pub use builder::TreeBuilder;
 
 mod iterator;
 pub use iterator::NodeRef;
