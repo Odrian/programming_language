@@ -6,16 +6,21 @@
 //! # Example
 //!
 //! ```rust
+//! use linear_tree::{TreeConstructor, NodeRef, Node};
+//!
+//! struct Elem { data: usize }
+//! struct Block { data: usize }
+//!
 //! let mut construction = TreeConstructor::<Elem, Block>::new();
-//! construction.add_elem(Elem::from(1));
-//! construction.start_new_block(Block::from(2));
+//! construction.add_elem(Elem { data: 1 });
+//! construction.start_new_block(Block { data: 2 });
 //!
-//! construction.start_new_block(Block::from(3));
+//! construction.start_new_block(Block { data: 3 });
 //! construction.close_block();
 //!
-//! construction.add_elem(Elem::from(4));
+//! construction.add_elem(Elem { data: 4 });
 //! construction.close_block();
-//! construction.add_elem(Elem::from(5));
+//! construction.add_elem(Elem { data: 5 });
 //!
 //! let tree = construction.finish_building();
 //!
