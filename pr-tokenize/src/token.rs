@@ -1,19 +1,8 @@
 use std::fmt::{Display, Formatter};
-use lsp_types::Range;
-use pr_common::BracketType;
-use pr_common::operations::*;
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct RangedToken {
-    pub token: Token,
-    pub range: Range,
-}
-
-impl RangedToken {
-    pub fn new(token: Token, range: Range) -> Self {
-        Self { token, range }
-    }
-}
+use pr_common::{
+    BracketType,
+    operations::*,
+};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
@@ -32,10 +21,11 @@ pub enum Token {
     Operation(TwoSidedOperation),
     UnaryOperation(OneSidedOperation),
 
-    Bracket(Vec<RangedToken>, BracketType),
     Quotes(String),
     DoubleQuotes(String),
 }
+
+pub type TokenBlock = BracketType;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TokenKeyword {

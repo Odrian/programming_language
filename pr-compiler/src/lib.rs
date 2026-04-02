@@ -2,8 +2,9 @@ use std::fs;
 use std::path::PathBuf;
 use clap::Parser;
 use pr_common::error::{range_to_str, ErrorQueue};
-use pr_tokenize::TokenizeResult;
-use pr_tokenize::token::{RangedToken, Token};
+use pr_common::ranged_tree::NodeRef;
+use pr_tokenize::token::Token;
+use pr_tokenize::{TokenIter, TokenLinearTree};
 use pr_ast::SyntacticResult;
 use pr_ast_linked::LinkedProgram;
 use crate::error::LLVMError;
@@ -83,41 +84,43 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
     Ok(())
 }
 
-fn tokens_to_str(tokens: &[RangedToken], layer: u8) -> String {
-    tokens.iter().map(|t| {
-        let range = range_to_str(t.range);
-        let str = match &t.token {
-            Token::Bracket(body, bracket) => {
+fn tokens_to_str(tokens: TokenIter<'_>, layer: u8) -> String {
+    tokens.map(|(token, range)| {
+        let range = range_to_str(*range);
+        let str = match token {
+            NodeRef::Elem(elem) => match elem {
+                Token::String(str) => format!("{str} {range}"),
+                Token::DoubleQuotes(str) => format!("\"{str}\" {range}"),
+                Token::Quotes(str) => format!("'{str}' {range}"),
+                Token::Keyword(keyword) => format!("{keyword:?} {range}"),
+                Token::NumberLiteral(str) => format!("{str} {range}"),
+
+                Token::UnaryOperation(op) => format!("{op} {range}"),
+                Token::Operation(op) => format!("{op} {range}"),
+                Token::EqualOperation(op) => format!("{op} {range}"),
+
+                Token::Semicolon => format!("; {range}"),
+                Token::Dot => format!(". {range}"),
+                Token::DoubleDot => format!(".. {range}"),
+                Token::Comma => format!(", {range}"),
+                Token::Colon => format!(": {range}"),
+                Token::DoubleColon => format!(":: {range}"),
+                Token::Arrow => format!("-> {range}"),
+            }
+            NodeRef::Block(bracket, body) => {
                 let body = tokens_to_str(body, layer + 1);
                 let left = bracket.to_open_string();
                 let right = bracket.to_close_string();
                 let spaces = "    ".repeat(layer as usize);
                 format!("{left} {range}\n{body}\n{spaces}{right}")
             }
-            Token::String(str) => format!("{str} {range}"),
-            Token::DoubleQuotes(str) => format!("\"{str}\" {range}"),
-            Token::Quotes(str) => format!("'{str}' {range}"),
-            Token::Keyword(keyword) => format!("{keyword:?} {range}"),
-            Token::NumberLiteral(str) => format!("{str} {range}"),
-
-            Token::UnaryOperation(op) => format!("{op} {range}"),
-            Token::Operation(op) => format!("{op} {range}"),
-            Token::EqualOperation(op) => format!("{op} {range}"),
-
-            Token::Semicolon => format!("; {range}"),
-            Token::Dot => format!(". {range}"),
-            Token::DoubleDot => format!(".. {range}"),
-            Token::Comma => format!(", {range}"),
-            Token::Colon => format!(": {range}"),
-            Token::DoubleColon => format!(":: {range}"),
-            Token::Arrow => format!("-> {range}"),
         };
         "    ".repeat(layer as usize).to_owned() + &str
     }).collect::<Vec<_>>().join("\n")
 }
 
-fn generate_tokens_file(filename: &String, tokens: &TokenizeResult) -> Result<(), ErrorQueue> {
-    let text = tokens_to_str(&tokens.tokens, 0);
+fn generate_tokens_file(filename: &String, tokens: &TokenLinearTree) -> Result<(), ErrorQueue> {
+    let text = tokens_to_str(tokens.iter(), 0);
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();
     let filepath = format!("{ARTIFACT_DIR}/{filename}_tokens.txt");

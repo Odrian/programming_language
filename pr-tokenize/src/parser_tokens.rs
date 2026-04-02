@@ -1,15 +1,18 @@
 use std::str::Chars;
 use lsp_types::{Position, Range};
-use pr_common::error::ErrorQueue;
-use pr_common::operations::*;
-use pr_common::BracketType;
+use pr_common::{
+    error::ErrorQueue,
+    operations::*,
+    BracketType,
+};
+use crate::{TokenTreeBuilder, TokenLinearTree};
 use crate::error::TokenizeError;
 use crate::token::*;
 
-pub fn parse_tokens(errors: &mut ErrorQueue, text: &str) -> Vec<RangedToken> {
-    let (token, _) = parse_inside_brackets(errors, &mut text.chars(), Position::default(), None);
-    let Token::Bracket(vec, _) = token.token else { unreachable!() };
-    vec
+pub fn parse_tokens(errors: &mut ErrorQueue, text: &str) -> TokenLinearTree {
+    let mut tree = TokenTreeBuilder::new();
+    let _position = parse_inside_brackets(&mut tree, errors, &mut text.chars(), Position::default(), None);
+    tree.finish_building()
 }
 
 #[inline]
@@ -43,11 +46,10 @@ impl IndexedTextBuffer {
         self.index = index;
         self.start_buffer_index = index;
     }
-    fn flush(&mut self, result_tokens: &mut Vec<RangedToken>, errors: &mut ErrorQueue) {
+    fn flush(&mut self, tree: &mut TokenTreeBuilder, errors: &mut ErrorQueue) {
         if self.index != self.start_buffer_index {
-            let mut tokens = split_text_without_brackets(errors, &self.text, self.start_buffer_index);
+            split_text_without_brackets(tree, errors, &self.text, self.start_buffer_index);
             self.text.clear();
-            result_tokens.append(&mut tokens);
         }
     }
     fn add_char(&mut self, ch: char) {
@@ -68,13 +70,12 @@ impl IndexedTextBuffer {
 }
 
 fn parse_inside_brackets(
+    tree: &mut TokenTreeBuilder,
     errors: &mut ErrorQueue,
     text: &mut Chars,
     start_position: Position,
     open_bracket_type: Option<BracketType>
-) -> (RangedToken, Position) {
-    let mut result_tokens = Vec::new();
-
+) -> (Position, Range) {
     let mut buffer = {
         let mut start_buffer_index = start_position;
         if open_bracket_type.is_some() { add_one(Some('('), &mut start_buffer_index); }
@@ -87,7 +88,7 @@ fn parse_inside_brackets(
         let Some(char) = text.next() else { break; };
 
         if char == '"' || char == '\'' || char == '`' {
-            buffer.flush(&mut result_tokens, errors);
+            buffer.flush(tree, errors);
 
             let quotes_start_position = buffer.index;
             loop { // here index map to previous char in start of loop
@@ -142,14 +143,16 @@ fn parse_inside_brackets(
             };
 
             let position = Range::new(quotes_start_position, buffer.index);
-            result_tokens.push(RangedToken::new(token, position));
+            tree.add_elem(token, position);
         } else if let Some(bracket_type) = is_open_bracket(char) {
             // open bracket
-            buffer.flush(&mut result_tokens, errors);
+            buffer.flush(tree, errors);
 
-            let (new_token, new_index) =
-                parse_inside_brackets(errors, text, buffer.index, Some(bracket_type));
-            result_tokens.push(new_token);
+            tree.start_new_block();
+            let (new_index, range) =
+                parse_inside_brackets(tree, errors, text, buffer.index, Some(bracket_type));
+            tree.close_block(bracket_type, range);
+
             buffer.set_new_index(new_index);
         } else if let Some(bracket_type) = is_close_bracket(char) {
             // close bracket
@@ -172,20 +175,18 @@ fn parse_inside_brackets(
                 *text = text_was;
             }
 
-            buffer.flush(&mut result_tokens, errors);
-
-            let result_token = Token::Bracket(result_tokens, open_bracket_type);
+            buffer.flush(tree, errors);
 
             let mut index = buffer.index;
             add_one(Some(char), &mut index);
             let range = Range::new(start_position, index);
 
-            return (RangedToken::new(result_token, range), index);
+            return (index, range);
         } else {
             buffer.add_char(char);
         }
     }
-    buffer.flush(&mut result_tokens, errors);
+    buffer.flush(tree, errors);
 
     if let Some(open_bracket_type) = open_bracket_type {
         errors.add_diag(
@@ -194,12 +195,10 @@ fn parse_inside_brackets(
         );
     }
 
-    let unused_bracket_type = BracketType::Round;
     let unused_position = Position::default();
 
-    let result_token = Token::Bracket(result_tokens, unused_bracket_type);
     let range = Range::new(start_position, buffer.index);
-    (RangedToken::new(result_token, range), unused_position)
+    (unused_position, range)
 }
 
 const fn is_open_bracket(char: char) -> Option<BracketType> {
@@ -219,12 +218,13 @@ const fn is_close_bracket(char: char) -> Option<BracketType> {
 }
 
 pub fn split_text_without_brackets(
+    tree: &mut TokenTreeBuilder,
     errors: &mut ErrorQueue,
     text: &str,
     offset_position: Position
-) -> Vec<RangedToken> {
+) {
     let mut iter = text.chars().peekable();
-    let mut state = TokenizeState::new(offset_position);
+    let mut state = TokenizeState::new(tree, offset_position);
 
     while let Some(char) = iter.next() {
         match char {
@@ -370,21 +370,20 @@ pub fn split_text_without_brackets(
         }
     }
     state.flush_buffer();
-    state.tokens
 }
 
 /// guarantees that `buffer_start <= buffer_end <= text.len()`
-struct TokenizeState {
-    tokens: Vec<RangedToken>,
+struct TokenizeState<'a> {
+    tree: &'a mut TokenTreeBuilder,
     buffer: String,
     is_buffer_number: bool,
     buffer_start: Position,
     buffer_end: Position,
 }
-impl TokenizeState {
-    const fn new(offset_position: Position) -> Self {
+impl<'a> TokenizeState<'a> {
+    const fn new(tree: &'a mut TokenTreeBuilder, offset_position: Position) -> Self {
         Self {
-            tokens: Vec::new(),
+            tree,
             buffer: String::new(),
             is_buffer_number: false,
             buffer_start: offset_position,
@@ -406,7 +405,7 @@ impl TokenizeState {
         self.buffer_end.character += skip_chars;
 
         let place_info = Range::new(self.buffer_start, self.buffer_end);
-        self.tokens.push(RangedToken::new(token, place_info));
+        self.tree.add_elem(token, place_info);
         self.buffer_start = self.buffer_end;
         // here start==end
     }
@@ -436,8 +435,7 @@ impl TokenizeState {
                 }
             };
             let place_info = Range::new(self.buffer_start, self.buffer_end);
-            self.tokens
-                .push(RangedToken::new(token, place_info));
+            self.tree.add_elem(token, place_info);
         }
         self.is_buffer_number = false;
         self.buffer_start = self.buffer_end;
