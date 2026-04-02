@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 pr-common = { path = "../pr-common" }
-pr-tokenize = { path = "../pr-tokenize" }
+pr-lexer = { path = "../pr-lexer" }
 pr-ast = { path = "../pr-ast" }
 pr-ast-linked = { path = "../pr-ast-linked" }
 

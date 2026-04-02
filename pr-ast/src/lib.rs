@@ -5,7 +5,7 @@ mod parser_statements;
 mod error;
 
 use pr_common::error::ErrorQueue;
-use pr_tokenize::TokenLinearTree;
+use pr_lexer::TokenLinearTree;
 use statement::RStatement;
 
 pub struct SyntacticResult {

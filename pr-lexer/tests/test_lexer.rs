@@ -5,7 +5,7 @@ use pr_common::{
     error::ErrorQueue,
     operations::*
 };
-use pr_tokenize::{token::*, tokenize, TokenLinearTree};
+use pr_lexer::{token::*, tokenize, TokenLinearTree};
 
 
 fn parse(text: &str) -> Result<TokenLinearTree, ErrorQueue> {

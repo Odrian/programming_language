@@ -3,8 +3,8 @@ use pr_common::error::{Diagnostic, ErrorQueue};
 use pr_common::BracketType;
 use pr_common::operations::*;
 use pr_common::ranged::RString;
-use pr_tokenize::token::*;
-use pr_tokenize::{TokenLinearTree, TokenIntoIter};
+use pr_lexer::token::*;
+use pr_lexer::{TokenLinearTree, TokenIntoIter};
 use crate::statement::*;
 use crate::error::{ExpectedEnum, SyntacticError};
 

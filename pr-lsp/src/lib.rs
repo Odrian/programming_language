@@ -47,7 +47,7 @@ impl Backend {
     async fn diagnose_file(&self, uri: Url, text: &str) {
         let mut errors = ErrorQueue::default();
 
-        let tokens = pr_tokenize::tokenize(&mut errors, text);
+        let tokens = pr_lexer::tokenize(&mut errors, text);
         // self.add_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens)).await;
 
         let statements = pr_ast::parse_ast(&mut errors, tokens);

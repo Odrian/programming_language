@@ -3,7 +3,7 @@ use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Range};
 use pr_common::ranged::Ranged;
 use pr_common::ranged_tree::NodeRef;
 use pr_ast::statement::*;
-use pr_tokenize::{TokenIter, TokenLinearTree};
+use pr_lexer::{TokenIter, TokenLinearTree};
 
 #[allow(dead_code)]
 pub fn token_diag(tokens: &TokenLinearTree) -> Vec<Diagnostic> {

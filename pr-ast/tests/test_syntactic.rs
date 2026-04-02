@@ -1,7 +1,7 @@
 use pr_common::error::ErrorQueue;
 use pr_common::operations::*;
 use pr_common::ranged::RString;
-use pr_tokenize::tokenize;
+use pr_lexer::tokenize;
 use pr_ast::statement::*;
 use pr_ast::parse_ast;
 

@@ -6,7 +6,7 @@ use pr_ast_linked::LinkedProgram;
 
 fn parse(text: &str) -> Result<LinkedProgram, ErrorQueue> {
     let mut errors = ErrorQueue::default();
-    let tokens = pr_tokenize::tokenize(&mut errors, text);
+    let tokens = pr_lexer::tokenize(&mut errors, text);
     let statements = pr_ast::parse_ast(&mut errors, tokens);
     if errors.has_errors() {
         return Err(errors)

@@ -615,7 +615,7 @@ version = "0.1.0"
 dependencies = [
  "lsp-types",
  "pr-common",
- "pr-tokenize",
+ "pr-lexer",
 ]
 
 [[package]]
@@ -625,7 +625,7 @@ dependencies = [
  "lsp-types",
  "pr-ast",
  "pr-common",
- "pr-tokenize",
+ "pr-lexer",
 ]
 
 [[package]]
@@ -646,8 +646,16 @@ dependencies = [
  "pr-ast",
  "pr-ast-linked",
  "pr-common",
- "pr-tokenize",
+ "pr-lexer",
  "tempfile",
+]
+
+[[package]]
+name = "pr-lexer"
+version = "0.1.0"
+dependencies = [
+ "lsp-types",
+ "pr-common",
 ]
 
 [[package]]
@@ -657,17 +665,9 @@ dependencies = [
  "pr-ast",
  "pr-ast-linked",
  "pr-common",
- "pr-tokenize",
+ "pr-lexer",
  "tokio",
  "tower-lsp",
-]
-
-[[package]]
-name = "pr-tokenize"
-version = "0.1.0"
-dependencies = [
- "lsp-types",
- "pr-common",
 ]
 
 [[package]]

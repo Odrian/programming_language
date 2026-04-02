@@ -5,6 +5,6 @@ edition.workspace = true
 
 [dependencies]
 pr-common = { path = "../pr-common" }
-pr-tokenize = { path = "../pr-tokenize" }
+pr-lexer = { path = "../pr-lexer" }
 
 lsp-types = { workspace = true }

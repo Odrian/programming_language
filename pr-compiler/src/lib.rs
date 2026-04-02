@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use clap::Parser;
 use pr_common::error::{range_to_str, ErrorQueue};
 use pr_common::ranged_tree::NodeRef;
-use pr_tokenize::token::Token;
-use pr_tokenize::{TokenIter, TokenLinearTree};
+use pr_lexer::token::Token;
+use pr_lexer::{TokenIter, TokenLinearTree};
 use pr_ast::SyntacticResult;
 use pr_ast_linked::LinkedProgram;
 use crate::error::LLVMError;
@@ -65,7 +65,7 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
         })?;
     let mut errors = ErrorQueue::default();
 
-    let tokens = pr_tokenize::tokenize(&mut errors, &text);
+    let tokens = pr_lexer::tokenize(&mut errors, &text);
     if args.gen_tokens { generate_tokens_file(&filename, &tokens)? }
 
     let statements = pr_ast::parse_ast(&mut errors, tokens);
