@@ -465,7 +465,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
-name = "linear_tree"
+name = "linear-tree"
 version = "0.1.0"
 
 [[package]]
@@ -632,6 +632,7 @@ dependencies = [
 name = "pr-common"
 version = "0.1.0"
 dependencies = [
+ "linear-tree",
  "lsp-types",
 ]
 

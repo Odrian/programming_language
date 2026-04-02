@@ -9,7 +9,7 @@ members = [
     "pr-compiler",
     "pr-lsp",
 
-    "linear_tree",
+    "linear-tree",
 ]
 
 [workspace.package]
