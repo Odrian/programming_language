@@ -5,6 +5,7 @@ use lsp_types::Range;
 
 pub struct LinkingError;
 
+// TODO: add module_id to all errors
 impl LinkingError {
     pub fn dependency_cycle(name: RString) -> Diagnostic {
         DiagnosticString::new(

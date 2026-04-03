@@ -120,7 +120,7 @@ impl IntObjType {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ObjectFactory {
     next_id: u32,
     array_type: Vec<ObjType>,

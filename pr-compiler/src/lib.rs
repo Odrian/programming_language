@@ -6,7 +6,7 @@ use pr_common::ranged_tree::NodeRef;
 use pr_lexer::token::Token;
 use pr_lexer::{TokenIter, TokenLinearTree};
 use pr_ast::SyntacticResult;
-use pr_ast_linked::LinkedProgram;
+use pr_ast_linked::LinkedModule;
 use crate::error::LLVMError;
 
 pub mod compiling;
@@ -73,12 +73,12 @@ pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
 
     if errors.has_errors() { return Err(errors) }
 
-    let linked_program = pr_ast_linked::link_ast(&mut errors, statements);
-    if args.gen_last { generate_last_file(&filename, &linked_program)? }
+    let linked_module = pr_ast_linked::link_module(&mut errors, statements);
+    if args.gen_last { generate_last_file(&filename, &linked_module)? }
 
     if errors.has_errors() { return Err(errors) }
 
-    compiling::parse_to_llvm(args, linked_program)
+    compiling::parse_to_llvm(args, linked_module)
         .map_err(|err| ErrorQueue::new_single_diag(err.to_diagnostic()))?;
 
     Ok(())
@@ -150,10 +150,10 @@ fn generate_ast_file(filename: &String, statements: &SyntacticResult) -> Result<
     Ok(())
 }
 
-fn generate_last_file(filename: &String, linked_program: &LinkedProgram) -> Result<(), ErrorQueue> {
-    let text = [&linked_program.extern_statements, &linked_program.type_statements, &linked_program.variable_statement, &linked_program.function_statement]
+fn generate_last_file(filename: &String, linked_module: &LinkedModule) -> Result<(), ErrorQueue> {
+    let text = [&linked_module.extern_statements, &linked_module.type_statements, &linked_module.variable_statement, &linked_module.function_statement]
         .iter().map(|hashmap| hashmap.iter()
-        .map(|(&object, statement)| statement.to_string::<true>(&linked_program.factory, object) + "\n")
+        .map(|(&object, statement)| statement.to_string::<true>(&linked_module.factory, object) + "\n")
         .collect::<String>()
     ).collect::<String>();
 

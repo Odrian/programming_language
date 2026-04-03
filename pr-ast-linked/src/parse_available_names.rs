@@ -1,20 +1,30 @@
 use pr_common::error::ErrorQueue;
 use pr_ast::statement::{ComptimeStatement, DeclarationStatement, ExternStatement, RStatement, Statement};
 use crate::error::LinkingError;
-use crate::object::ObjType;
-use crate::TypeContext;
+use crate::object::{ObjType, ObjectFactory};
+use crate::ModuleLinkingContext;
 
-pub fn parse_available_names(errors: &mut ErrorQueue, context: &mut TypeContext, statements: Vec<RStatement>) {
+pub fn parse_available_names(
+    errors: &mut ErrorQueue,
+    context: &mut ModuleLinkingContext,
+    factory: &mut ObjectFactory,
+    statements: Vec<RStatement>,
+) {
     for statement in statements {
-        add_name(errors, context, statement);
+        add_name(errors, context, factory, statement);
     }
 }
 
 /// has errors only on name overloading
-fn add_name(errors: &mut ErrorQueue, context: &mut TypeContext, stat: RStatement) {
+fn add_name(
+    errors: &mut ErrorQueue,
+    context: &mut ModuleLinkingContext,
+    factory: &mut ObjectFactory,
+    stat: RStatement,
+) {
     match &stat.value {
         Statement::DeclarationStatement { name, statement } => {
-            let object = context.factory.create_object(name.clone(), ObjType::Unknown);
+            let object = factory.create_object(name.clone(), ObjType::Unknown);
             let object_option = context.available_names.insert(name.value.clone(), object);
             if object_option.is_some() {
                 errors.add_diag(LinkingError::overloading(name.clone()));
@@ -28,7 +38,7 @@ fn add_name(errors: &mut ErrorQueue, context: &mut TypeContext, stat: RStatement
                     context.function_statement.insert(object, stat);
                 }
                 DeclarationStatement::Struct { .. } => {
-                    context.type_statements.insert(object, stat);
+                    context.type_statements.insert(object, (stat, context.module_id));
                 }
             }
         }
@@ -37,7 +47,7 @@ fn add_name(errors: &mut ErrorQueue, context: &mut TypeContext, stat: RStatement
                 ExternStatement::Variable { name, .. } => name,
                 ExternStatement::Function { name, .. } => name,
             };
-            let object = context.factory.create_object(name.clone(), ObjType::Unknown);
+            let object = factory.create_object(name.clone(), ObjType::Unknown);
             let object_option = context.available_names.insert(name.value.clone(), object);
             if object_option.is_some() {
             errors.add_diag(LinkingError::overloading(name.clone()));

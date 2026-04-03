@@ -6,16 +6,24 @@ use pr_common::ranged::RString;
 use pr_ast::statement::*;
 use crate::context_window::ObjectContextWindow;
 use crate::linked_statement::*;
-use crate::object::{parse_primitive_type, IntObjType, ObjType, Object};
+use crate::object::{parse_primitive_type, IntObjType, ObjType, Object, ObjectFactory};
 use crate::error::LinkingError;
-use crate::TypeContext;
+use crate::{GlobalLiningContext, ModuleLinkingContext};
 
-pub fn link_objects(errors: &mut ErrorQueue, context: &mut TypeContext) {
-    let function_declarations = std::mem::take(&mut context.function_statement);
-    let variable_declarations = std::mem::take(&mut context.variable_statement);
-    let extern_declarations = std::mem::take(&mut context.extern_statements);
+pub fn link_objects(errors: &mut ErrorQueue, context: &mut GlobalLiningContext) {
+    // TODO: parallelize, the only problem is factory, maybe just clone factory for each module?
+    for module in &mut context.modules {
+        let factory = &mut context.factory;
+        link_module_objects(errors, module, factory);
+    }
+}
 
-    let mut linking_context = FunctionLinkingContext::new(errors, context);
+pub fn link_module_objects(errors: &mut ErrorQueue, module: &mut ModuleLinkingContext, factory: &mut ObjectFactory) {
+    let function_declarations = std::mem::take(&mut module.function_statement);
+    let variable_declarations = std::mem::take(&mut module.variable_statement);
+    let extern_declarations = std::mem::take(&mut module.extern_statements);
+
+    let mut linking_context = FunctionLinkingContext::new(errors, module, factory);
 
     let r1 = extern_declarations.into_iter().map(|(object, statement)|
         linking_context.link_global_declaration(object, statement)
@@ -42,16 +50,18 @@ pub fn link_objects(errors: &mut ErrorQueue, context: &mut TypeContext) {
 struct FunctionLinkingContext<'factory> {
     errors: RefCell<&'factory mut ErrorQueue>,
     object_context_window: ObjectContextWindow,
-    context: &'factory mut TypeContext,
+    context: &'factory mut ModuleLinkingContext,
+    factory: &'factory mut ObjectFactory,
     current_function_returns: Option<ObjType>,
 }
 
 impl<'factory> FunctionLinkingContext<'factory> {
-    fn new(errors: &'factory mut ErrorQueue, context: &'factory mut TypeContext) -> Self {
+    fn new(errors: &'factory mut ErrorQueue, context: &'factory mut ModuleLinkingContext, factory: &'factory mut ObjectFactory) -> Self {
         Self {
             errors: RefCell::new(errors),
             object_context_window: ObjectContextWindow::new(context.available_names.clone()),
             context,
+            factory,
             current_function_returns: None,
         }
     }
@@ -70,7 +80,7 @@ impl FunctionLinkingContext<'_> {
                 let extern_statement = ExternLinkedStatement::Variable { typee: obj_type.clone() };
                 let extern_statement = GlobalLinkedStatement::ExternStatement { statement: extern_statement };
 
-                *self.context.factory.get_type_mut(object) = obj_type;
+                *self.factory.get_type_mut(object) = obj_type;
                 self.object_context_window.add(name, object);
                 self.context.result.extern_statements.insert(object, extern_statement);
                 Ok(())
@@ -100,7 +110,7 @@ impl FunctionLinkingContext<'_> {
                 let extern_statement = ExternLinkedStatement::Function { typee: func_type.clone() };
                 let extern_statement = GlobalLinkedStatement::ExternStatement { statement: extern_statement };
 
-                *self.context.factory.get_type_mut(object) = func_type;
+                *self.factory.get_type_mut(object) = func_type;
                 self.object_context_window.add(name, object);
                 self.context.result.extern_statements.insert(object, extern_statement);
                 Ok(())
@@ -118,7 +128,7 @@ impl FunctionLinkingContext<'_> {
         };
         let obj_type = self.parse_type(typee)?;
 
-        *self.context.factory.get_type_mut(object) = obj_type;
+        *self.factory.get_type_mut(object) = obj_type;
         self.object_context_window.add(name.clone(), object);
 
         Ok(())
@@ -127,7 +137,7 @@ impl FunctionLinkingContext<'_> {
         let Statement::DeclarationStatement { name: _, statement } = statement.value else { unreachable!() };
         let DeclarationStatement::VariableDeclaration { typee: _, value: expr } = statement else { unreachable!() };
 
-        let var_type = self.context.factory.get_type(object).clone();
+        let var_type = self.factory.get_type(object).clone();
 
         let expression = self.parse_expression(expr, Some(&var_type))?;
         let linked_statement = GlobalLinkedStatement::new_variable(expression);
@@ -162,7 +172,7 @@ impl FunctionLinkingContext<'_> {
             returns: Box::new(return_type.clone()),
             is_vararg: false
         };
-        *self.context.factory.get_type_mut(object) = func_type;
+        *self.factory.get_type_mut(object) = func_type;
         self.object_context_window.add(name.clone(), object);
 
         Ok(())
@@ -173,14 +183,14 @@ impl FunctionLinkingContext<'_> {
 
         let mut arguments_obj = Vec::with_capacity(args.len());
 
-        let func_type = self.context.factory.get_type(object).clone();
+        let func_type = self.factory.get_type(object).clone();
         let ObjType::Function { arguments, is_vararg, returns: return_type } = func_type else { unreachable!() };
         if is_vararg { unreachable!() }
         let return_type = *return_type;
 
         for (arg_name, _) in args {
             let object_type = arguments[arguments_obj.len()].clone();
-            let object = self.context.factory.create_object(arg_name.clone(), object_type);
+            let object = self.factory.create_object(arg_name.clone(), object_type);
             self.object_context_window.add(arg_name, object);
             arguments_obj.push(object);
         }
@@ -311,7 +321,7 @@ impl FunctionLinkingContext<'_> {
             return Err(())
         }
 
-        let object = self.context.factory.create_object(name.clone(), typed_expr.value.object_type.clone());
+        let object = self.factory.create_object(name.clone(), typed_expr.value.object_type.clone());
         let name_range = name.range;
         self.object_context_window.add(name, object);
         result.push(LinkedStatement::new_variable(object, typed_expr).add_range(name_range));
@@ -438,7 +448,7 @@ impl FunctionLinkingContext<'_> {
             Expression::Variable(name) => {
                 let object = self.object_context_window.get_or_error(&name)
                     .map_err(|d| self.add_diag(d))?;
-                let obj_type = self.context.factory.get_type(object);
+                let obj_type = self.factory.get_type(object);
 
                 if matches!(obj_type, ObjType::Function { .. }) {
                     self.add_diag(LinkingError::function_as_value(name));
@@ -454,12 +464,12 @@ impl FunctionLinkingContext<'_> {
             Expression::FunctionCall { object: name, args: args_values } => {
                 let object = self.object_context_window.get_or_error(&name)
                     .map_err(|d| self.add_diag(d))?;
-                let ObjType::Function { arguments, is_vararg, returns } = self.context.factory.get_type(object).clone() else {
+                let ObjType::Function { arguments, is_vararg, returns } = self.factory.get_type(object).clone() else {
                     self.add_diag(LinkingError::call_not_function(name));
                     return Err(())
                 };
                 if args_values.len() < arguments.len() || (!is_vararg && args_values.len() > arguments.len()) {
-                    let function_name = self.context.factory.get_name(object).clone();
+                    let function_name = self.factory.get_name(object).clone();
                     self.add_diag(LinkingError::incorrect_argument_count(function_name, is_vararg, arguments.len(), args_values.len()));
                     return Err(())
                 }
@@ -500,7 +510,7 @@ impl FunctionLinkingContext<'_> {
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
                         let Some(&index) = field_names.get(&field.value) else {
                             self.add_diag(LinkingError::struct_field_name_not_found(
-                                self.context.factory.get_name(*object).value.clone(), field));
+                                self.factory.get_name(*object).value.clone(), field));
                             return Err(())
                         };
                         let obj_type = fields.get(index as usize).unwrap().clone();
@@ -516,7 +526,7 @@ impl FunctionLinkingContext<'_> {
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else { unreachable!() };
                         let Some(&index) = field_names.get(&field.value) else {
                             self.add_diag(LinkingError::struct_field_name_not_found(
-                                self.context.factory.get_name(*object).value.clone(),
+                                self.factory.get_name(*object).value.clone(),
                                 field));
                             return Err(())
                         };
@@ -750,7 +760,7 @@ fn check_is_returns(statements: &[RLinkedStatement]) -> bool {
 
 impl ObjType {
     fn to_str(&self, context: &FunctionLinkingContext) -> String {
-        self.to_string::<false>(&context.context.factory)
+        self.to_string::<false>(&context.factory)
     }
     fn check_can_cast(from: &Self, other: &Self) -> bool {
         if other == &Self::Char {

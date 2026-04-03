@@ -2,20 +2,20 @@ use pr_common::error::ErrorQueue;
 use pr_common::operations::*;
 use pr_ast_linked::linked_statement::*;
 use pr_ast_linked::object::*;
-use pr_ast_linked::LinkedProgram;
+use pr_ast_linked::LinkedModule;
 
-fn parse(text: &str) -> Result<LinkedProgram, ErrorQueue> {
+fn parse(text: &str) -> Result<LinkedModule, ErrorQueue> {
     let mut errors = ErrorQueue::default();
     let tokens = pr_lexer::tokenize(&mut errors, text);
     let statements = pr_ast::parse_ast(&mut errors, tokens);
     if errors.has_errors() {
         return Err(errors)
     }
-    let linked_program = pr_ast_linked::link_ast(&mut errors, statements);
+    let module = pr_ast_linked::link_module(&mut errors, statements);
     if errors.has_errors() {
         return Err(errors)
     }
-    Ok(linked_program)
+    Ok(module)
 }
 fn assert_has_error_global(str: &str) {
     assert_ne!(parse(str).err(), None);
@@ -206,15 +206,15 @@ fn test_function_with_while() {
 
     let text = "a :: (b: i32) -> i32 { c := b; while c != 0 { c = b } return c }";
     let result = parse(text);
-    let Ok(linked_program) = result else {
+    let Ok(linked_module) = result else {
         panic!("parsing error");
     };
-    assert_eq!(linked_program.function_statement.len(), 1);
-    let (function_object, GlobalLinkedStatement::Function { args, returns, body }) = linked_program.function_statement.into_iter().next().unwrap() else { panic!() };
+    assert_eq!(linked_module.function_statement.len(), 1);
+    let (function_object, GlobalLinkedStatement::Function { args, returns, body }) = linked_module.function_statement.into_iter().next().unwrap() else { panic!() };
 
     assert!(matches!(returns, ObjType::DEFAULT_INTEGER), "{returns:?}");
 
-    let function_type = linked_program.factory.get_type(function_object);
+    let function_type = linked_module.factory.get_type(function_object);
     assert!(matches!(function_type, ObjType::Function { .. }));
     let ObjType::Function { arguments, is_vararg, returns } = function_type else { unreachable!() };
     assert!(!is_vararg);
@@ -241,7 +241,7 @@ fn test_function_with_while() {
 
     let LinkedStatement::Return(option_return) = body_iter.next().unwrap().value else { panic!() };
     let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().value.expr else { panic!() };
-    assert_eq!(linked_program.factory.get_name(c_var).value, "c");
+    assert_eq!(linked_module.factory.get_name(c_var).value, "c");
 
     assert_eq!(while_body.len(), 1);
     let LinkedStatement::SetVariable { what, value: value2, op: Option::None } = while_body.pop().unwrap().value else { panic!() };

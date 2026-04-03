@@ -6,7 +6,7 @@ use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
 use pr_common::ranged::RString;
 use pr_common::operations::*;
-use pr_ast_linked::LinkedProgram;
+use pr_ast_linked::LinkedModule;
 use pr_ast_linked::object::*;
 use pr_ast_linked::linked_statement::*;
 use crate::error::LLVMError;
@@ -14,9 +14,9 @@ use super::context_window::ValueContextWindow;
 
 pub fn parse_module<'ctx>(
     context: &'ctx Context, target_data: &'ctx TargetData,
-    linked_program: LinkedProgram
+    linked_module: LinkedModule
 ) -> Result<Module<'ctx>, LLVMError> {
-    let mut code_module_gen = CodeModuleGen::new(context, target_data, linked_program, "main_module");
+    let mut code_module_gen = CodeModuleGen::new(context, target_data, linked_module, "main_module");
     code_module_gen.parse_module()?;
     Ok(code_module_gen.module)
 }
@@ -26,13 +26,13 @@ struct CodeModuleGen<'ctx> {
     target_data: &'ctx TargetData,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
-    linked_program: LinkedProgram,
+    linked_module: LinkedModule,
     current_function: Option<FunctionValue<'ctx>>,
     context_window: ValueContextWindow<'ctx>,
     struct_context: HashMap<Object, StructType<'ctx>>
 }
 impl<'ctx> CodeModuleGen<'ctx> {
-    fn new(context: &'ctx Context, target_data: &'ctx TargetData, linked_program: LinkedProgram, name: &str) -> Self {
+    fn new(context: &'ctx Context, target_data: &'ctx TargetData, linked_module: LinkedModule, name: &str) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
         let context_window = ValueContextWindow::new();
@@ -41,7 +41,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
             target_data,
             module,
             builder,
-            linked_program,
+            linked_module,
             current_function: None,
             context_window,
             struct_context: Default::default(),
@@ -51,10 +51,10 @@ impl<'ctx> CodeModuleGen<'ctx> {
 
 impl<'ctx> CodeModuleGen<'ctx> {
     fn get_object_name(&self, object: Object) -> &RString {
-        self.linked_program.factory.get_name(object)
+        self.linked_module.factory.get_name(object)
     }
     fn get_object_type(&self, object: Object) -> BasicTypeEnum<'ctx> {
-        self.parse_type(self.linked_program.factory.get_type(object))
+        self.parse_type(self.linked_module.factory.get_type(object))
     }
     fn parse_type(&self, object_type: &ObjType) -> BasicTypeEnum<'ctx> {
         match object_type {
@@ -117,13 +117,13 @@ mod module_parsing {
 
             self.parse_type_statements();
 
-            let extern_statements = std::mem::take(&mut self.linked_program.extern_statements);
+            let extern_statements = std::mem::take(&mut self.linked_module.extern_statements);
             for (object, statement) in extern_statements {
                 self.create_extern(object, statement);
             }
 
-            let function_statements = std::mem::take(&mut self.linked_program.function_statement);
-            let variable_statements = std::mem::take(&mut self.linked_program.variable_statement);
+            let function_statements = std::mem::take(&mut self.linked_module.function_statement);
+            let variable_statements = std::mem::take(&mut self.linked_module.variable_statement);
 
             // init global context
             for (object, statement) in &function_statements {
@@ -192,7 +192,7 @@ mod module_parsing {
             self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
-                return Err(LLVMError::llvm_verify_function_error(self.linked_program.factory.get_name(object).value.clone()));
+                return Err(LLVMError::llvm_verify_function_error(self.linked_module.factory.get_name(object).value.clone()));
             }
             self.current_function = None;
 
@@ -232,8 +232,8 @@ mod type_parsing {
 
     impl<'ctx> CodeModuleGen<'ctx> {
         pub fn parse_type_statements(&mut self) {
-            let mut type_statements = std::mem::take(&mut self.linked_program.type_statements);
-            let type_statements_order = std::mem::take(&mut self.linked_program.type_statements_order);
+            let mut type_statements = std::mem::take(&mut self.linked_module.type_statements);
+            let type_statements_order = std::mem::take(&mut self.linked_module.type_statements_order);
 
             for object in type_statements_order {
                 let statement = type_statements.remove(&object).unwrap();
