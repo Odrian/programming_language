@@ -3,6 +3,7 @@ use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Range};
 use pr_common::ranged::Ranged;
 use pr_common::ranged_tree::NodeRef;
 use pr_ast::statement::*;
+use pr_ast::SyntacticResult;
 use pr_lexer::{TokenIter, TokenLinearTree};
 
 #[allow(dead_code)]
@@ -14,10 +15,10 @@ pub fn token_diag(tokens: &TokenLinearTree) -> Vec<Diagnostic> {
 }
 
 #[allow(dead_code)]
-pub fn statement_diag(statements: &Vec<RStatement>) -> Vec<Diagnostic> {
+pub fn statement_diag(statements: &SyntacticResult) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut debug = DebugDiagnostics::new(&mut diagnostics);
-    debug.statements_diags(statements);
+    debug.statements_diags(&statements.statements);
     diagnostics
 }
 

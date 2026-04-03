@@ -20,11 +20,6 @@ impl<Key: Eq + Hash + Copy> DependencyResolver<Key> {
     pub fn add(&mut self, keys: impl IntoIterator<Item=Key>) {
         self.queue.extend(keys);
     }
-    pub fn clear(&mut self) {
-        self.queue.clear();
-        self.waiting_rev.clear();
-        self.waiting_for.clear();
-    }
     /// error: return dependency cycle
     pub fn next(&mut self) -> Result<Option<Key>, Key> {
         let result = self.queue.pop_front();

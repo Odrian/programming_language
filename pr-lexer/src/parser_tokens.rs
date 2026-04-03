@@ -91,6 +91,7 @@ fn parse_inside_brackets(
             buffer.flush(tree, errors);
 
             let quotes_start_position = buffer.index;
+            buffer.skip_char();
             loop { // here index map to previous char in start of loop
                 let Some(next_char) = text.next() else {
                     errors.add_diag(

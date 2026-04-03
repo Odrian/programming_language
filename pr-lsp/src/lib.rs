@@ -48,10 +48,18 @@ impl Backend {
         let mut errors = ErrorQueue::default();
 
         let tokens = pr_lexer::tokenize(&mut errors, text);
-        // self.add_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens)).await;
+        #[cfg(feature = "debug-tokens")]
+        {
+            self.send_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens)).await;
+            return;
+        }
 
         let statements = pr_ast::parse_ast(&mut errors, tokens);
-        // self.add_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements)).await;
+        #[cfg(feature = "debug-statements")]
+        {
+            self.send_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements)).await;
+            return;
+        }
 
         let diagnostics = errors.to_lsp_diagnostics();
         self.send_diagnostics(uri, diagnostics).await;

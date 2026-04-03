@@ -11,3 +11,7 @@ pr-ast-linked = { path = "../pr-ast-linked" }
 
 tokio = { workspace = true }
 tower-lsp = { workspace = true }
+
+[features]
+debug-tokens = []
+debug-statements = []
