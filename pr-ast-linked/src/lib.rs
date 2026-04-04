@@ -40,12 +40,13 @@ impl GlobalLiningContext {
     }
 }
 
+#[derive(Default)]
 pub struct ModuleLinkingContext {
     module_id: usize,
 
     available_names: HashMap<String, Object>,
 
-    // import_statements: HashMap<Object, RStatement>,
+    import_statements: Vec<RStatement>, // consumed in parse_imports
     type_statements: HashMap<Object, (RStatement, usize)>, // consumed in parse_types
     extern_statements: HashMap<Object, RStatement>, // consumed in parser_linked_statement
     function_statement: HashMap<Object, RStatement>, // consumed in parser_linked_statement
@@ -113,12 +114,7 @@ fn create_context(
     for (module_id, (path, result)) in statements.into_iter().enumerate() {
         let mut context = ModuleLinkingContext {
             module_id,
-            available_names: Default::default(),
-            type_statements: Default::default(),
-            extern_statements: Default::default(),
-            function_statement: Default::default(),
-            variable_statement: Default::default(),
-            result: Default::default(),
+            ..Default::default()
         };
 
         parse_available_names::parse_available_names(errors, &mut context, &mut global_context.factory, result.statements);

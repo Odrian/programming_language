@@ -116,4 +116,19 @@ impl LinkingError {
             "incorrect value before ="
         ).to_diag(range)
     }
+    pub fn import_no_module(from_module: String, current_module: &String, range: Range) -> Diagnostic {
+        DiagnosticString::new(
+            format!("cant find module {from_module}, current module: {current_module}")
+        ).to_diag(range)
+    }
+    pub fn import_no_name(name: String, module: &String, range: Range) -> Diagnostic {
+        DiagnosticString::new(
+            format!("cant find '{name}' in module {module}")
+        ).to_diag(range)
+    }
+    pub fn import_global_name_overlap(range: Range, module: &String) -> Diagnostic {
+        DiagnosticString::new(
+            format!("name overloading in module {module}")
+        ).to_diag(range)
+    }
 }

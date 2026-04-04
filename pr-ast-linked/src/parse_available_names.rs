@@ -57,7 +57,7 @@ fn add_name(
         }
         Statement::ComptimeStatement(comp_stat) => match comp_stat {
             ComptimeStatement::Import { .. } => {
-                unimplemented!()
+                context.import_statements.push(stat);
             }
         }
         Statement::SetVariable { .. } | Statement::Expression(_) | Statement::If { .. }
