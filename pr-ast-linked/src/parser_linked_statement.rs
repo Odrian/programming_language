@@ -8,22 +8,22 @@ use crate::context_window::ObjectContextWindow;
 use crate::linked_statement::*;
 use crate::object::{parse_primitive_type, IntObjType, ObjType, Object, ObjectFactory};
 use crate::error::LinkingError;
-use crate::{GlobalLiningContext, ModuleLinkingContext};
+use crate::{ModuleLiningContext, FileLinkingContext};
 
-pub fn link_objects(errors: &mut ErrorQueue, context: &mut GlobalLiningContext) {
-    // TODO: parallelize, the only problem is factory, maybe just clone factory for each module?
-    for module in &mut context.modules {
+pub fn link_objects(errors: &mut ErrorQueue, context: &mut ModuleLiningContext) {
+    // TODO: parallelize, the only problem is factory, maybe just clone factory for each file?
+    for file in &mut context.files {
         let factory = &mut context.factory;
-        link_module_objects(errors, module, factory);
+        link_file_objects(errors, file, factory);
     }
 }
 
-pub fn link_module_objects(errors: &mut ErrorQueue, module: &mut ModuleLinkingContext, factory: &mut ObjectFactory) {
-    let function_declarations = std::mem::take(&mut module.function_statement);
-    let variable_declarations = std::mem::take(&mut module.variable_statement);
-    let extern_declarations = std::mem::take(&mut module.extern_statements);
+pub fn link_file_objects(errors: &mut ErrorQueue, file: &mut FileLinkingContext, factory: &mut ObjectFactory) {
+    let function_declarations = std::mem::take(&mut file.function_statement);
+    let variable_declarations = std::mem::take(&mut file.variable_statement);
+    let extern_declarations = std::mem::take(&mut file.extern_statements);
 
-    let mut linking_context = FunctionLinkingContext::new(errors, module, factory);
+    let mut linking_context = FunctionLinkingContext::new(errors, file, factory);
 
     let r1 = extern_declarations.into_iter().map(|(object, statement)|
         linking_context.link_global_declaration(object, statement)
@@ -50,13 +50,13 @@ pub fn link_module_objects(errors: &mut ErrorQueue, module: &mut ModuleLinkingCo
 struct FunctionLinkingContext<'factory> {
     errors: RefCell<&'factory mut ErrorQueue>,
     object_context_window: ObjectContextWindow,
-    context: &'factory mut ModuleLinkingContext,
+    context: &'factory mut FileLinkingContext,
     factory: &'factory mut ObjectFactory,
     current_function_returns: Option<ObjType>,
 }
 
 impl<'factory> FunctionLinkingContext<'factory> {
-    fn new(errors: &'factory mut ErrorQueue, context: &'factory mut ModuleLinkingContext, factory: &'factory mut ObjectFactory) -> Self {
+    fn new(errors: &'factory mut ErrorQueue, context: &'factory mut FileLinkingContext, factory: &'factory mut ObjectFactory) -> Self {
         Self {
             errors: RefCell::new(errors),
             object_context_window: ObjectContextWindow::new(context.available_names.clone()),

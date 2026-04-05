@@ -2,11 +2,11 @@ use pr_common::error::ErrorQueue;
 use pr_ast::statement::{ComptimeStatement, DeclarationStatement, ExternStatement, RStatement, Statement};
 use crate::error::LinkingError;
 use crate::object::{ObjType, ObjectFactory};
-use crate::ModuleLinkingContext;
+use crate::FileLinkingContext;
 
 pub fn parse_available_names(
     errors: &mut ErrorQueue,
-    context: &mut ModuleLinkingContext,
+    context: &mut FileLinkingContext,
     factory: &mut ObjectFactory,
     statements: Vec<RStatement>,
 ) {
@@ -18,7 +18,7 @@ pub fn parse_available_names(
 /// has errors only on name overloading
 fn add_name(
     errors: &mut ErrorQueue,
-    context: &mut ModuleLinkingContext,
+    context: &mut FileLinkingContext,
     factory: &mut ObjectFactory,
     stat: RStatement,
 ) {
@@ -38,7 +38,7 @@ fn add_name(
                     context.function_statement.insert(object, stat);
                 }
                 DeclarationStatement::Struct { .. } => {
-                    context.type_statements.insert(object, (stat, context.module_id));
+                    context.type_statements.insert(object, (stat, context.file_id));
                 }
             }
         }

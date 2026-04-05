@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fs;
 use std::path::PathBuf;
 use clap::Parser;
@@ -6,7 +7,7 @@ use pr_common::ranged_tree::NodeRef;
 use pr_lexer::token::Token;
 use pr_lexer::{TokenIter, TokenLinearTree};
 use pr_ast::SyntacticResult;
-use pr_ast_linked::LinkedModule;
+use pr_ast_linked::LinkedFile;
 use crate::error::LLVMError;
 
 pub mod compiling;
@@ -44,45 +45,96 @@ pub struct Args {
     pub gen_object: bool,
 }
 
-pub fn compile_src(args: &Args, path: PathBuf) -> Result<(), ErrorQueue> {
-    let file_path = path.join("main.pr");
 
-    parse_to_exe(args, file_path)?;
+pub fn compile_src(args: &Args, errors: &mut ErrorQueue, base_path: PathBuf) -> Result<(), ()> {
+    let mut files = Vec::new();
+    find_files(&mut files, &base_path, PathBuf::new());
+
+    fn find_files(files: &mut Vec<PathBuf>, base_path: &PathBuf, path: PathBuf) {
+        let Ok(entries) = fs::read_dir(base_path.join(&path)) else { return };
+        for entry_result in entries {
+            let Ok(entry) = entry_result else { return };
+            let Ok(metadata) = entry.metadata() else { return };
+
+            if metadata.is_file() {
+                if entry.path().extension() != Some(OsStr::new("pr")) { continue; }
+                let name = entry.file_name();
+
+                let mut file_path = path.clone();
+                file_path.push(name);
+                files.push(file_path);
+            }
+            if metadata.is_dir() {
+                let name = entry.file_name().to_str().unwrap().to_owned();
+
+                let mut dir_path = path.clone();
+                dir_path.push(name);
+
+                return find_files(files, base_path, dir_path);
+            }
+        }
+    }
+
+    let statements = files.into_iter().map(|path| {
+        parse_to_statements(errors, args, base_path.join(&path))
+            .map(|result| {
+                let path = path.to_str().expect("valid utf name").to_string();
+                (path, result)
+            })
+    }).collect::<Result<Vec<_>, _>>()?;
+
+    let linked_module = pr_ast_linked::link_module(errors, statements);
+    if args.gen_last { linked_module.files.iter().for_each(|(file, path)|
+        generate_last_file(errors, &path, file)
+    ) }
+
+    if errors.has_errors() { return Err(()) }
+
+    todo!("compile multimodule");
+    // compiling::parse_to_llvm(args, linked_module)
+    //     .map_err(|err| ErrorQueue::new_single_diag(err.to_diagnostic()))?;
 
     Ok(())
 }
 
+pub fn compile_file(errors: &mut ErrorQueue, args: &Args, file_path: PathBuf) -> Result<(), ()> {
+    let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
 
-const ARTIFACT_DIR: &str = "artifacts";
+    let statements = parse_to_statements(errors, args, file_path)?;
 
-pub fn parse_to_exe(args: &Args, file_path: PathBuf) -> Result<(), ErrorQueue> {
+    if errors.has_errors() { return Err(()) }
+
+    let linked_file = pr_ast_linked::link_file(errors, statements);
+    if args.gen_last { generate_last_file(errors, &filename, &linked_file) }
+
+    if errors.has_errors() { return Err(()) }
+
+    compiling::parse_to_llvm(args, linked_file)
+        .map_err(|err| errors.add_diag(err.to_diagnostic()))?;
+
+    Ok(())
+}
+
+fn parse_to_statements(errors: &mut ErrorQueue, args: &Args, file_path: PathBuf) -> Result<SyntacticResult, ()> {
     let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
     let text = fs::read_to_string(&file_path)
         .map_err(|err| {
-            ErrorQueue::new_single_diag(
+            errors.add_diag(
                 LLVMError::source_file_reading_error(file_path, err.to_string())
-                    .to_diagnostic())
+                    .to_diagnostic());
+            ()
         })?;
-    let mut errors = ErrorQueue::default();
 
-    let tokens = pr_lexer::tokenize(&mut errors, &text);
-    if args.gen_tokens { generate_tokens_file(&filename, &tokens)? }
+    let tokens = pr_lexer::tokenize(errors, &text);
+    if args.gen_tokens { generate_tokens_file(errors, &filename, &tokens) }
 
-    let statements = pr_ast::parse_ast(&mut errors, tokens);
-    if args.gen_ast { generate_ast_file(&filename, &statements)? }
+    let statements = pr_ast::parse_ast(errors, tokens);
+    if args.gen_ast { generate_ast_file(errors, &filename, &statements) }
 
-    if errors.has_errors() { return Err(errors) }
-
-    let linked_module = pr_ast_linked::link_module(&mut errors, statements);
-    if args.gen_last { generate_last_file(&filename, &linked_module)? }
-
-    if errors.has_errors() { return Err(errors) }
-
-    compiling::parse_to_llvm(args, linked_module)
-        .map_err(|err| ErrorQueue::new_single_diag(err.to_diagnostic()))?;
-
-    Ok(())
+    Ok(statements)
 }
+
+const ARTIFACT_DIR: &str = "artifacts";
 
 fn tokens_to_str(tokens: TokenIter<'_>, layer: u8) -> String {
     tokens.map(|(token, range)| {
@@ -119,41 +171,39 @@ fn tokens_to_str(tokens: TokenIter<'_>, layer: u8) -> String {
     }).collect::<Vec<_>>().join("\n")
 }
 
-fn generate_tokens_file(filename: &String, tokens: &TokenLinearTree) -> Result<(), ErrorQueue> {
+fn generate_tokens_file(errors: &mut ErrorQueue, filename: &String, tokens: &TokenLinearTree) {
     let text = tokens_to_str(tokens.iter(), 0);
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();
     let filepath = format!("{ARTIFACT_DIR}/{filename}_tokens.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
-        return Err(ErrorQueue::new_single_diag(
+        errors.add_diag(
             LLVMError::file_writing_error(
                 filepath,
                 "tokens".to_owned(),
                 err.to_string()
-            ).to_diagnostic()))
+            ).to_diagnostic());
     }
-    Ok(())
 }
 
-fn generate_ast_file(filename: &String, statements: &SyntacticResult) -> Result<(), ErrorQueue> {
+fn generate_ast_file(errors: &mut ErrorQueue, filename: &String, statements: &SyntacticResult) {
     let text = statements.statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
 
     fs::create_dir_all(ARTIFACT_DIR).unwrap();
     let filepath = format!("{ARTIFACT_DIR}/{filename}_AST.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
-        return Err(ErrorQueue::new_single_diag(LLVMError::file_writing_error(
+        errors.add_diag(LLVMError::file_writing_error(
             filepath, "unlinked AST".to_owned(), err.to_string()
-        ).to_diagnostic()))
+        ).to_diagnostic());
     }
-    Ok(())
 }
 
-fn generate_last_file(filename: &String, linked_module: &LinkedModule) -> Result<(), ErrorQueue> {
-    let text = [&linked_module.extern_statements, &linked_module.type_statements, &linked_module.variable_statement, &linked_module.function_statement]
+fn generate_last_file(errors: &mut ErrorQueue, filename: &String, linked_file: &LinkedFile) {
+    let text = [&linked_file.extern_statements, &linked_file.type_statements, &linked_file.variable_statement, &linked_file.function_statement]
         .iter().map(|hashmap| hashmap.iter()
-        .map(|(&object, statement)| statement.to_string::<true>(&linked_module.factory, object) + "\n")
+        .map(|(&object, statement)| statement.to_string::<true>(&linked_file.factory, object) + "\n")
         .collect::<String>()
     ).collect::<String>();
 
@@ -161,9 +211,8 @@ fn generate_last_file(filename: &String, linked_module: &LinkedModule) -> Result
     let filepath = format!("{ARTIFACT_DIR}/{filename}_LAST.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
-        return Err(ErrorQueue::new_single_diag(LLVMError::file_writing_error(
+        errors.add_diag(LLVMError::file_writing_error(
             filepath, "AST".to_owned(), err.to_string()
-        ).to_diagnostic()))
+        ).to_diagnostic());
     }
-    Ok(())
 }

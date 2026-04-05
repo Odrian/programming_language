@@ -17,32 +17,33 @@ use linked_statement::GlobalLinkedStatement;
 use object::{Object, ObjectFactory};
 use pr_ast::SyntacticResult;
 
-struct GlobalLiningContext {
+struct ModuleLiningContext {
     factory: ObjectFactory,
 
-    modules: Vec<ModuleLinkingContext>,
-    module_paths: Vec<String>,
+    files: Vec<FileLinkingContext>,
+    file_paths: Vec<String>,
 }
-impl GlobalLiningContext {
-    fn consume(self) -> LinkedProgram {
+
+impl ModuleLiningContext {
+    fn consume(self) -> LinkedModule {
         let factory = self.factory; // TODO: clone in parse_linked_statements
 
-        let modules = self.modules.into_iter().map(|m| {
+        let files = (self.files.into_iter()).zip(self.file_paths.into_iter()).map(|(m, path)| {
             let mut result = m.result;
             result.factory = factory.clone();
-            result
+            (result, path)
         }).collect();
 
-        LinkedProgram {
+        LinkedModule {
             factory,
-            modules,
+            files,
         }
     }
 }
 
 #[derive(Default)]
-pub struct ModuleLinkingContext {
-    module_id: usize,
+pub struct FileLinkingContext {
+    file_id: usize,
 
     available_names: HashMap<String, Object>,
 
@@ -52,17 +53,17 @@ pub struct ModuleLinkingContext {
     function_statement: HashMap<Object, RStatement>, // consumed in parser_linked_statement
     variable_statement: HashMap<Object, RStatement>, // consumed in parser_linked_statement
 
-    result: LinkedModule,
+    result: LinkedFile,
 }
 
-pub struct LinkedProgram {
+pub struct LinkedModule {
     pub factory: ObjectFactory,
 
-    pub modules: Vec<LinkedModule>,
+    pub files: Vec<(LinkedFile, String)>,
 }
 
 #[derive(Debug, Default)]
-pub struct LinkedModule {
+pub struct LinkedFile {
     pub factory: ObjectFactory,
 
     // pub import_statements: Vec<Object>,
@@ -73,10 +74,10 @@ pub struct LinkedModule {
     pub variable_statement: HashMap<Object, GlobalLinkedStatement>,
 }
 
-pub fn link_all_modules(
+pub fn link_module(
     errors: &mut ErrorQueue,
     statements: Vec<(String, SyntacticResult)>,
-) -> LinkedProgram {
+) -> LinkedModule {
     let mut context = create_context(errors, statements);
 
     if errors.has_errors() { return context.consume() }
@@ -90,37 +91,37 @@ pub fn link_all_modules(
     context.consume()
 }
 
-pub fn link_module(
+pub fn link_file(
     errors: &mut ErrorQueue,
     statements: SyntacticResult,
-) -> LinkedModule {
-    let mut program = link_all_modules(
+) -> LinkedFile {
+    let mut module = link_module(
         errors,
         vec![("unused string".to_string(), statements)]
     );
-    program.modules.pop().unwrap()
+    module.files.pop().unwrap().0
 }
 
 fn create_context(
     errors: &mut ErrorQueue,
     statements: Vec<(String, SyntacticResult)>,
-) -> GlobalLiningContext {
-    let mut global_context = GlobalLiningContext {
+) -> ModuleLiningContext {
+    let mut global_context = ModuleLiningContext {
         factory: ObjectFactory::default(),
-        modules: vec![],
-        module_paths: vec![],
+        files: vec![],
+        file_paths: vec![],
     };
 
-    for (module_id, (path, result)) in statements.into_iter().enumerate() {
-        let mut context = ModuleLinkingContext {
-            module_id,
+    for (file_id, (path, result)) in statements.into_iter().enumerate() {
+        let mut context = FileLinkingContext {
+            file_id,
             ..Default::default()
         };
 
         parse_available_names::parse_available_names(errors, &mut context, &mut global_context.factory, result.statements);
 
-        global_context.modules.push(context);
-        global_context.module_paths.push(path);
+        global_context.files.push(context);
+        global_context.file_paths.push(path);
     }
 
     global_context

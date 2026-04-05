@@ -6,21 +6,21 @@ use std::process::Command;
 use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine}, OptimizationLevel};
 use pr_ast_linked::linked_statement::GlobalLinkedStatement;
 use pr_ast_linked::object::{IntObjType, ObjType};
-use pr_ast_linked::LinkedModule;
+use pr_ast_linked::LinkedFile;
 use crate::Args;
 use crate::error::LLVMError;
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(args: &Args, linked_module: LinkedModule) -> Result<(), LLVMError> {
+pub fn parse_to_llvm(args: &Args, linked_file: LinkedFile) -> Result<(), LLVMError> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
-    verify_main_signature(&linked_module)?;
+    verify_main_signature(&linked_file)?;
 
     let target_machine = create_target_machine(args);
     let target_data = target_machine.get_target_data();
 
-    let module = module_generator::parse_module(&context, &target_data, linked_module)?;
+    let module = module_generator::parse_file(&context, &target_data, linked_file)?;
     module.set_triple(&target_machine.get_triple());
 
     if let Err(err) = module.verify() {
@@ -31,7 +31,7 @@ pub fn parse_to_llvm(args: &Args, linked_module: LinkedModule) -> Result<(), LLV
     Ok(())
 }
 
-fn verify_main_signature(linked_module: &LinkedModule) -> Result<(), LLVMError> {
+fn verify_main_signature(linked_module: &LinkedFile) -> Result<(), LLVMError> {
     for (object, statement) in &linked_module.function_statement {
         if let GlobalLinkedStatement::Function { returns, args, body: _body } = statement {
             let name = linked_module.factory.get_name(*object);
