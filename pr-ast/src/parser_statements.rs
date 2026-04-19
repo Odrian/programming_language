@@ -78,6 +78,9 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
         let (token, range0) = self.next_unwrap(|_| unreachable!())?;
         match token {
             Node::Elem(Token::Keyword(keyword)) => match keyword {
+                TokenKeyword::Cfg => {
+                    todo!()
+                }
                 TokenKeyword::If | TokenKeyword::While => {
                     let condition = self.parse_expression(true)?;
 
@@ -244,7 +247,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
     /// parse `name ..` as definition
     fn parse_statement2(&mut self, name: RString, result: &mut Vec<RStatement>, is_global: bool) -> Result<(), ()> {
         let Some((token, _range)) = self.peek() else {
-            self.add_diag(SyntacticError::from_text("unexpected EOF", self.all_range));
+            self.add_diag(SyntacticError::unexpected_end(self.all_range));
             return Err(());
         };
         match token {
@@ -442,7 +445,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
         in_cond: bool,
     ) -> Result<RExpression, ()> {
         let (token, range) = self.next_unwrap(|s|
-            SyntacticError::from_text("unexpected EOF", s.all_range))?;
+            SyntacticError::unexpected_end(s.all_range))?;
 
         match token {
             Node::Elem(Token::String(string)) => { // string
@@ -1099,5 +1102,92 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
         }
 
         let _ = self.next();
+    }
+}
+
+enum CfgParseType {
+    Any, All, None
+}
+impl ParsingState<'_, '_, '_> {
+    fn parse_cfg(&mut self) -> Result<bool, ()> {
+        self.parse_cfg_recursive(CfgParseType::None)
+    }
+
+    fn parse_cfg_recursive(&mut self, parse_type: CfgParseType) -> Result<bool, ()> {
+        let (token, range_round) = self.next_unwrap(|s|
+            ExpectedEnum::RoundBracket.diagnostic_after(s.all_range))?;
+        let Node::Block(BracketType::Round, mut vec) = token else {
+            self.add_diag(SyntacticError::from_text("expected cfg: (...)", range_round));
+            return Err(());
+        };
+        let mut state = Self::new_state(self.errors, &mut vec, range_round);
+
+        let mut vec = Vec::new();
+        loop {
+            let (token, range_str) = state.next_unwrap(|s|
+                ExpectedEnum::Name.diagnostic_after(s.all_range))?;
+            let Node::Elem(Token::String(str)) = token else {
+                self.add_diag(ExpectedEnum::Name.diagnostic(range_str));
+                return Err(());
+            };
+
+            let result = match str.as_str() {
+                "not" => {
+                    let result = state.parse_cfg_recursive(CfgParseType::None)?;
+                    !result
+                }
+                "any" => {
+                    state.parse_cfg_recursive(CfgParseType::Any)?
+                }
+                "all" => {
+                    state.parse_cfg_recursive(CfgParseType::All)?
+                }
+                feature => {
+                    let (token, range_eq) = state.next_unwrap(|s|
+                        ExpectedEnum::Equal.diagnostic_after(s.all_range))?;
+                    let Node::Elem(Token::EqualOperation(EqualOperation::Equal)) = token else {
+                        state.add_diag(ExpectedEnum::Equal.diagnostic(range_eq));
+                        return Err(());
+                    };
+
+                    let (token, range_value) = state.next_unwrap(|s|
+                        ExpectedEnum::Name.diagnostic_after(s.all_range))?;
+                    let Node::Elem(Token::String(value)) = token else {
+                        state.add_diag(ExpectedEnum::Name.diagnostic(range_value));
+                        return Err(());
+                    };
+
+                    // TODO: feature = value
+                    false
+                }
+            };
+
+            if matches!(parse_type, CfgParseType::None) {
+                if !state.at_end() {
+                    state.add_diag(ExpectedEnum::End.diagnostic(state.all_range));
+                    return Err(());
+                }
+                return Ok(result)
+            }
+
+            vec.push(result);
+
+            if state.at_end() { break } // (...)
+
+            let (token, range_comma) = state.next_unwrap(|s|
+                ExpectedEnum::Comma.diagnostic_after(s.all_range))?;
+            let Node::Elem(Token::Comma) = token else {
+                state.add_diag(ExpectedEnum::Comma.diagnostic(range_comma));
+                return Err(());
+            };
+
+            if state.at_end() { break } // (..., )
+        }
+
+        match parse_type {
+            CfgParseType::Any => Ok(vec.iter().any(|x| *x)),
+            CfgParseType::All => Ok(vec.iter().all(|x| *x)),
+            CfgParseType::None => unreachable!(),
+        }
     }
 }

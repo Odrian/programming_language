@@ -12,6 +12,9 @@ impl SyntacticError {
     pub fn new_local_global(name: &str, range: Range) -> Diagnostic {
         Diagnostic::new_error(range, format!("local {name} not supported"))
     }
+    pub fn unexpected_end(range: Range) -> Diagnostic {
+        Diagnostic::new_error(range, "unexpected end".to_string())
+    }
 
     pub fn unnecessary_semicolon(range: Range) -> Diagnostic {
         Diagnostic::new_hint(range, "unnecessary semicolon".to_string())
@@ -38,6 +41,7 @@ pub struct ExpectedError {
 pub enum ExpectedEnum {
     Name,
     String(String),
+    End,
 
     Comma,
     Colon,
@@ -109,6 +113,7 @@ impl Display for ExpectedEnum {
         match self {
             Self::Name => write!(f, "string"),
             Self::String(str) => write!(f, "{str}"),
+            Self::End => write!(f, "end"),
 
             Self::Comma => write!(f, ","),
             Self::Colon => write!(f, ":"),

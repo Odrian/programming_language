@@ -33,6 +33,7 @@ pub enum TokenKeyword {
     Return,
     Import,
     Extern,
+    Cfg,
 }
 
 /// `TwoSidedOperation` must not change type

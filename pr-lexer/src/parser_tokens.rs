@@ -458,6 +458,7 @@ impl<'a> TokenizeState<'a> {
                     "while" => TokenKeyword::While.into(),
                     "import" => TokenKeyword::Import.into(),
                     "#extern" => TokenKeyword::Extern.into(),
+                    "#cfg" => TokenKeyword::Cfg.into(),
                     _ => Token::String(token_text)
                 }
             };
