@@ -26,11 +26,11 @@ struct ParsingState<'e, 'a, 'b> {
 }
 
 impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
-    fn new(errors: &'e mut ErrorQueue, tokens: &'a mut TokenIntoIter<'b>, all_range: Range) -> ParsingState<'e, 'a, 'b> {
+    fn new<'e2, 'a2, 'b2>(errors: &'e2 mut ErrorQueue, tokens: &'a2 mut TokenIntoIter<'b2>, all_range: Range) -> ParsingState<'e2, 'a2, 'b2> {
         ParsingState { errors, tokens, all_range }
     }
-    fn new_state<'e2, 'a2, 'b2>(errors: &'e2 mut ErrorQueue, tokens: &'a2 mut TokenIntoIter<'b2>, all_range: Range) -> ParsingState<'e2, 'a2, 'b2> {
-        ParsingState { errors, tokens, all_range }
+    fn new_state<'e2, 'a2, 'b2>(&'e2 mut self, tokens: &'a2 mut TokenIntoIter<'b2>, all_range: Range) -> ParsingState<'e2, 'a2, 'b2> {
+        ParsingState { errors: self.errors, tokens, all_range }
     }
     fn add_diag(&mut self, diagnostic: Diagnostic) {
         self.errors.add_diag(diagnostic)
@@ -54,8 +54,11 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
     fn at_end(&self) -> bool {
         self.tokens.is_empty()
     }
+}
+
+impl ParsingState<'_, '_, '_> {
     fn parse_statements(&mut self, mut tokens: TokenIntoIter<'_>, range: Range, is_global: bool) -> Vec<RStatement> {
-        let mut state = Self::new_state(self.errors, &mut tokens, range);
+        let mut state = self.new_state(&mut tokens, range);
         state.parse_statements_inplace(is_global)
     }
     fn parse_statements_inplace(&mut self, is_global: bool) -> Vec<RStatement> {
@@ -192,7 +195,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
                     if matches!(self.peek(), Some((RefNode::Block(BracketType::Curly, _), _))) {
                         let Some((Node::Block(BracketType::Curly, mut vec), range)) = self.next() else { unreachable!() };
 
-                        let mut state = Self::new_state(self.errors, &mut vec, range);
+                        let mut state = self.new_state(&mut vec, range);
                         while !state.at_end() {
                             if let Ok(ext) = state.parse_extern(range0) {
                                 result.push(ext)
@@ -462,7 +465,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
                 self.parse_expression2_without_ops(expression1, was_unary, in_cond)
             }
             Node::Block(BracketType::Round, mut vec) => { // (..)
-                let mut new_state = Self::new_state(self.errors, &mut vec, range);
+                let mut new_state = self.new_state(&mut vec, range);
                 let expression = new_state.parse_expression(false)?;
                 if !new_state.at_end() {
                     let (_, range) = new_state.next_unwrap(|_| unreachable!())?;
@@ -693,7 +696,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
         };
 
         let mut fields = Vec::new();
-        let mut state = Self::new_state(self.errors, &mut tokens, range);
+        let mut state = self.new_state(&mut tokens, range);
         while !state.at_end() {
             // name
             let (token, range) = state.next_unwrap(|_| unreachable!())?;
@@ -853,7 +856,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
         };
 
         let mut what = Vec::with_capacity(whats.len());
-        let mut state = Self::new_state(self.errors, &mut whats, range_br);
+        let mut state = self.new_state(&mut whats, range_br);
         while !state.at_end() {
             let (token, range) = state.next_unwrap(|_| unreachable!())?;
             let Node::Elem(Token::String(name)) = token else {
@@ -924,7 +927,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
             return Ok(Vec::new())
         }
         let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
-        let mut state = Self::new_state(self.errors, &mut args, range);
+        let mut state = self.new_state(&mut args, range);
 
         while !state.at_end() {
             // name
@@ -973,7 +976,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
             return Ok((Vec::new(), false))
         }
         let mut arguments = Vec::with_capacity(args.len().div_ceil(2));
-        let mut state = Self::new_state(self.errors, &mut args, range);
+        let mut state = self.new_state(&mut args, range);
 
         let mut range0 = Range::default();
         while !state.at_end() {
@@ -1015,7 +1018,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
         let (token, range_bracket) = self.next_unwrap(|_| unreachable!())?;
         let Node::Block(_, mut vec) = token else { unreachable!() };
 
-        let mut state = Self::new_state(self.errors, &mut vec, range_bracket);
+        let mut state = self.new_state(&mut vec, range_bracket);
         let mut args = Vec::new();
 
         while !state.at_end() {
@@ -1039,7 +1042,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
         let Node::Block(_, mut vec) = token else { unreachable!() };
 
         let mut fields = Vec::new();
-        let mut state = Self::new_state(self.errors, &mut vec, range0);
+        let mut state = self.new_state(&mut vec, range0);
 
         while !state.at_end() {
             let (token, range) = state.next_unwrap(|_| unreachable!())?;
@@ -1120,7 +1123,7 @@ impl ParsingState<'_, '_, '_> {
             self.add_diag(SyntacticError::from_text("expected cfg: (...)", range_round));
             return Err(());
         };
-        let mut state = Self::new_state(self.errors, &mut vec, range_round);
+        let mut state = self.new_state(&mut vec, range_round);
 
         let mut vec = Vec::new();
         loop {
