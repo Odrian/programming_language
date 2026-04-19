@@ -161,3 +161,13 @@ fn test_correct_token_position() {
         ]),
     );
 }
+
+#[test]
+fn test_escapes() {
+    assert_result(
+        r#""\\ \n \t \r \0 \" \x5F""#,
+        build_no_meta![
+            Token::DoubleQuotes("\\ \n \t \r \0 \" \x5F".to_string()),
+        ],
+    );
+}

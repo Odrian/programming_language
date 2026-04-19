@@ -31,15 +31,9 @@ impl TokenizeError {
             actual_bracket.to_close_string()
         ))
     }
-    pub fn incorrect_escape(ch: Option<char>) -> DiagnosticString {
-        if let Some(ch) = ch {
-            DiagnosticString::new(format!(
-                "unexpected {ch} after \\"
-            ))
-        } else {
-            DiagnosticString::from_text(
-                "unexpected EOF after \\"
-            )
-        }
+    pub fn incorrect_escape(escape: String) -> DiagnosticString {
+        DiagnosticString::new(format!(
+            "incorrect escape: \\{escape}"
+        ))
     }
 }

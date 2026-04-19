@@ -96,15 +96,14 @@ fn parse_inside_brackets(
                 let Some(next_char) = text.next() else {
                     errors.add_diag(
                         TokenizeError::quotes_not_closed()
-                            .to_diag1(quotes_start_position)
-                    );
+                            .to_diag1(quotes_start_position));
                     break
                 };
                 if next_char == char {
-                    buffer.skip_char();
+                    buffer.skip_char(); // skip next_char
                     break;
                 } else if next_char == '\\' && char != '`' {
-                    buffer.skip_char();
+                    buffer.skip_char(); // skip '\'
                     let escape_char = text.next();
                     match escape_char {
                         Some('\\') => buffer.add_char('\\'),
@@ -114,19 +113,46 @@ fn parse_inside_brackets(
                         Some('r') => buffer.add_escape_char('\r'),
                         Some('"') => buffer.add_char('"'),
                         Some('\'') => buffer.add_char('\''),
-                        Some('x') => unimplemented!("8bit escapes"),
+                        Some('x') => (|| { // closure
+                            buffer.skip_char(); // skip 'x'
+                            let mut escape_seq = String::new();
+                            let Some(first) = text.next() else {
+                                errors.add_diag(
+                                    TokenizeError::incorrect_escape("x".to_string())
+                                        .to_diag1(buffer.index));
+                                return;
+                            };
+                            buffer.skip_char(); // skip first char
+                            escape_seq.push(first);
+
+                            let Some(second) = text.next() else {
+                                errors.add_diag(
+                                    TokenizeError::incorrect_escape(format!("x{escape_seq}"))
+                                        .to_diag1(buffer.index));
+                                return;
+                            };
+                            buffer.skip_char(); // skip second char
+                            escape_seq.push(second);
+
+                            let Ok(hex) = u8::from_str_radix(&escape_seq, 16) else {
+                                errors.add_diag(
+                                    TokenizeError::incorrect_escape(format!("x{escape_seq}"))
+                                        .to_diag1(buffer.index));
+                                return;
+                            };
+
+                            buffer.add_escape_char(hex as char);
+                        })(), // closure end
                         Some(ch) => {
                             errors.add_diag(
-                                TokenizeError::incorrect_escape(Some(ch))
-                                    .to_diag1(buffer.index)
-                            );
+                                TokenizeError::incorrect_escape(ch.to_string())
+                                    .to_diag1(buffer.index));
                             buffer.add_char(ch);
                         }
                         None => {
                             errors.add_diag(
-                                TokenizeError::incorrect_escape(None)
-                                    .to_diag1(buffer.index)
-                            );
+                                TokenizeError::incorrect_escape("*empty*".to_string())
+                                    .to_diag1(buffer.index));
                         }
                     }
                     continue
@@ -145,7 +171,7 @@ fn parse_inside_brackets(
 
             let position = Range::new(quotes_start_position, buffer.index);
             tree.add_elem(token, position);
-        } else if let Some(bracket_type) = is_open_bracket(char) {
+        } else if let Some(bracket_type) = parse_open_bracket(char) {
             // open bracket
             buffer.flush(tree, errors);
 
@@ -155,7 +181,7 @@ fn parse_inside_brackets(
             tree.close_block(bracket_type, range);
 
             buffer.set_new_index(new_index);
-        } else if let Some(bracket_type) = is_close_bracket(char) {
+        } else if let Some(bracket_type) = parse_close_bracket(char) {
             // close bracket
             let Some(open_bracket_type) = open_bracket_type else {
                 errors.add_diag(
@@ -202,7 +228,7 @@ fn parse_inside_brackets(
     (unused_position, range)
 }
 
-const fn is_open_bracket(char: char) -> Option<BracketType> {
+const fn parse_open_bracket(char: char) -> Option<BracketType> {
     match char {
         '{' => Some(BracketType::Curly),
         '(' => Some(BracketType::Round),
@@ -210,7 +236,7 @@ const fn is_open_bracket(char: char) -> Option<BracketType> {
     }
 }
 
-const fn is_close_bracket(char: char) -> Option<BracketType> {
+const fn parse_close_bracket(char: char) -> Option<BracketType> {
     match char {
         '}' => Some(BracketType::Curly),
         ')' => Some(BracketType::Round),
@@ -332,7 +358,7 @@ pub fn split_text_without_brackets(
                 let token = Token::Semicolon;
                 state.add(1, token);
             }
-            '{' | '}' | '(' | ')' | '\'' | '"' => {
+            '{' | '}' | '(' | ')' | '\'' | '"' | '`' => {
                 unreachable!()
             }
             _ if char.is_ascii_whitespace() => {
