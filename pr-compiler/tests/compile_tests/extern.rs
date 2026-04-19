@@ -13,26 +13,22 @@ main :: () -> i32 {
 }
 
 #[test]
-fn test_fprintf() {
+fn test_printf() {
     assert_eq!("Hello world!", run_code_stdout("\
-FILE :: struct {}
-
 #extern
-stdout: *FILE;
-
-#extern
-fprintf :: (*FILE, *char);
+printf :: (*char, ...);
 
 main :: () -> i32 {
-    fprintf(stdout, \"Hello world!\");
+    printf(\"Hello world!\");
     return 0;
 }
 
 ").unwrap())
 }
 
+#[cfg(target_os = "linux")]
 #[test]
-fn test_fprintf_with_vararg() {
+fn test_fprintf() {
     assert_eq!("765", run_code_stdout("\
 FILE :: struct {}
 
