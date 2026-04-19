@@ -46,7 +46,10 @@ impl Diagnostic {
         Self::new(None, message, DiagnosticSeverity::ERROR)
     }
     pub fn to_string(&self) -> String {
-        format!("{}", self.message)
+        match self.range {
+            Some(range) => format!("{} at {}", self.message, range_to_str(range)),
+            None => format!("{}", self.message),
+        }
     }
     pub fn print(&self) {
         println!("{}", self.to_string())
