@@ -8,10 +8,16 @@ use pr_lexer::token::Token;
 use pr_lexer::{TokenIter, TokenLinearTree};
 use pr_ast::SyntacticResult;
 use pr_ast_linked::LinkedFile;
+use pr_common::Target;
 use crate::error::LLVMError;
 
 pub mod compiling;
 mod error;
+
+pub struct CompileConfig {
+    pub args: Args,
+    pub target: Target,
+}
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -46,7 +52,7 @@ pub struct Args {
 }
 
 
-pub fn compile_src(args: &Args, errors: &mut ErrorQueue, base_path: PathBuf) -> Result<(), ()> {
+pub fn compile_src(errors: &mut ErrorQueue, config: &CompileConfig, base_path: PathBuf) -> Result<(), ()> {
     let mut files = Vec::new();
     find_files(&mut files, &base_path, PathBuf::new());
 
@@ -76,7 +82,7 @@ pub fn compile_src(args: &Args, errors: &mut ErrorQueue, base_path: PathBuf) -> 
     }
 
     let statements = files.into_iter().map(|path| {
-        parse_to_statements(errors, args, base_path.join(&path))
+        parse_to_statements(errors, config, base_path.join(&path))
             .map(|result| {
                 let path = path.to_str().expect("valid utf name").to_string();
                 (path, result)
@@ -84,7 +90,7 @@ pub fn compile_src(args: &Args, errors: &mut ErrorQueue, base_path: PathBuf) -> 
     }).collect::<Result<Vec<_>, _>>()?;
 
     let linked_module = pr_ast_linked::link_module(errors, statements);
-    if args.gen_last { linked_module.files.iter().for_each(|(file, path)|
+    if config.args.gen_last { linked_module.files.iter().for_each(|(file, path)|
         generate_last_file(errors, &path, file)
     ) }
 
@@ -97,25 +103,25 @@ pub fn compile_src(args: &Args, errors: &mut ErrorQueue, base_path: PathBuf) -> 
     Ok(())
 }
 
-pub fn compile_file(errors: &mut ErrorQueue, args: &Args, file_path: PathBuf) -> Result<(), ()> {
+pub fn compile_file(errors: &mut ErrorQueue, config: &CompileConfig, file_path: PathBuf) -> Result<(), ()> {
     let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
 
-    let statements = parse_to_statements(errors, args, file_path)?;
+    let statements = parse_to_statements(errors, config, file_path)?;
 
     if errors.has_errors() { return Err(()) }
 
     let linked_file = pr_ast_linked::link_file(errors, statements);
-    if args.gen_last { generate_last_file(errors, &filename, &linked_file) }
+    if config.args.gen_last { generate_last_file(errors, &filename, &linked_file) }
 
     if errors.has_errors() { return Err(()) }
 
-    compiling::parse_to_llvm(args, linked_file)
+    compiling::parse_to_llvm(config, linked_file)
         .map_err(|err| errors.add_diag(err.to_diagnostic()))?;
 
     Ok(())
 }
 
-fn parse_to_statements(errors: &mut ErrorQueue, args: &Args, file_path: PathBuf) -> Result<SyntacticResult, ()> {
+fn parse_to_statements(errors: &mut ErrorQueue, config: &CompileConfig, file_path: PathBuf) -> Result<SyntacticResult, ()> {
     let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
     let text = fs::read_to_string(&file_path)
         .map_err(|err| {
@@ -126,10 +132,10 @@ fn parse_to_statements(errors: &mut ErrorQueue, args: &Args, file_path: PathBuf)
         })?;
 
     let tokens = pr_lexer::tokenize(errors, &text);
-    if args.gen_tokens { generate_tokens_file(errors, &filename, &tokens) }
+    if config.args.gen_tokens { generate_tokens_file(errors, &filename, &tokens) }
 
-    let statements = pr_ast::parse_ast(errors, tokens);
-    if args.gen_ast { generate_ast_file(errors, &filename, &statements) }
+    let statements = pr_ast::parse_ast(errors, &config.target, tokens);
+    if config.args.gen_ast { generate_ast_file(errors, &filename, &statements) }
 
     Ok(statements)
 }

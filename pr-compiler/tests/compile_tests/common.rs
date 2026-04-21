@@ -1,8 +1,9 @@
 use std::process::{Command, ExitStatus, Stdio};
 use clap::builder::OsStr;
 use clap::Parser;
-use pr_compiler::{Args, compile_file};
+use pr_compiler::{Args, compile_file, CompileConfig};
 use pr_common::error::{DiagnosticString, ErrorQueue};
+use pr_common::Target;
 
 use tempfile::TempDir;
 
@@ -16,8 +17,12 @@ fn compile_text(text: &str) -> Result<(TempDir, Command), ErrorQueue> {
     let out_path = temp_dir.path().join(name);
 
     let args = Args::parse_from([&OsStr::from("binary.exe"), out_path.as_os_str()]);
+    let config = &CompileConfig {
+        target: Target::get_current(),
+        args,
+    };
     let mut errors = ErrorQueue::default();
-    let result = compile_file(&mut errors, &args, main_txt_path);
+    let result = compile_file(&mut errors, config, main_txt_path);
 
     match result {
         Ok(()) => {

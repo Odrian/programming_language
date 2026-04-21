@@ -1,5 +1,6 @@
 use pr_common::error::ErrorQueue;
 use pr_common::operations::*;
+use pr_common::Target;
 use pr_ast_linked::linked_statement::*;
 use pr_ast_linked::object::*;
 use pr_ast_linked::LinkedFile;
@@ -7,7 +8,8 @@ use pr_ast_linked::LinkedFile;
 fn parse(text: &str) -> Result<LinkedFile, ErrorQueue> {
     let mut errors = ErrorQueue::default();
     let tokens = pr_lexer::tokenize(&mut errors, text);
-    let statements = pr_ast::parse_ast(&mut errors, tokens);
+    let target = &Target::get_current();
+    let statements = pr_ast::parse_ast(&mut errors, target, tokens);
     if errors.has_errors() {
         return Err(errors)
     }
@@ -282,4 +284,31 @@ fn test_function_call() {
     assert_has_error_global(&cover("a :: (ar1: i32, ar2: i32) {}", "a()"));
     assert_has_error_global(&cover("a :: (ar1: i32, ar2: i32) {}", "a(0)"));
     assert_has_error_global(&cover("a :: (ar1: i32, ar2: i32) {}", "a(0, 0, 0)"));
+}
+
+#[test]
+fn test_cfg() {
+    assert_no_error("#cfg(false) a := a");
+    assert_has_error("#cfg(true) a := a");
+
+    assert_no_error("#cfg(false) a := a");
+    assert_has_error("#cfg(true) a := a");
+
+    assert_no_error("#cfg(false) a = a");
+    assert_has_error("#cfg(true) a = a");
+
+    assert_no_error("#cfg(false) a()");
+    assert_has_error("#cfg(true) a()");
+
+    assert_no_error("#cfg(false) { a() }");
+    assert_has_error("#cfg(true) { a() }");
+
+    assert_no_error_global("#cfg(false) import a::a;");
+    assert_has_error_global("#cfg(true) import a::a;");
+
+    assert_no_error_global("#cfg(false) a :: struct { a: a }");
+    assert_has_error_global("#cfg(true) a :: struct { a: a }");
+
+    assert_no_error_global("#cfg(false) a :: (a: a) { }");
+    assert_has_error_global("#cfg(true) a :: (a: a) { }");
 }

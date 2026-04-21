@@ -5,10 +5,12 @@ use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
+use pr_common::Target;
 
 mod debug_diagnostics;
 
 pub struct Backend {
+    pub target: Target,
     pub client: Client,
     pub files:  Arc<RwLock<HashMap<Url, File>>>,
 }
@@ -22,6 +24,7 @@ pub struct File {
 impl Backend {
     pub fn new(client: Client) -> Self {
         Self {
+            target: Target::get_current(),
             client,
             files: Default::default(),
         }
@@ -54,7 +57,8 @@ impl Backend {
             return;
         }
 
-        let statements = pr_ast::parse_ast(&mut errors, tokens);
+        #[allow(unused)]
+        let statements = pr_ast::parse_ast(&mut errors, &self.target, tokens);
         #[cfg(feature = "debug-statements")]
         {
             self.send_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements)).await;

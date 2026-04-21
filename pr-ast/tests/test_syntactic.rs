@@ -4,11 +4,13 @@ use pr_common::ranged::RString;
 use pr_lexer::tokenize;
 use pr_ast::statement::*;
 use pr_ast::parse_ast;
+use pr_common::Target;
 
 fn parse_global(text: &str) -> Result<Vec<Statement>, ErrorQueue> {
     let mut errors = ErrorQueue::default();
     let tokens = tokenize(&mut errors, text);
-    let statements = parse_ast(&mut errors, tokens);
+    let config = &Target::get_current();
+    let statements = parse_ast(&mut errors, config, tokens);
     let statements = statements.statements.into_iter().map(|x| x.value).collect();
     if errors.has_errors() {
         return Err(errors)
@@ -401,7 +403,7 @@ fn test_struct() {
 }
 
 #[test]
-fn test_semicolons_corectness() {
+fn test_semicolons_correctness() {
     assert_has_error("cat : i32 = 0 cat : i32 = 0");
     assert_has_error("a := 0 a := 0");
     assert_has_error("a = 0 a = 0");

@@ -7,27 +7,27 @@ use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, I
 use pr_ast_linked::linked_statement::GlobalLinkedStatement;
 use pr_ast_linked::object::{IntObjType, ObjType};
 use pr_ast_linked::LinkedFile;
-use crate::Args;
+use crate::CompileConfig;
 use crate::error::LLVMError;
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(args: &Args, linked_file: LinkedFile) -> Result<(), LLVMError> {
+pub fn parse_to_llvm(config: &CompileConfig, linked_file: LinkedFile) -> Result<(), LLVMError> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
     verify_main_signature(&linked_file)?;
 
-    let target_machine = create_target_machine(args);
+    let target_machine = create_target_machine(config);
     let target_data = target_machine.get_target_data();
 
-    let module = module_generator::parse_file(&context, &target_data, linked_file)?;
+    let module = module_generator::parse_file(config, &context, &target_data, linked_file)?;
     module.set_triple(&target_machine.get_triple());
 
     if let Err(err) = module.verify() {
         return Err(LLVMError::llvm_verify_module_error(err.to_string()));
     }
 
-    create_executable(args, &target_machine, &module)?;
+    create_executable(config, &target_machine, &module)?;
     Ok(())
 }
 
@@ -49,7 +49,8 @@ fn verify_main_signature(linked_module: &LinkedFile) -> Result<(), LLVMError> {
     Err(LLVMError::no_main_function())
 }
 
-fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result<(), LLVMError> {
+fn create_executable(config: &CompileConfig, tm: &TargetMachine, module: &Module) -> Result<(), LLVMError> {
+    let args = &config.args;
     let assembly_name = format!("{}.ll", args.exe_name);
     let object_name = format!("{}.o", args.exe_name);
     let executable_name = args.exe_name.clone();
@@ -99,7 +100,7 @@ fn create_executable(args: &Args, tm: &TargetMachine, module: &Module) -> Result
     Ok(())
 }
 
-fn create_target_machine(_args: &Args) -> TargetMachine {
+fn create_target_machine(_config: &CompileConfig) -> TargetMachine {
     let triple = TargetMachine::get_default_triple();
     let target = Target::from_triple(&triple)
         .expect("Failed to get target from default triple");

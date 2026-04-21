@@ -9,19 +9,22 @@ use pr_common::operations::*;
 use pr_ast_linked::LinkedFile;
 use pr_ast_linked::object::*;
 use pr_ast_linked::linked_statement::*;
+use crate::CompileConfig;
 use crate::error::LLVMError;
 use super::context_window::ValueContextWindow;
 
 pub fn parse_file<'ctx>(
+    config: &'ctx CompileConfig,
     context: &'ctx Context, target_data: &'ctx TargetData,
     linked_module: LinkedFile
 ) -> Result<Module<'ctx>, LLVMError> {
-    let mut code_module_gen = CodeModuleGen::new(context, target_data, linked_module, "main_module");
+    let mut code_module_gen = CodeModuleGen::new(config, context, target_data, linked_module, "main_module");
     code_module_gen.parse_module()?;
     Ok(code_module_gen.module)
 }
 
 struct CodeModuleGen<'ctx> {
+    config: &'ctx CompileConfig,
     context: &'ctx Context,
     target_data: &'ctx TargetData,
     module: Module<'ctx>,
@@ -32,11 +35,12 @@ struct CodeModuleGen<'ctx> {
     struct_context: HashMap<Object, StructType<'ctx>>
 }
 impl<'ctx> CodeModuleGen<'ctx> {
-    fn new(context: &'ctx Context, target_data: &'ctx TargetData, linked_file: LinkedFile, name: &str) -> Self {
+    fn new(config: &'ctx CompileConfig, context: &'ctx Context, target_data: &'ctx TargetData, linked_file: LinkedFile, name: &str) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
         let context_window = ValueContextWindow::new();
         Self {
+            config,
             context,
             target_data,
             module,
