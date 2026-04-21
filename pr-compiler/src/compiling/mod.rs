@@ -4,6 +4,7 @@ mod module_generator;
 use std::path::Path;
 use std::process::Command;
 use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine}, OptimizationLevel};
+use inkwell::targets::TargetTriple;
 use pr_ast_linked::linked_statement::GlobalLinkedStatement;
 use pr_ast_linked::object::{IntObjType, ObjType};
 use pr_ast_linked::LinkedFile;
@@ -19,6 +20,7 @@ pub fn parse_to_llvm(config: &CompileConfig, linked_file: LinkedFile) -> Result<
 
     let target_machine = create_target_machine(config);
     let target_data = target_machine.get_target_data();
+    assert_eq!(target_data.get_pointer_byte_size(None) * 8, config.target.pointer_width as u32);
 
     let module = module_generator::parse_file(config, &context, &target_data, linked_file)?;
     module.set_triple(&target_machine.get_triple());
@@ -100,10 +102,10 @@ fn create_executable(config: &CompileConfig, tm: &TargetMachine, module: &Module
     Ok(())
 }
 
-fn create_target_machine(_config: &CompileConfig) -> TargetMachine {
-    let triple = TargetMachine::get_default_triple();
-    let target = Target::from_triple(&triple)
-        .expect("Failed to get target from default triple");
+fn create_target_machine(config: &CompileConfig) -> TargetMachine {
+    let triple = TargetTriple::create(config.target.llvm_target);
+    let target = Target::from_triple(&triple).unwrap_or_else(|err|
+        panic!("Target should be created from compile time triple {}: {err}", config.target.llvm_target));
     let cpu = "generic";
     let features = "";
 
@@ -114,5 +116,5 @@ fn create_target_machine(_config: &CompileConfig) -> TargetMachine {
         OptimizationLevel::None,
         RelocMode::PIC,
         CodeModel::Default,
-    ).expect("Could not create TargetMachine")
+    ).expect("Target machine should be created from compile time config ")
 }

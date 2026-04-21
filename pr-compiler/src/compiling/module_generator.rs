@@ -74,11 +74,11 @@ impl<'ctx> CodeModuleGen<'ctx> {
                 IntObjType::I64 | IntObjType::U64 => self.context.i64_type().into(),
                 IntObjType::I128 | IntObjType::U128 => self.context.i128_type().into(),
                 IntObjType::ISize | IntObjType::USize => {
-                    let pointer_size_bytes = self.target_data.get_pointer_byte_size(None);
-                    match pointer_size_bytes {
-                        4 => self.context.i32_type().into(),
-                        8 => self.context.i64_type().into(),
-                        _ => panic!("unexpected pointer size: {pointer_size_bytes} bytes")
+                    let pointer_width = self.config.target.pointer_width;
+                    match pointer_width {
+                        32 => self.context.i32_type().into(),
+                        64 => self.context.i64_type().into(),
+                        _ => panic!("unexpected pointer size: {pointer_width} bytes")
                     }
                 },
             }
