@@ -6,3 +6,6 @@ edition.workspace = true
 [dependencies]
 lsp-types = { workspace = true }
 linear-tree = { path = "../linear-tree" }
+
+strum = "0.28"
+strum_macros = "0.28"
