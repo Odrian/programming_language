@@ -60,6 +60,9 @@ pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext)
 }
 
 fn find_file(current_module: &String, from: Vec<RString>) -> String {
+    if from.is_empty() {
+        unimplemented!("import just a module")
+    }
     let module = &from[0].value;
 
     if module != "self" {

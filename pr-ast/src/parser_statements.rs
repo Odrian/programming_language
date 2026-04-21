@@ -182,10 +182,12 @@ impl ParsingState<'_, '_, '_> {
                     if peek_token.is_none() {
                         result.push(Statement::Return(None).add_range(range0))
                     } else if let Some((RefNode::Elem(Token::Semicolon), _)) = peek_token {
-                        result.push(Statement::Return(None).add_range(range0))
+                        result.push(Statement::Return(None).add_range(range0));
+                        self.consume_semicolon(range0);
                     } else {
                         let expression = self.parse_expression(false)?;
-                        result.push(Statement::Return(Some(expression)).add_range(range0))
+                        result.push(Statement::Return(Some(expression)).add_range(range0));
+                        self.consume_semicolon(range0);
                     }
                     Ok(())
                 }

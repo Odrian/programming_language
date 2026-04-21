@@ -386,8 +386,8 @@ fn test_import() {
     assert_has_error_global("import x::x::*;");
 
     assert_has_error_global("import ;");
-    assert_has_error_global("import ::x;");
-    assert_has_error_global("import x::;");
+    assert_has_error_global("import ::x::x;");
+    assert_has_error_global("import x::x::;");
     assert_has_error_global("import x::{x}::x;");
 }
 
