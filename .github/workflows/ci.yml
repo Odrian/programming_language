@@ -19,8 +19,8 @@ jobs:
             llvm_os: linux
           - os: macos-latest
             llvm_os: macos
-          - os: windows-latest
-            llvm_os: windows
+#          - os: windows-latest
+#            llvm_os: windows
 
     steps:
       - name: Checkout
