@@ -54,7 +54,7 @@ jobs:
 
           LLVM_PREFIX="$(brew --prefix llvm@21)"
           echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
-          echo "LLVM_SYS_210_PREFIX=$LLVM_PREFIX" >> "$GITHUB_ENV"
+          echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=$LLVM_PREFIX/bin/llvm-config" >> "$GITHUB_ENV"
 
       - name: Install LLVM 21 on Windows
@@ -68,7 +68,7 @@ jobs:
           Start-Process -FilePath .\llvm.exe -ArgumentList "/S" -Wait
 
           Add-Content $env:GITHUB_PATH 'C:\Program Files\LLVM\bin'
-          "LLVM_SYS_210_PREFIX=C:\Program Files\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "LLVM_SYS_211_PREFIX=C:\Program Files\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "LLVM_CONFIG_PATH=C:\Program Files\LLVM\bin\llvm-config.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Run tests
