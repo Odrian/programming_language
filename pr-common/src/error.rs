@@ -1,0 +1,124 @@
+use lsp_types::{DiagnosticSeverity, Position, Range};
+
+pub struct DiagnosticString {
+    pub message: String,
+}
+
+impl DiagnosticString {
+    pub fn new(message: String) -> Self {
+        Self { message }
+    }
+    pub fn from_text(text: &str) -> Self {
+        Self::new(text.to_string())
+    }
+    pub fn to_diag0(self) -> Diagnostic {
+        Diagnostic::new(None, self.message, DiagnosticSeverity::ERROR)
+    }
+    pub fn to_diag1(self, position: Position) -> Diagnostic {
+        Diagnostic::new(Some(Range::new(position, position)), self.message, DiagnosticSeverity::ERROR)
+    }
+    pub fn to_diag(self, range: Range) -> Diagnostic {
+        Diagnostic::new(Some(range), self.message, DiagnosticSeverity::ERROR)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Diagnostic {
+    pub range: Option<Range>,
+    pub severity: DiagnosticSeverity,
+    pub message: String,
+}
+
+impl Diagnostic {
+    pub fn new(range: Option<Range>, message: String, severity: DiagnosticSeverity) -> Self {
+        Self { range, severity, message }
+    }
+    pub fn new_hint(range: Range, message: String) -> Self {
+        Self::new(Some(range), message, DiagnosticSeverity::HINT)
+    }
+    pub fn new_warning(range: Range, message: String) -> Self {
+        Self::new(Some(range), message, DiagnosticSeverity::WARNING)
+    }
+    pub fn new_error(range: Range, message: String) -> Self {
+        Self::new(Some(range), message, DiagnosticSeverity::ERROR)
+    }
+    pub fn new_error_unranged(message: String) -> Self {
+        Self::new(None, message, DiagnosticSeverity::ERROR)
+    }
+    pub fn to_string(&self) -> String {
+        match self.range {
+            Some(range) => format!("{} at {}", self.message, range_to_str(range)),
+            None => format!("{}", self.message),
+        }
+    }
+    pub fn print(&self) {
+        println!("{}", self.to_string())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ErrorQueue {
+    vec: Vec<Diagnostic>,
+}
+
+impl Default for ErrorQueue {
+    fn default() -> Self {
+        Self { vec: Vec::new() }
+    }
+}
+
+impl ErrorQueue {
+    pub fn new_single_diag(diagnostic: Diagnostic) -> Self {
+        let mut queue = Self::default();
+        queue.add_diag(diagnostic);
+        queue
+    }
+    pub fn add_diag(&mut self, diagnostic: Diagnostic) {
+        self.vec.push(diagnostic)
+    }
+    pub fn print(&self) {
+        self.vec.iter().for_each(Diagnostic::print)
+    }
+    pub fn has_errors(&self) -> bool {
+        self.vec.iter().any(|diag| diag.severity == DiagnosticSeverity::ERROR)
+    }
+    pub fn to_lsp_diagnostics(self) -> Vec<lsp_types::Diagnostic> {
+        self.vec.into_iter().map(|d|
+            lsp_types::Diagnostic {
+                range: d.range.unwrap_or(Range::default()),
+                severity: Some(d.severity),
+                message: d.message,
+                ..Default::default()
+            }
+        ).collect()
+    }
+}
+
+pub fn pos_to_str(position: Position) -> String {
+    format!("{}:{}", position.line + 1, position.character + 1)
+}
+pub fn range_to_str(range: Range) -> String {
+    let start = pos_to_str(range.start);
+    let end = pos_to_str(range.end);
+    format!("{start} - {end}")
+}
+
+pub fn print_error(kind: ErrKind, error_string: &str) {
+    let kind = kind.to_string();
+    println!("{kind}: {error_string}");
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum ErrKind {
+    Error,
+    Warning,
+}
+
+impl ErrKind {
+    const fn to_string(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+        }
+    }
+}

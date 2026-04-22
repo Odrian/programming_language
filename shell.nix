@@ -12,6 +12,7 @@ pkgs.mkShell {
     pkgs.pkg-config
     pkgs.libxml2
     pkgs.libffi
+    pkgs.gcc
   ];
 
   LLVM_SYS_211_PREFIX = "${llvm.llvm.dev}";

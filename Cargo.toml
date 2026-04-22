@@ -1,11 +1,33 @@
 [workspace]
 resolver = "3"
 members = [
-    "pr-core",
+    "pr-common",
+    "pr-lexer",
+    "pr-ast",
+    "pr-ast-linked",
+
     "pr-compiler",
     "pr-lsp",
+
+    "linear-tree",
 ]
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+clap = { version = "4.5.53", features = ["derive"]}
+tempfile = "3.23.0"
+
+tokio = { version = "1", features = ["full"] }
+tower-lsp = "0.20"
+lsp-types = { version = "0.94.1" } # as in tower-lsp 0.20.0
+
+inkwell = { version = "0.7.1", features = ["llvm21-1"] }
+
+[profile.release]
+lto = "fat"
+
 [profile.dev]
-opt-level = 0
-debug = "full"
+lto = "thin"

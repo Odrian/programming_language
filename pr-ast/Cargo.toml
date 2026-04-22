@@ -1,0 +1,10 @@
+[package]
+name = "pr-ast"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pr-common = { path = "../pr-common" }
+pr-lexer = { path = "../pr-lexer" }
+
+lsp-types = { workspace = true }

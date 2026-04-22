@@ -1,5 +1,5 @@
 [package]
-name = "pr-compiler"
+name = "pr-ast-linked"
 version.workspace = true
 edition.workspace = true
 
@@ -7,9 +7,5 @@ edition.workspace = true
 pr-common = { path = "../pr-common" }
 pr-lexer = { path = "../pr-lexer" }
 pr-ast = { path = "../pr-ast" }
-pr-ast-linked = { path = "../pr-ast-linked" }
 
-inkwell = { workspace = true }
-clap = { workspace = true }
-tempfile = { workspace = true }
 lsp-types = { workspace = true }

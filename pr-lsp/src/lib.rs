@@ -1,16 +1,16 @@
-use pr_core::error::ErrorQueue;
-use pr_core::parser::parse1_tokenize::tokenize;
-use pr_core::parser::parse2_syntactic::parse_statements;
+use pr_common::error::ErrorQueue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
+use pr_common::Target;
 
 mod debug_diagnostics;
 
 pub struct Backend {
+    pub target: Target,
     pub client: Client,
     pub files:  Arc<RwLock<HashMap<Url, File>>>,
 }
@@ -24,6 +24,7 @@ pub struct File {
 impl Backend {
     pub fn new(client: Client) -> Self {
         Self {
+            target: Target::get_current(),
             client,
             files: Default::default(),
         }
@@ -49,11 +50,20 @@ impl Backend {
     async fn diagnose_file(&self, uri: Url, text: &str) {
         let mut errors = ErrorQueue::default();
 
-        let tokens = tokenize(&mut errors, text);
-        // self.add_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens)).await;
+        let tokens = pr_lexer::tokenize(&mut errors, text);
+        #[cfg(feature = "debug-tokens")]
+        {
+            self.send_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens)).await;
+            return;
+        }
 
-        let statements = parse_statements(&mut errors, tokens);
-        // self.add_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements)).await;
+        #[allow(unused)]
+        let statements = pr_ast::parse_ast(&mut errors, &self.target, tokens);
+        #[cfg(feature = "debug-statements")]
+        {
+            self.send_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements)).await;
+            return;
+        }
 
         let diagnostics = errors.to_lsp_diagnostics();
         self.send_diagnostics(uri, diagnostics).await;

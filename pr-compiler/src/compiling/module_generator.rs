@@ -1,49 +1,51 @@
-use super::error::LLVMError;
-
-use pr_core::parser::operations::*;
-use pr_core::parser::parse3_linking::object::*;
-use pr_core::parser::parse3_linking::linked_statement::*;
-use super::context_window::ValueContextWindow;
-
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue, AnyValue, BasicValue};
 use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
-use pr_core::parser::parse3_linking::LinkedProgram;
-use pr_core::RString;
+use pr_common::ranged::RString;
+use pr_common::operations::*;
+use pr_ast_linked::LinkedFile;
+use pr_ast_linked::object::*;
+use pr_ast_linked::linked_statement::*;
+use crate::CompileConfig;
+use crate::error::LLVMError;
+use super::context_window::ValueContextWindow;
 
-pub fn parse_module<'ctx>(
+pub fn parse_file<'ctx>(
+    config: &'ctx CompileConfig,
     context: &'ctx Context, target_data: &'ctx TargetData,
-    linked_program: LinkedProgram
+    linked_module: LinkedFile
 ) -> Result<Module<'ctx>, LLVMError> {
-    let mut code_module_gen = CodeModuleGen::new(context, target_data, linked_program, "main_module");
+    let mut code_module_gen = CodeModuleGen::new(config, context, target_data, linked_module, "main_module");
     code_module_gen.parse_module()?;
     Ok(code_module_gen.module)
 }
 
 struct CodeModuleGen<'ctx> {
+    config: &'ctx CompileConfig,
     context: &'ctx Context,
     target_data: &'ctx TargetData,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
-    linked_program: LinkedProgram,
+    linked_file: LinkedFile,
     current_function: Option<FunctionValue<'ctx>>,
     context_window: ValueContextWindow<'ctx>,
     struct_context: HashMap<Object, StructType<'ctx>>
 }
 impl<'ctx> CodeModuleGen<'ctx> {
-    fn new(context: &'ctx Context, target_data: &'ctx TargetData, linked_program: LinkedProgram, name: &str) -> Self {
+    fn new(config: &'ctx CompileConfig, context: &'ctx Context, target_data: &'ctx TargetData, linked_file: LinkedFile, name: &str) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
         let context_window = ValueContextWindow::new();
         Self {
+            config,
             context,
             target_data,
             module,
             builder,
-            linked_program,
+            linked_file,
             current_function: None,
             context_window,
             struct_context: Default::default(),
@@ -53,10 +55,10 @@ impl<'ctx> CodeModuleGen<'ctx> {
 
 impl<'ctx> CodeModuleGen<'ctx> {
     fn get_object_name(&self, object: Object) -> &RString {
-        self.linked_program.factory.get_name(object)
+        self.linked_file.factory.get_name(object)
     }
     fn get_object_type(&self, object: Object) -> BasicTypeEnum<'ctx> {
-        self.parse_type(self.linked_program.factory.get_type(object))
+        self.parse_type(self.linked_file.factory.get_type(object))
     }
     fn parse_type(&self, object_type: &ObjType) -> BasicTypeEnum<'ctx> {
         match object_type {
@@ -72,11 +74,11 @@ impl<'ctx> CodeModuleGen<'ctx> {
                 IntObjType::I64 | IntObjType::U64 => self.context.i64_type().into(),
                 IntObjType::I128 | IntObjType::U128 => self.context.i128_type().into(),
                 IntObjType::ISize | IntObjType::USize => {
-                    let pointer_size_bytes = self.target_data.get_pointer_byte_size(None);
-                    match pointer_size_bytes {
-                        4 => self.context.i32_type().into(),
-                        8 => self.context.i64_type().into(),
-                        _ => panic!("unexpected pointer size: {pointer_size_bytes} bytes")
+                    let pointer_width = self.config.target.pointer_width;
+                    match pointer_width {
+                        32 => self.context.i32_type().into(),
+                        64 => self.context.i64_type().into(),
+                        _ => panic!("unexpected pointer size: {pointer_width} bytes")
                     }
                 },
             }
@@ -119,13 +121,13 @@ mod module_parsing {
 
             self.parse_type_statements();
 
-            let extern_statements = std::mem::take(&mut self.linked_program.extern_statements);
+            let extern_statements = std::mem::take(&mut self.linked_file.extern_statements);
             for (object, statement) in extern_statements {
                 self.create_extern(object, statement);
             }
 
-            let function_statements = std::mem::take(&mut self.linked_program.function_statement);
-            let variable_statements = std::mem::take(&mut self.linked_program.variable_statement);
+            let function_statements = std::mem::take(&mut self.linked_file.function_statement);
+            let variable_statements = std::mem::take(&mut self.linked_file.variable_statement);
 
             // init global context
             for (object, statement) in &function_statements {
@@ -147,12 +149,12 @@ mod module_parsing {
         fn create_global_var(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), LLVMError> {
             let GlobalLinkedStatement::VariableDeclaration { value } = statement else { unreachable!() };
 
-            let global_type = self.parse_type(&value.object_type);
+            let global_type = self.parse_type(&value.value.object_type);
 
             let name = self.get_object_name(object);
             let global_value = self.module.add_global(global_type, None, &name.value);
 
-            let global_const_value = self.get_const_value(object, value)?;
+            let global_const_value = self.get_const_value(object, value.value)?;
             global_value.set_initializer(&global_const_value);
 
             self.context_window.add(object, global_value.as_any_value_enum());
@@ -161,7 +163,7 @@ mod module_parsing {
         fn get_const_value(&self, object: Object, value: TypedExpression) -> Result<BasicValueEnum<'ctx>, LLVMError> {
             let TypedExpression { object_type: _, expr } = value;
             let LinkedExpression::Literal(LinkedLiteralExpression::Undefined(obj_type)) = expr else {
-                return Err(LLVMError::GlobalWithValue { name: self.get_object_name(object).value.clone()});
+                return Err(LLVMError::global_with_value(self.get_object_name(object).value.clone()));
             };
             Ok(get_undef(self.parse_type(&obj_type)))
         }
@@ -194,7 +196,7 @@ mod module_parsing {
             self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
-                return Err(LLVMError::LLVMVerifyFunctionError { name: self.linked_program.factory.get_name(object).value.clone() });
+                return Err(LLVMError::llvm_verify_function_error(self.linked_file.factory.get_name(object).value.clone()));
             }
             self.current_function = None;
 
@@ -234,8 +236,8 @@ mod type_parsing {
 
     impl<'ctx> CodeModuleGen<'ctx> {
         pub fn parse_type_statements(&mut self) {
-            let mut type_statements = std::mem::take(&mut self.linked_program.type_statements);
-            let type_statements_order = std::mem::take(&mut self.linked_program.type_statements_order);
+            let mut type_statements = std::mem::take(&mut self.linked_file.type_statements);
+            let type_statements_order = std::mem::take(&mut self.linked_file.type_statements_order);
 
             for object in type_statements_order {
                 let statement = type_statements.remove(&object).unwrap();
@@ -266,13 +268,13 @@ mod declaration_parsing {
     use super::*;
 
     impl<'ctx> CodeModuleGen<'ctx> {
-        pub fn parse_function_body(&mut self, body: Vec<LinkedStatement>) -> Result<(), LLVMError> {
+        pub fn parse_function_body(&mut self, body: Vec<RLinkedStatement>) -> Result<(), LLVMError> {
             let is_returned = self.parse_statements(body)?;
             assert!(is_returned);
 
             Ok(())
         }
-        fn parse_statements(&mut self, statements: Vec<LinkedStatement>) -> Result<bool, LLVMError> {
+        fn parse_statements(&mut self, statements: Vec<RLinkedStatement>) -> Result<bool, LLVMError> {
             for statement in statements {
                 if self.parse_statement(statement)? {
                     return Ok(true)
@@ -281,18 +283,18 @@ mod declaration_parsing {
             Ok(false)
         }
 
-        fn parse_statement(&mut self, statement: LinkedStatement) -> Result<bool, LLVMError> {
-            match statement {
+        fn parse_statement(&mut self, statement: RLinkedStatement) -> Result<bool, LLVMError> {
+            match statement.value {
                 LinkedStatement::Expression(expression) => {
-                    if expression.object_type.is_void() {
-                        let LinkedExpression::FunctionCall { object, args } = expression.expr else { unreachable!() };
+                    if expression.value.object_type.is_void() {
+                        let LinkedExpression::FunctionCall { object, args } = expression.value.expr else { unreachable!() };
                         self.call_function(object, args)?;
                     } else {
-                        self.parse_expression(expression.expr)?;
+                        self.parse_expression(expression.value.expr)?;
                     }
                 }
                 LinkedStatement::If { condition, body } => {
-                    let condition_value = self.parse_expression(condition.expr)?.unwrap().into_int_value();
+                    let condition_value = self.parse_expression(condition.value.expr)?.unwrap().into_int_value();
 
                     let function = self.current_function.unwrap();
                     let then_bb = self.context.append_basic_block(function, "then");
@@ -315,7 +317,7 @@ mod declaration_parsing {
                     self.builder.build_unconditional_branch(cond_bb)?;
 
                     self.builder.position_at_end(cond_bb);
-                    let condition_value = self.parse_expression(condition.expr)?.unwrap().into_int_value();
+                    let condition_value = self.parse_expression(condition.value.expr)?.unwrap().into_int_value();
                     self.builder.build_conditional_branch(condition_value, body_bb, after_bb)?;
 
                     self.builder.position_at_end(body_bb);
@@ -328,21 +330,21 @@ mod declaration_parsing {
                 }
                 LinkedStatement::SetVariable { what, value, op } => {
                     if let Some(op) = op {
-                        let what_ty = self.parse_type(&what.object_type);
-                        let obj_ty = what.object_type.clone();
+                        let what_ty = self.parse_type(&what.value.object_type);
+                        let obj_ty = what.value.object_type.clone();
                         let pointer = self.parse_lvalue(what)?;
-                        let rvalue = self.parse_expression(value.expr)?.unwrap();
+                        let rvalue = self.parse_expression(value.value.expr)?.unwrap();
                         let value0 = self.builder.build_load(what_ty, pointer, "load for op-set")?;
-                        let rvalue = self.parse_operation(value0, rvalue, obj_ty, op.value)?;
+                        let rvalue = self.parse_operation(value0, rvalue, obj_ty, op)?;
                         self.builder.build_store(pointer, rvalue)?;
                     } else {
                         let pointer = self.parse_lvalue(what)?;
-                        let rvalue = self.parse_expression(value.expr)?.unwrap();
+                        let rvalue = self.parse_expression(value.value.expr)?.unwrap();
                         self.builder.build_store(pointer, rvalue)?;
                     }
                 }
                 LinkedStatement::VariableDeclaration { object, value } => {
-                    let value = self.parse_expression(value.expr)?.unwrap();
+                    let value = self.parse_expression(value.value.expr)?.unwrap();
                     let var_type = self.get_object_type(object);
                     let pointer = self.builder.build_alloca(var_type, &self.get_object_name(object).value)?;
                     self.builder.build_store(pointer, value)?;
@@ -350,7 +352,7 @@ mod declaration_parsing {
                 }
                 LinkedStatement::Return(expression) => {
                     if let Some(expression) = expression {
-                        let expression = self.parse_expression(expression.expr)?.unwrap();
+                        let expression = self.parse_expression(expression.value.expr)?.unwrap();
                         self.builder.build_return(Some(&expression))?;
                     } else {
                         self.builder.build_return(None)?;
@@ -360,19 +362,21 @@ mod declaration_parsing {
             }
             Ok(false)
         }
-        fn parse_lvalue(&self, expression: TypedExpression) -> Result<PointerValue<'ctx>, LLVMError> {
-            if let LinkedExpression::UnaryOperation(expr, OneSidedOperation::Dereference) = expression.expr {
-                let value = self.parse_expression(expr.expr)?;
+        fn parse_lvalue(&self, expression: RTypedExpression) -> Result<PointerValue<'ctx>, LLVMError> {
+            let expression = expression.value.expr;
+            if matches!(&expression, LinkedExpression::UnaryOperation(_, op) if op.value == OneSidedOperation::Dereference) {
+                let LinkedExpression::UnaryOperation(expr, _) = expression else { unreachable!() };
+                let value = self.parse_expression(expr.value.expr)?;
                 Ok(value.unwrap().into_pointer_value())
             } else {
-                Ok(self.get_pointer(&expression.expr)?.unwrap())
+                Ok(self.get_pointer(&expression)?.unwrap())
             }
         }
 
         /// get pointer to local object or None
         fn get_pointer(&self, expression: &LinkedExpression) -> Result<Option<PointerValue<'ctx>>, LLVMError> {
             match expression {
-                LinkedExpression::RoundBracket(exp) => self.get_pointer(&exp.expr),
+                LinkedExpression::RoundBracket(exp) => self.get_pointer(&exp.value.expr),
                 LinkedExpression::Variable(object) => {
                     let pointer = self.context_window.get_pointer_unwrap(*object);
                     Ok(Some(pointer))
@@ -387,15 +391,15 @@ mod declaration_parsing {
                     Ok(Some(self.call_function(object, args)?.unwrap()))
                 },
                 LinkedExpression::StructField { left, field_index } => {
-                    let struct_value = self.parse_expression(left.expr)?.unwrap().into_pointer_value();
-                    let ObjType::Reference{ obj_type: struct_obj_type, is_weak: _ } = &left.object_type else { unreachable!() };
+                    let struct_value = self.parse_expression(left.value.expr)?.unwrap().into_pointer_value();
+                    let ObjType::Reference{ obj_type: struct_obj_type, is_weak: _ } = &left.value.object_type else { unreachable!() };
                     let struct_type = self.parse_type(struct_obj_type);
 
                     let field_pointer = self.builder.build_struct_gep(struct_type, struct_value, field_index, "get_field")?;
                     Ok(Some(field_pointer.into()))
                 }
                 LinkedExpression::Literal(literal) => self.parse_literal(literal),
-                LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed.expr),
+                LinkedExpression::RoundBracket(boxed) => self.parse_expression(boxed.value.expr),
                 LinkedExpression::Variable(object) => {
                     let value_type = self.get_object_type(object);
                     let pointer = self.context_window.get_pointer_unwrap(object);
@@ -403,8 +407,8 @@ mod declaration_parsing {
                     Ok(Some(value))
                 }
                 LinkedExpression::UnaryOperation(boxed, op) => {
-                    let TypedExpression { expr: linked_expr, object_type } = *boxed;
-                    let result = match op {
+                    let TypedExpression { expr: linked_expr, object_type } = boxed.value;
+                    let result = match op.value {
                         OneSidedOperation::BoolNot => {
                             let exp_parsed = self.parse_expression(linked_expr)?.unwrap();
                             let int_value = exp_parsed.into_int_value();
@@ -436,15 +440,15 @@ mod declaration_parsing {
                     Ok(Some(result))
                 }
                 LinkedExpression::Operation(ex1, ex2, op) => {
-                    let TypedExpression { expr: linked_expr1, object_type: type1 } = *ex1;
-                    let TypedExpression { expr: linked_expr2, object_type: _type2 } = *ex2;
+                    let TypedExpression { expr: linked_expr1, object_type: type1 } = ex1.value;
+                    let TypedExpression { expr: linked_expr2, object_type: _type2 } = ex2.value;
 
                     let v1 = self.parse_expression(linked_expr1)?.unwrap();
                     let v2 = self.parse_expression(linked_expr2)?.unwrap();
                     Ok(Some(self.parse_operation(v1, v2, type1, op)?))
                 }
                 LinkedExpression::As(expression, to_obj_type) => {
-                    let TypedExpression { expr: linked_expr, object_type: was_obj_type } = *expression;
+                    let TypedExpression { expr: linked_expr, object_type: was_obj_type } = expression.value;
                     let ex = self.parse_expression(linked_expr)?.unwrap();
                     self.parse_as(ex, was_obj_type, to_obj_type)
                 }
@@ -454,7 +458,7 @@ mod declaration_parsing {
                     let struct_value = self.builder.build_alloca(struct_type, "new_struct")?;
                     for (i, field) in fields.into_iter().enumerate() {
                         let field_ptr = self.builder.build_struct_gep(struct_type, struct_value, i as u32, "get_field")?;
-                        let field_value = self.parse_expression(field.expr)?.unwrap();
+                        let field_value = self.parse_expression(field.value.expr)?.unwrap();
                         self.builder.build_store(field_ptr, field_value)?;
                     }
 
@@ -596,8 +600,8 @@ mod declaration_parsing {
             };
             Ok(Some(result))
         }
-        fn parse_operation(&self, v1: BasicValueEnum<'ctx>, v2: BasicValueEnum<'ctx>, type1: ObjType, op: TwoSidedOperation) -> Result<BasicValueEnum<'ctx>, LLVMError> {
-            let result = match op {
+        fn parse_operation(&self, v1: BasicValueEnum<'ctx>, v2: BasicValueEnum<'ctx>, type1: ObjType, op: RTwoSidedOperation) -> Result<BasicValueEnum<'ctx>, LLVMError> {
+            let result = match op.value {
                 TwoSidedOperation::Number(num_op) => match type1 {
                     ObjType::Integer(int) => {
                         let num1 = v1.into_int_value();
@@ -668,9 +672,9 @@ mod declaration_parsing {
             };
             Ok(result)
         }
-        fn call_function(&self, object: Object, args: Vec<TypedExpression>) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
+        fn call_function(&self, object: Object, args: Vec<RTypedExpression>) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
             let args: Vec<_> = args.into_iter().map(|a|
-                self.parse_expression(a.expr)
+                self.parse_expression(a.value.expr)
             ).collect::<Result<_, _>>()?;
             let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.unwrap().into()).collect(); // will be removed
 

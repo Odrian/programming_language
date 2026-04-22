@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use inkwell::values::{AnyValueEnum, FunctionValue, PointerValue};
-use pr_core::parser::parse3_linking::object::Object;
+use pr_ast_linked::object::Object;
 
 #[derive(Debug, Default)]
 struct ValueContext<'ctx>(HashMap<Object, AnyValueEnum<'ctx>>);

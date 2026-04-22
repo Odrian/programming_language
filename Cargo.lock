@@ -465,6 +465,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
+name = "linear-tree"
+version = "0.1.0"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -606,27 +610,64 @@ dependencies = [
 ]
 
 [[package]]
+name = "pr-ast"
+version = "0.1.0"
+dependencies = [
+ "lsp-types",
+ "pr-common",
+ "pr-lexer",
+]
+
+[[package]]
+name = "pr-ast-linked"
+version = "0.1.0"
+dependencies = [
+ "lsp-types",
+ "pr-ast",
+ "pr-common",
+ "pr-lexer",
+]
+
+[[package]]
+name = "pr-common"
+version = "0.1.0"
+dependencies = [
+ "linear-tree",
+ "lsp-types",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
 name = "pr-compiler"
 version = "0.1.0"
 dependencies = [
  "clap",
  "inkwell",
- "pr-core",
+ "lsp-types",
+ "pr-ast",
+ "pr-ast-linked",
+ "pr-common",
+ "pr-lexer",
  "tempfile",
 ]
 
 [[package]]
-name = "pr-core"
+name = "pr-lexer"
 version = "0.1.0"
 dependencies = [
  "lsp-types",
+ "pr-common",
 ]
 
 [[package]]
 name = "pr-lsp"
 version = "0.1.0"
 dependencies = [
- "pr-core",
+ "pr-ast",
+ "pr-ast-linked",
+ "pr-common",
+ "pr-lexer",
  "tokio",
  "tower-lsp",
 ]
@@ -798,6 +839,24 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "syn"

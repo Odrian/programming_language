@@ -1,0 +1,97 @@
+use std::fmt::{Display, Formatter};
+use pr_common::{
+    BracketType,
+    operations::*,
+};
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Token {
+    Keyword(TokenKeyword),
+    String(String),             // any String
+    NumberLiteral(String),      // any String starting with a digit
+    Semicolon,                  // ;
+    Dot,                        // .
+    DoubleDot,                  // ..
+    Comma,                      // ,
+    Colon,                      // :
+    DoubleColon,                // ::
+    Arrow,                      // ->
+
+    EqualOperation(EqualOperation),
+    Operation(TwoSidedOperation),
+    UnaryOperation(OneSidedOperation),
+
+    Quotes(String),
+    DoubleQuotes(String),
+}
+
+pub type TokenBlock = BracketType;
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum TokenKeyword {
+    If, While, For,
+    Return,
+    Import,
+    Extern,
+    Cfg,
+}
+
+/// `TwoSidedOperation` must not change type
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum EqualOperation {
+    Equal,                      // =
+    ColonEqual,                 // :=
+    OperationEqual(TwoSidedOperation), // _=
+}
+
+impl From<TokenKeyword> for Token {
+    fn from(value: TokenKeyword) -> Self {
+        Self::Keyword(value)
+    }
+}
+
+impl From<EqualOperation> for Token {
+    fn from(value: EqualOperation) -> Self {
+        Self::EqualOperation(value)
+    }
+}
+
+impl From<OneSidedOperation> for Token {
+    fn from(value: OneSidedOperation) -> Self {
+        Self::UnaryOperation(value)
+    }
+}
+
+impl From<TwoSidedOperation> for Token {
+    fn from(value: TwoSidedOperation) -> Self {
+        Self::Operation(value)
+    }
+}
+
+impl From<NumberOperation> for Token {
+    fn from(value: NumberOperation) -> Self {
+        Self::Operation(TwoSidedOperation::Number(value))
+    }
+}
+
+impl From<BoolOperation> for Token {
+    fn from(value: BoolOperation) -> Self {
+        Self::Operation(TwoSidedOperation::Bool(value))
+    }
+}
+
+impl From<CompareOperator> for Token {
+    fn from(value: CompareOperator) -> Self {
+        Self::Operation(TwoSidedOperation::Compare(value))
+    }
+}
+
+impl Display for EqualOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Equal => write!(f, "="),
+            Self::ColonEqual => write!(f, ":="),
+            Self::OperationEqual(op) => write!(f, "{op}="),
+        }
+    }
+}

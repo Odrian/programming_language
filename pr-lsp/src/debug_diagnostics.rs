@@ -1,22 +1,24 @@
-use pr_core::parser::parse1_tokenize::token::{RangedToken, Token};
-use pr_core::parser::parse2_syntactic::statement::*;
-use pr_core::Ranged;
 use std::fmt::Debug;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Range};
+use pr_common::ranged::Ranged;
+use pr_common::ranged_tree::NodeRef;
+use pr_ast::statement::*;
+use pr_ast::SyntacticResult;
+use pr_lexer::{TokenIter, TokenLinearTree};
 
 #[allow(dead_code)]
-pub fn token_diag(tokens: &Vec<RangedToken>) -> Vec<Diagnostic> {
+pub fn token_diag(tokens: &TokenLinearTree) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut debug = DebugDiagnostics::new(&mut diagnostics);
-    debug.token_diags(tokens);
+    debug.token_diags(tokens.iter());
     diagnostics
 }
 
 #[allow(dead_code)]
-pub fn statement_diag(statements: &Vec<RStatement>) -> Vec<Diagnostic> {
+pub fn statement_diag(statements: &SyntacticResult) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut debug = DebugDiagnostics::new(&mut diagnostics);
-    debug.statements_diags(statements);
+    debug.statements_diags(&statements.statements);
     diagnostics
 }
 
@@ -45,22 +47,25 @@ impl DebugDiagnostics<'_> {
     }
 
     /// add hints to all tokens
-    fn token_diags(&mut self, tokens: &Vec<RangedToken>) {
-        for RangedToken { token, range } in tokens {
-            if let Token::Bracket(body, bracket) = token {
-                let mut start1 = range.start;
-                start1.character += 1;
-                let mut end1 = range.end;
-                end1.character -= 1;
-                self.hint_diag(
-                    bracket.to_open_string().to_string(),
-                    Range::new(range.start, start1));
-                self.hint_diag(
-                    bracket.to_close_string().to_string(),
-                    Range::new(end1, range.end));
-                self.token_diags(body)
-            } else {
-                self.hint_diag(format!("{token:?}"), *range);
+    fn token_diags(&mut self, tokens: TokenIter<'_>) {
+        for (node, range) in tokens {
+            match node {
+                NodeRef::Block(bracket, body) => {
+                    let mut start1 = range.start;
+                    start1.character += 1;
+                    let mut end1 = range.end;
+                    end1.character -= 1;
+                    self.hint_diag(
+                        bracket.to_open_string().to_string(),
+                        Range::new(range.start, start1));
+                    self.hint_diag(
+                        bracket.to_close_string().to_string(),
+                        Range::new(end1, range.end));
+                    self.token_diags(body)
+                }
+                NodeRef::Elem(token) => {
+                    self.hint_diag(format!("{token:?}"), *range);
+                }
             }
         }
     }

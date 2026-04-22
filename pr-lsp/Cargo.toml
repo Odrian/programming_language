@@ -1,10 +1,17 @@
 [package]
 name = "pr-lsp"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-pr-core = { path = "../pr-core" }
+pr-common = { path = "../pr-common" }
+pr-lexer = { path = "../pr-lexer" }
+pr-ast = { path = "../pr-ast" }
+pr-ast-linked = { path = "../pr-ast-linked" }
 
-tokio = { version = "1", features = ["full"] }
-tower-lsp = "0.20"
+tokio = { workspace = true }
+tower-lsp = { workspace = true }
+
+[features]
+debug-tokens = []
+debug-statements = []
