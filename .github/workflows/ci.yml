@@ -62,14 +62,17 @@ jobs:
         shell: pwsh
         run: |
           $version = "21.1.8"
-          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/LLVM-$version-win64.exe"
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/clang+llvm-$version-x86_64-pc-windows-msvc.tar.xz"
 
-          Invoke-WebRequest -Uri $url -OutFile llvm.exe
-          Start-Process -FilePath .\llvm.exe -ArgumentList "/S" -Wait
+          Invoke-WebRequest -Uri $url -OutFile llvm.tar.xz
+          tar -xf llvm.tar.xz
 
-          Add-Content $env:GITHUB_PATH 'C:\Program Files\LLVM\bin'
-          "LLVM_SYS_211_PREFIX=C:\Program Files\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "LLVM_CONFIG_PATH=C:\Program Files\LLVM\bin\llvm-config.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $root = Get-ChildItem -Directory | Where-Object { $_.Name -like "clang+llvm-$version*" } | Select-Object -First 1
+          if (-not $root) { throw "LLVM archive directory not found" }
+
+          "LLVM_SYS_211_PREFIX=$($root.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "LLVM_CONFIG_PATH=$($root.FullName)\bin\llvm-config.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$($root.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Run tests
         shell: bash
