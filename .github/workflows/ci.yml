@@ -1,26 +1,20 @@
-name: Rust CI (with LLVM 21)
+name: Rust CI (LLVM 21)
 
 on:
   push:
   pull_request:
 
+env:
+  LLVM_VERSION: "21.1.8"
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_INCREMENTAL: 0
+
 jobs:
-  test:
-    name: Test on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    env:
-      LLVM_VERSION: 21
-      CARGO_PROFILE_DEV_DEBUG: 0
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            llvm_os: linux
-          - os: macos-latest
-            llvm_os: macos
-#          - os: windows-latest
-#            llvm_os: windows
+  test-ubuntu:
+    name: Test on Ubuntu (prebuilt LLVM image)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/llvm/libcxx-ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -32,47 +26,54 @@ jobs:
           toolchain: stable
           rustflags: ""
 
-      - name: Install LLVM 21 on Ubuntu
-        if: matrix.llvm_os == 'linux'
+      - name: Export LLVM paths
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg lsb-release
+          echo "LLVM_CONFIG_PATH=$(command -v llvm-config)" >> "$GITHUB_ENV"
+          echo "LLVM_SYS_211_PREFIX=$(llvm-config --prefix)" >> "$GITHUB_ENV"
 
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh ${LLVM_VERSION}
+      - name: Run tests
+        shell: bash
+        run: cargo test --all --verbose
 
-          sudo apt-get update
-          sudo apt-get install -y llvm-${LLVM_VERSION} llvm-${LLVM_VERSION}-dev llvm-${LLVM_VERSION}-tools
-          sudo apt-get install -y gcc libpolly-${LLVM_VERSION}-dev
+  test-macos:
+    name: Test on macOS (prebuilt LLVM tarball)
+    runs-on: macos-latest
 
-      - name: Install LLVM 21 on macOS
-        if: matrix.llvm_os == 'macos'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache prebuilt LLVM
+        uses: actions/cache@v4
+        id: llvm-cache
+        with:
+          path: ~/.cache/llvm/21.1.8
+          key: llvm-21.1.8-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Download and unpack LLVM 21.1.8
+        shell: bash
         run: |
-          brew update
-          brew install llvm@21
+          set -euo pipefail
 
-          LLVM_PREFIX="$(brew --prefix llvm@21)"
+          LLVM_PREFIX="$HOME/.cache/llvm/21.1.8"
+          if [ ! -x "$LLVM_PREFIX/bin/llvm-config" ]; then
+            mkdir -p "$LLVM_PREFIX"
+            curl -L --retry 3 \
+              -o /tmp/llvm-21.1.8-macos-arm64.tar.xz \
+              "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-macOS-ARM64.tar.xz"
+            tar -xJf /tmp/llvm-21.1.8-macos-arm64.tar.xz -C "$LLVM_PREFIX" --strip-components=1
+          fi
+
           echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
           echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=$LLVM_PREFIX/bin/llvm-config" >> "$GITHUB_ENV"
 
-      - name: Install LLVM 21 on Windows
-        if: matrix.llvm_os == 'windows'
-        shell: pwsh
-        run: |
-          $version = "21.1.8"
-          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/clang+llvm-$version-x86_64-pc-windows-msvc.tar.xz"
-
-          Invoke-WebRequest -Uri $url -OutFile llvm.tar.xz
-          tar -xf llvm.tar.xz
-
-          $root = Get-ChildItem -Directory | Where-Object { $_.Name -like "clang+llvm-$version*" } | Select-Object -First 1
-          if (-not $root) { throw "LLVM archive directory not found" }
-
-          "LLVM_SYS_211_PREFIX=$($root.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "LLVM_CONFIG_PATH=$($root.FullName)\bin\llvm-config.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "$($root.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          rustflags: ""
 
       - name: Run tests
         shell: bash
