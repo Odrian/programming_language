@@ -30,40 +30,6 @@ main :: () -> i32 {
 }
 ```
 
-### Extern
-
-`#extern` can be used to declare functions or variable from libc  
-Only extern function can be Variadic
-
-```
-FILE :: struct {}
-
-#extern
-stdout: *FILE;
-
-#extern
-abs :: (i32) -> i32;
-
-#extern
-fprintf :: (*FILE, *char, ...);
-
-main :: () -> i32 {
-    fprintf(stdout, "Hello user %d", abs(-765));
-    return 0;
-}
-```
-
-`#extern` can be used to curly brackets
-```
-FILE :: struct {}
-
-#extern {
-    stdout: *FILE;
-
-    fprintf :: (*FILE, *char, ...);
-}
-```
-
 ### Struct
 
 ```
@@ -203,7 +169,7 @@ unary `-`, `!`, `*`, `&`
 `&&`  
 `||`  
 
-### Types
+### Primitive types
 
 `void`, `bool`, `char`,  
 `i8`, `i16`, `i32`, `i64`, `i128`, `isize`,  
@@ -233,3 +199,8 @@ Integer and float may contain any number of `_` (first char must be a digit)
 * `*T` => `*U`
 * `*T` => `integer`
 * `integer` => `*T`
+
+## More documentation
+
+### [Attributes](docs/Attributes.md)  
+### [Extern](docs/Extern.md)  
