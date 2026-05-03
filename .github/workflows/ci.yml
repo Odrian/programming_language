@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test on ${{ matrix.os }}
@@ -11,6 +15,7 @@ jobs:
     env:
       LLVM_VERSION: 21
       CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_INCREMENTAL: 0
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +50,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y llvm-${LLVM_VERSION} llvm-${LLVM_VERSION}-dev llvm-${LLVM_VERSION}-tools
           sudo apt-get install -y gcc libpolly-${LLVM_VERSION}-dev
+
+      - name: Cache Homebrew downloads
+        if: matrix.os == 'macos'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/Homebrew/downloads                                                                                                                              
+            ~/Library/Caches/Homebrew/api
+          key: ${{ runner.os }}-homebrew-llvm-${{ env.LLVM_VERSION }}
 
       - name: Install LLVM 21 on macOS
         if: matrix.os == 'macos'
