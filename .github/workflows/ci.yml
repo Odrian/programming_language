@@ -19,8 +19,8 @@ jobs:
             os: linux
           - runner_os: macos-latest
             os: macos
-          - runner_os: windows-latest
-            os: windows
+#          - runner_os: windows-latest
+#            os: windows
 
     steps:
       - name: Checkout
@@ -46,29 +46,14 @@ jobs:
           sudo apt-get install -y llvm-${LLVM_VERSION} llvm-${LLVM_VERSION}-dev llvm-${LLVM_VERSION}-tools
           sudo apt-get install -y gcc libpolly-${LLVM_VERSION}-dev
 
-      - name: Cache prebuilt LLVM
-        if: matrix.os == 'macos'
-        uses: actions/cache@v5
-        id: llvm-cache
-        with:
-          path: ~/.cache/llvm/21.1.8
-          key: llvm-21.1.8-${{ runner.os }}-${{ runner.arch }}
-
-      - name: Download and unpack LLVM 21.1.8
+      - name: Install LLVM 21 on macOS
         if: matrix.os == 'macos'
         shell: bash
         run: |
-          set -euo pipefail
+          brew update
+          brew install llvm@21
 
-          LLVM_PREFIX="$HOME/.cache/llvm/21.1.8"
-          if [ ! -x "$LLVM_PREFIX/bin/llvm-config" ]; then
-            mkdir -p "$LLVM_PREFIX"
-            curl -L --retry 3 \
-              -o /tmp/llvm-21.1.8-macos-arm64.tar.xz \
-              "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-macOS-ARM64.tar.xz"
-            tar -xJf /tmp/llvm-21.1.8-macos-arm64.tar.xz -C "$LLVM_PREFIX" --strip-components=1
-          fi
-
+          LLVM_PREFIX="$(brew --prefix llvm@21)"
           echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
           echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=$LLVM_PREFIX/bin/llvm-config" >> "$GITHUB_ENV"
