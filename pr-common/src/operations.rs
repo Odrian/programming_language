@@ -66,19 +66,33 @@ impl NumberOperation {
 
 impl TwoSidedOperation {
     pub const fn get_prior(&self) -> u8 {
-        match self {
-            Self::Compare(_comp_op) => 6,
+        // same as in rust
+        enum Prior {
+            Mul,
+            Add,
+            // BitShift
+            BitAnd,
+            // BitXor
+            BitOr,
+            Compare,
+            BoolAnd,
+            BoolOr,
+        }
+
+        let prior = match self {
+            Self::Compare(_comp_op) => Prior::Compare,
             Self::Number(num_op) => match num_op {
-                NumberOperation::Mul | NumberOperation::Div | NumberOperation::Rem => 5,
-                NumberOperation::Add | NumberOperation::Sub => 4,
-                NumberOperation::BitAnd => 3,
-                NumberOperation::BitOr => 2,
+                NumberOperation::Mul | NumberOperation::Div | NumberOperation::Rem => Prior::Mul,
+                NumberOperation::Add | NumberOperation::Sub => Prior::Add,
+                NumberOperation::BitAnd => Prior::BitAnd,
+                NumberOperation::BitOr => Prior::BitOr,
             }
             Self::Bool(bool_op) => match bool_op {
-                BoolOperation::And => 1,
-                BoolOperation::Or => 0,
+                BoolOperation::And => Prior::BoolAnd,
+                BoolOperation::Or => Prior::BoolOr,
             }
-        }
+        };
+        prior as u8
     }
 }
 

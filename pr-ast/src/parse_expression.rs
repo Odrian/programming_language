@@ -34,7 +34,7 @@ impl ParsingState<'_, '_, '_> {
             if ops.is_empty() {
                 return exps.pop().unwrap()
             }
-            let split_index = (0..ops.len()).min_by_key(|x| ops[*x].value.get_prior()).unwrap();
+            let split_index = (0..ops.len()).max_by_key(|x| ops[*x].value.get_prior()).unwrap();
 
             let exps_right = exps.split_off(split_index + 1);
             let ops_right = ops.split_off(split_index + 1);

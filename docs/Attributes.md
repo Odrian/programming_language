@@ -8,7 +8,7 @@ Compiletime configuration for code
 #attribute
 statement
 
-// multiple attribute, parsed left to right
+// multiple attribute, order doesnt matter
 #[attribute1, attribute2, ...]
 statement
 

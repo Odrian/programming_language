@@ -1,14 +1,14 @@
-use std::cell::RefCell;
+use crate::context_window::ObjectContextWindow;
+use crate::error::LinkingError;
+use crate::linked_statement::*;
+use crate::object::{parse_primitive_type, IntObjType, ObjType, Object, ObjectFactory};
+use crate::{FileLinkingContext, ModuleLiningContext};
 use lsp_types::Range;
+use pr_ast::statement::*;
 use pr_common::error::{Diagnostic, ErrorQueue};
 use pr_common::operations::{OneSidedOperation, TwoSidedOperation};
 use pr_common::ranged::RString;
-use pr_ast::statement::*;
-use crate::context_window::ObjectContextWindow;
-use crate::linked_statement::*;
-use crate::object::{parse_primitive_type, IntObjType, ObjType, Object, ObjectFactory};
-use crate::error::LinkingError;
-use crate::{ModuleLiningContext, FileLinkingContext};
+use std::cell::RefCell;
 
 pub fn link_objects(errors: &mut ErrorQueue, context: &mut ModuleLiningContext) {
     // TODO: parallelize, the only problem is factory, maybe just clone factory for each file?
@@ -695,9 +695,11 @@ impl FunctionLinkingContext<'_> {
                 ).add_range(literal_range))
             } else {
                 // 123
-                let mut num_type = ObjType::DEFAULT_INTEGER;
+                let num_type: ObjType;
                 if let Some(obj_type) = expected_type && matches!(obj_type, ObjType::Integer(..)) {
                     num_type = obj_type.clone();
+                } else {
+                    num_type = ObjType::DEFAULT_INTEGER
                 }
                 Ok(TypedExpression::new(
                     num_type.clone(),

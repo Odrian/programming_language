@@ -1,7 +1,7 @@
+use lsp_types::Range;
 use pr_common::error::{Diagnostic, DiagnosticString};
 use pr_common::operations::{ROneSidedOperation, RTwoSidedOperation};
 use pr_common::ranged::RString;
-use lsp_types::Range;
 
 pub struct LinkingError;
 
@@ -91,7 +91,7 @@ impl LinkingError {
 
     pub fn function_must_return(function_name: RString) -> Diagnostic {
         DiagnosticString::new(
-            format!("function {function_name} may not return")
+            format!("function {function_name} not always return")
         ).to_diag(function_name.range)
     }
 
