@@ -32,6 +32,9 @@ impl SyntacticError {
     pub fn incorrect_call(range: Range) -> Diagnostic {
         Diagnostic::new_error(range, "incorrect function call".to_string())
     }
+    pub fn unknown_attribute(range: Range, attribute: &str) -> Diagnostic {
+        Diagnostic::new_error(range, format!("unknown attribute {attribute}"))
+    }
 }
 
 pub struct ExpectedError {

@@ -79,9 +79,9 @@ fn test_parse_brackets() {
     assert_has_error("{");
     assert_has_error("}");
     assert_has_error("{)");
-    assert_has_error("{})");
+    assert_has_error("{}]");
 
-    assert_no_error("{({(())})}");
+    assert_no_error("{([{(([]))}])}");
 
     assert_result("()", build_no_meta![
         [ BracketType::Round;

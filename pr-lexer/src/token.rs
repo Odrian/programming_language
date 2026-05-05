@@ -16,6 +16,7 @@ pub enum Token {
     Colon,                      // :
     DoubleColon,                // ::
     Arrow,                      // ->
+    Hashtag,                    // #
 
     EqualOperation(EqualOperation),
     Operation(TwoSidedOperation),
@@ -32,8 +33,6 @@ pub enum TokenKeyword {
     If, While, For,
     Return,
     Import,
-    Extern,
-    Cfg,
 }
 
 /// `TwoSidedOperation` must not change type

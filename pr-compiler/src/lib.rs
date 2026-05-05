@@ -164,6 +164,7 @@ fn tokens_to_str(tokens: TokenIter<'_>, layer: u8) -> String {
                 Token::Colon => format!(": {range}"),
                 Token::DoubleColon => format!(":: {range}"),
                 Token::Arrow => format!("-> {range}"),
+                Token::Hashtag => format!("# {range}")
             }
             NodeRef::Block(bracket, body) => {
                 let body = tokens_to_str(body, layer + 1);

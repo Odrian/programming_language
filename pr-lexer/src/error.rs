@@ -16,12 +16,12 @@ impl TokenizeError {
     }
     pub fn bracket_not_closed(bracket: BracketType) -> DiagnosticString {
         DiagnosticString::new(format!(
-            "{} bracket not closed", bracket.to_string()
+            "{} not closed", bracket.to_string()
         ))
     }
     pub fn bracket_not_opened(bracket: BracketType) -> DiagnosticString {
         DiagnosticString::new(format!(
-            "{} bracket not opened", bracket.to_string()
+            "{} not opened", bracket.to_string()
         ))
     }
     pub fn wrong_bracket_closed(expected_bracket: BracketType, actual_bracket: BracketType) -> DiagnosticString {

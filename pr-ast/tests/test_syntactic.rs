@@ -1,10 +1,10 @@
+use pr_ast::parse_ast;
+use pr_ast::statement::*;
 use pr_common::error::ErrorQueue;
 use pr_common::operations::*;
 use pr_common::ranged::RString;
-use pr_lexer::tokenize;
-use pr_ast::statement::*;
-use pr_ast::parse_ast;
 use pr_common::Target;
+use pr_lexer::tokenize;
 
 fn parse_global(text: &str) -> Result<Vec<Statement>, ErrorQueue> {
     let mut errors = ErrorQueue::default();
@@ -409,4 +409,13 @@ fn test_semicolons_correctness() {
     assert_has_error("a = 0 a = 0");
     assert_has_error("foo() foo()");
     assert_has_error_global("import x import x");
+}
+
+#[test]
+fn test_attributes() {
+    assert_no_error("#cfg(true) foo()");
+    assert_no_error("#cfg(true) #cfg(true) foo()");
+    assert_no_error("#[cfg(true), cfg(true)] foo()");
+    assert_has_error("#[cfg(true) cfg(true)] foo()");
+    assert_has_error("{ #cfg(true) }");
 }

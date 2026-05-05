@@ -1,13 +1,13 @@
-use std::str::Chars;
+use crate::error::TokenizeError;
+use crate::token::*;
+use crate::{TokenLinearTree, TokenTreeBuilder};
 use lsp_types::{Position, Range};
 use pr_common::{
     error::ErrorQueue,
     operations::*,
     BracketType,
 };
-use crate::{TokenTreeBuilder, TokenLinearTree};
-use crate::error::TokenizeError;
-use crate::token::*;
+use std::str::Chars;
 
 pub fn parse_tokens(errors: &mut ErrorQueue, text: &str) -> TokenLinearTree {
     let mut tree = TokenTreeBuilder::new();
@@ -232,6 +232,7 @@ const fn parse_open_bracket(char: char) -> Option<BracketType> {
     match char {
         '{' => Some(BracketType::Curly),
         '(' => Some(BracketType::Round),
+        '[' => Some(BracketType::Square),
         _ => None
     }
 }
@@ -240,6 +241,7 @@ const fn parse_close_bracket(char: char) -> Option<BracketType> {
     match char {
         '}' => Some(BracketType::Curly),
         ')' => Some(BracketType::Round),
+        ']' => Some(BracketType::Square),
         _ => None
     }
 }
@@ -358,13 +360,17 @@ pub fn split_text_without_brackets(
                 let token = Token::Semicolon;
                 state.add(1, token);
             }
-            '{' | '}' | '(' | ')' | '\'' | '"' | '`' => {
+            '#' => {
+                let token = Token::Hashtag;
+                state.add(1, token);
+            }
+            '{' | '}' | '(' | ')' | '[' | ']' | '\'' | '"' | '`' => {
                 unreachable!()
             }
             _ if char.is_ascii_whitespace() => {
                 state.add_whitespace(char);
             }
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '#' => {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
                 state.use_char_in_string(char);
             }
             '.' if state.is_buffer_number => {
@@ -457,8 +463,6 @@ impl<'a> TokenizeState<'a> {
                     "for" => TokenKeyword::For.into(),
                     "while" => TokenKeyword::While.into(),
                     "import" => TokenKeyword::Import.into(),
-                    "#extern" => TokenKeyword::Extern.into(),
-                    "#cfg" => TokenKeyword::Cfg.into(),
                     _ => Token::String(token_text)
                 }
             };
