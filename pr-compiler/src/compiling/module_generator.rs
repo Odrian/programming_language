@@ -1,17 +1,17 @@
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use inkwell::values::{BasicValueEnum, BasicMetadataValueEnum, FunctionValue, PointerValue, AnyValue, BasicValue};
-use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
+use super::context_window::ValueContextWindow;
+use crate::error::LLVMError;
+use crate::CompileConfig;
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
-use pr_common::ranged::RString;
-use pr_common::operations::*;
-use pr_ast_linked::LinkedFile;
-use pr_ast_linked::object::*;
+use inkwell::values::{AnyValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue};
+use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
 use pr_ast_linked::linked_statement::*;
-use crate::CompileConfig;
-use crate::error::LLVMError;
-use super::context_window::ValueContextWindow;
+use pr_ast_linked::object::*;
+use pr_ast_linked::LinkedFile;
+use pr_common::operations::*;
+use pr_common::ranged::RString;
+use std::cmp::Ordering;
+use std::collections::HashMap;
 
 pub fn parse_file<'ctx>(
     config: &'ctx CompileConfig,
@@ -475,9 +475,31 @@ mod declaration_parsing {
                 LinkedLiteralExpression::IntLiteral(literal, object_type) => {
                     let int_type = self.parse_type(&object_type).into_int_type();
 
-                    // FIXME: can't parse i128. Uncomment test for i128
-                    let value = literal.parse::<u64>().unwrap(); // FIXME: return error
-                    let int_value = int_type.const_int(value, true);
+                    let int_value = match int_type.get_bit_width() {
+                        0..=64 => {
+                            let value = literal.parse::<u64>()
+                                .map_err(|err| LLVMError::parse_int_literal_error(&literal, &err.to_string()))?;
+                            let max_type_value = u64::MAX >> (64 - int_type.get_bit_width());
+                            if value > max_type_value {
+                                return Err(LLVMError::parse_int_literal_error(&literal, "number too large to fit in target type"))
+                            }
+                            int_type.const_int(value, false)
+                        }
+                        128 => {
+                            let value = literal.parse::<u128>()
+                                .map_err(|err| LLVMError::parse_int_literal_error(&literal, &err.to_string()))?;
+
+                            let low = value as u64;
+                            let high = (value >> 64) as u64;
+
+                            if high == 0 {
+                                int_type.const_int(low, false)
+                            } else {
+                                int_type.const_int_arbitrary_precision(&[low, high])
+                            }
+                        }
+                        x => unreachable!("bit width {}", x)
+                    };
                     Ok(Some(int_value.into()))
                 }
                 LinkedLiteralExpression::FloatLiteral(float, float_type) => {

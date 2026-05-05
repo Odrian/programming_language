@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use inkwell::builder::BuilderError;
 use lsp_types::Range;
 use pr_common::error::{Diagnostic, DiagnosticString};
+use std::path::PathBuf;
 
 
 pub enum LLVMError {
@@ -59,6 +59,9 @@ impl LLVMError {
     }
     pub fn file_writing_error(filepath: String, what: String, io_error: String) -> LLVMError {
         Self::Error(format!("while writing {what} to file {filepath}: {io_error}"))
+    }
+    pub fn parse_int_literal_error(literal: &str, error: &str) -> Self {
+        Self::Error(format!("incorrect int literal \"{literal}\": {error}"))
     }
 }
 

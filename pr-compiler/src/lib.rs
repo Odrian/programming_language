@@ -1,15 +1,15 @@
+use crate::error::LLVMError;
+use clap::Parser;
+use pr_ast::SyntacticResult;
+use pr_ast_linked::LinkedFile;
+use pr_common::error::{range_to_str, ErrorQueue};
+use pr_common::ranged_tree::NodeRef;
+use pr_common::Target;
+use pr_lexer::token::Token;
+use pr_lexer::{TokenIter, TokenLinearTree};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::PathBuf;
-use clap::Parser;
-use pr_common::error::{range_to_str, ErrorQueue};
-use pr_common::ranged_tree::NodeRef;
-use pr_lexer::token::Token;
-use pr_lexer::{TokenIter, TokenLinearTree};
-use pr_ast::SyntacticResult;
-use pr_ast_linked::LinkedFile;
-use pr_common::Target;
-use crate::error::LLVMError;
 
 pub mod compiling;
 mod error;

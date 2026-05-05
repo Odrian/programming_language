@@ -58,7 +58,7 @@ main :: () -> i32 {
 
 #[test]
 fn test_literals() {
-    assert_eq!(1, get_exit_code_main_return("257u8 as i32"));
+    assert_eq!(1, get_exit_code_main_return("257 as u8 as i32"));
     assert_eq!(0, get_exit_code_main_return("((-1 as u128) + 1_u128) as i32"));
     assert_eq!(1, get_exit_code_main_return(&format!("('a' as i32 == {}) as i32", 'a' as i32)));
     assert_eq!(1, get_exit_code_main_return(&format!("({}_u8 as char == 'a') as i32", 'a' as i32)));
@@ -90,17 +90,16 @@ main :: () -> i32 {
     assert_eq!(actual_count as i32, get_exit_code(program));
 }
 
-// FIXME: uncomment when fixed
-/*
 #[test]
 fn test_max_u128() {
     let program = "\
 main :: () -> i32 {
     x := 340282366920938463463374607431768211455_u128;
+    if x + 1 != 0 { return -1; }
     count := 0;
-    while x > 0_u128 {
+    while x > 0 {
         count += 1;
-        x /= 10_u128;
+        x /= 10;
     }
     return count;
 }
@@ -108,7 +107,7 @@ main :: () -> i32 {
     let actual_count = "340282366920938463463374607431768211455".chars().count();
     assert_eq!(actual_count as i32, get_exit_code(program));
 }
-*/
+
 #[test]
 fn test_float() {
     // TODO: test floats
