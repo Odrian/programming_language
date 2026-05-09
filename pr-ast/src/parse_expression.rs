@@ -9,13 +9,23 @@ use pr_lexer::token::Token;
 
 impl ParsingState<'_, '_, '_> {
     pub fn parse_expression(&mut self, in_cond: bool) -> Result<RExpression, ()> {
-        let mut expressions = Vec::<RExpression>::new();
-        let mut operations = Vec::<RTwoSidedOperation>::new();
+        let mut expressions_stack = Vec::<RExpression>::new();
+        let mut operations_stack = Vec::<RTwoSidedOperation>::new();
         // let mut range = Range::default();
+
+        fn reduce_top(expr_stack: &mut Vec<RExpression>, op_stack: &mut Vec<RTwoSidedOperation>) {
+            assert!(expr_stack.len() >= 2);
+            assert!(op_stack.len() >= 1);
+            let rhs = expr_stack.pop().unwrap();
+            let lhs = expr_stack.pop().unwrap();
+            let op = op_stack.pop().unwrap();
+            let range = Range::new(lhs.range.start, rhs.range.end);
+            expr_stack.push(Expression::new_operation(lhs, rhs, op).add_range(range));
+        }
 
         loop {
             let next_expression = self.parse_expression_without_ops(false, in_cond)?;
-            expressions.push(next_expression);
+            expressions_stack.push(next_expression);
 
             let Some((token, _range)) = self.peek() else {
                 break;
@@ -26,28 +36,31 @@ impl ParsingState<'_, '_, '_> {
             let (token, range) = self.next_unwrap(|_| unreachable!())?;
             let Node::Elem(Token::Operation(op)) = token else { unreachable!() };
             // range = range2;
-            operations.push(op.add_range(range));
-        }
 
-        // FIXME: speed up to O(n log n)
-        fn create_expression(mut exps: Vec<RExpression>, mut ops: Vec<RTwoSidedOperation>) -> RExpression {
-            if ops.is_empty() {
-                return exps.pop().unwrap()
+            // this creates expression from n operations in O(n)
+            {
+                // while can do  (... a * b + c ...) => (... (a * b) + c ... ) where + is `op`
+                while let Some(top) = operations_stack.last() {
+                    // <= for left-associative, < for right-associative
+                    if top.value.get_prior() <= op.get_prior() {
+                        reduce_top(&mut expressions_stack, &mut operations_stack);
+                    } else {
+                        break;
+                    }
+                }
             }
-            let split_index = (0..ops.len()).max_by_key(|x| ops[*x].value.get_prior()).unwrap();
 
-            let exps_right = exps.split_off(split_index + 1);
-            let ops_right = ops.split_off(split_index + 1);
-            let op_middle = ops.pop().unwrap();
-
-            let left_exp = create_expression(exps, ops);
-            let right_exp = create_expression(exps_right, ops_right);
-            let range = Range::new(left_exp.range.start, right_exp.range.end);
-            Expression::new_operation(left_exp, right_exp, op_middle).add_range(range)
+            operations_stack.push(op.add_range(range));
         }
 
-        let result = create_expression(expressions, operations);
+        while !operations_stack.is_empty() {
+            reduce_top(&mut expressions_stack, &mut operations_stack);
+        }
 
+        assert_eq!(expressions_stack.len(), 1);
+        assert_eq!(operations_stack.len(), 0);
+
+        let result = expressions_stack.pop().unwrap();
         Ok(result)
     }
     pub fn parse_expression_without_ops(
