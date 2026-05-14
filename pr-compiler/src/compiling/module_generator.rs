@@ -162,10 +162,12 @@ mod module_parsing {
         }
         fn get_const_value(&self, object: Object, value: TypedExpression) -> Result<BasicValueEnum<'ctx>, LLVMError> {
             let TypedExpression { object_type: _, expr } = value;
-            let LinkedExpression::Literal(LinkedLiteralExpression::Undefined(obj_type)) = expr else {
+            let LinkedExpression::Literal(LinkedLiteralExpression::Undefined { obj_type, is_zeroed }) = expr else {
                 return Err(LLVMError::global_with_value(self.get_object_name(object).value.clone()));
             };
-            Ok(get_undef(self.parse_type(&obj_type)))
+            let value_type = self.parse_type(&obj_type);
+            let value = if is_zeroed { value_type.const_zero() } else { get_undef(value_type) };
+            Ok(value)
         }
         fn create_function(&mut self, object: Object, statement: &GlobalLinkedStatement) {
             let GlobalLinkedStatement::Function { args, returns, body: _ } = statement else { unreachable!() };
@@ -468,9 +470,10 @@ mod declaration_parsing {
         }
         fn parse_literal(&self, literal: LinkedLiteralExpression) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
             match literal {
-                LinkedLiteralExpression::Undefined(obj_type) => {
+                LinkedLiteralExpression::Undefined { obj_type, is_zeroed} => {
                     let value_type = self.parse_type(&obj_type);
-                    Ok(Some(get_undef(value_type)))
+                    let value = if is_zeroed { value_type.const_zero() } else { get_undef(value_type) };
+                    Ok(Some(value))
                 }
                 LinkedLiteralExpression::IntLiteral(literal, object_type) => {
                     let int_type = self.parse_type(&object_type).into_int_type();

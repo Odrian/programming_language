@@ -604,14 +604,14 @@ impl FunctionLinkingContext<'_> {
     }
     fn parse_literal(&self, literal: LiteralExpression, literal_range: Range, expected_type: Option<&ObjType>) -> Result<RTypedExpression, ()> {
         match literal {
-            LiteralExpression::Undefined => {
+            LiteralExpression::Undefined { is_zeroed } => {
                 let Some(obj_type) = expected_type else {
                     self.add_diag(LinkingError::cant_determine_type(literal_range));
                     return Err(())
                 };
                 Ok(TypedExpression::new(
                     obj_type.clone(),
-                    LinkedLiteralExpression::Undefined(obj_type.clone()).into(),
+                    LinkedLiteralExpression::Undefined { obj_type: obj_type.clone(), is_zeroed }.into(),
                 ).add_range(literal_range))
             }
             LiteralExpression::NumberLiteral(string) => {

@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::fmt::Debug;
+use crate::object::{FloatObjType, IntObjType, ObjType, Object, ObjectFactory};
 use lsp_types::Range;
 use pr_common::operations::{ROneSidedOperation, RTwoSidedOperation};
 use pr_common::ranged::Ranged;
-use crate::object::{Object, ObjType, FloatObjType, IntObjType, ObjectFactory};
+use std::collections::HashMap;
+use std::fmt::Debug;
 
 pub type RTypedExpression = Ranged<TypedExpression>;
 pub type RLinkedStatement = Ranged<LinkedStatement>;
@@ -60,7 +60,7 @@ pub enum LinkedExpression {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LinkedLiteralExpression {
-    Undefined(ObjType),
+    Undefined { obj_type: ObjType, is_zeroed: bool },
     /// `ObjType` always `IntObjType`
     IntLiteral(String, ObjType),
     /// `ObjType` always `FloatObjType`
@@ -295,7 +295,10 @@ impl LinkedExpression {
 impl LinkedLiteralExpression {
     pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
         match self {
-            Self::Undefined(_) => "---".to_string(),
+            Self::Undefined { obj_type: _, is_zeroed } => match is_zeroed {
+                false => "---".to_string(),
+                true => "#zeroed".to_string(),
+            },
             Self::IntLiteral(number, object_type) => {
                 let object_type = object_type.to_string::<WITH_ID>(factory);
                 format!("{number}_{object_type}")

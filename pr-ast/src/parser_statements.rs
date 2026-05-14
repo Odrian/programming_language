@@ -242,7 +242,7 @@ impl ParsingState<'_, '_, '_> {
                 let (token, _) = self.next_unwrap(|s|
                     (ExpectedEnum::Equal | ExpectedEnum::Semicolon).diagnostic(s.all_range))?;
                 if matches!(token, Node::Elem(Token::Semicolon)) {
-                    let expression: Expression = LiteralExpression::Undefined.into();
+                    let expression: Expression = LiteralExpression::Undefined { is_zeroed: true }.into();
                     let expression = expression.add_no_range();
                     let range_st = Range::new(name.range.start, expression.range.end);
                     let statement = Statement::new_variable(name, Some(typee), expression);

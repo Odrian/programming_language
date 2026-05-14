@@ -1,7 +1,7 @@
-use std::fmt;
 use lsp_types::Range;
 use pr_common::operations::{ROneSidedOperation, RTwoSidedOperation};
 use pr_common::ranged::{RString, Ranged};
+use std::fmt;
 
 pub type RStatement = Ranged<Statement>;
 pub type RTypee = Ranged<Typee>;
@@ -70,7 +70,7 @@ pub enum Expression {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum LiteralExpression {
-    Undefined,
+    Undefined { is_zeroed: bool },
     NumberLiteral(String),
     BoolLiteral(bool),
     CharLiteral(u8),
@@ -311,7 +311,10 @@ impl fmt::Display for Expression {
 impl fmt::Display for LiteralExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Undefined => write!(f, "---"),
+            Self::Undefined { is_zeroed } => match is_zeroed {
+                false => write!(f, "---"),
+                true => write!(f, "#zeroed"),
+            }
             Self::NumberLiteral(number) => write!(f, "{number}"),
             Self::BoolLiteral(value) => match value {
                 true => write!(f, "true"),

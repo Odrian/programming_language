@@ -104,7 +104,7 @@ impl ParsingState<'_, '_, '_> {
                     };
 
                     let range = Range::new(range.start, range2.end);
-                    let undef_expression = Expression::from(LiteralExpression::Undefined).add_range(range);
+                    let undef_expression = Expression::from(LiteralExpression::Undefined { is_zeroed: false }).add_range(range);
                     // return Ok(undef_expression); // no operators on undef token
                     return self.parse_expression2_without_ops(undef_expression, false, in_cond)
                 }
