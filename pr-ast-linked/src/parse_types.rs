@@ -102,6 +102,7 @@ impl TypeResolver<'_> {
         let linked_statement = GlobalLinkedStatement::new_struct(linked_fields, field_names);
         self.context.type_statements_order.push(object);
         self.context.type_statements.insert(object, linked_statement);
+        *self.context.factory.get_type_mut(object) = ObjType::Struct(object);
 
         Ok(())
     }

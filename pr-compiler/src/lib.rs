@@ -104,8 +104,6 @@ pub fn compile_src(errors: &mut ErrorQueue, config: &CompileConfig, base_path: P
 }
 
 pub fn compile_file(errors: &mut ErrorQueue, config: &CompileConfig, file_path: PathBuf) -> Result<(), ()> {
-    let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
-
     let statements = parse_to_statements(errors, config, file_path)?;
 
     if errors.has_errors() { return Err(()) }

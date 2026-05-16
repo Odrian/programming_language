@@ -92,6 +92,9 @@ pub fn link_module(
 
     parse_types::parse_types(errors, &mut context);
     parse_declaration_types::parse_declaration_types(errors, &mut context);
+
+    if errors.has_errors() { return context.consume() }
+
     context.factory.asset_no_unknown();
 
     parser_linked_statement::link_objects(errors, &mut context);

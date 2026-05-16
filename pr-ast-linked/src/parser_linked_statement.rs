@@ -88,7 +88,7 @@ impl FunctionLinkingContext<'_> {
     fn link_global_declaration(&mut self, object: Object, statement: RStatement) -> Result<(), ()> {
         let Statement::ExternStatement { statement } = statement.value else { unreachable!() };
         match statement {
-            ExternStatement::Variable { name, typee } => {
+            ExternStatement::Variable { name, typee: _ } => {
                 let obj_type = self.factory.get_type(object);
 
                 let extern_statement = ExternLinkedStatement::Variable { typee: obj_type.clone() };
@@ -98,7 +98,7 @@ impl FunctionLinkingContext<'_> {
                 self.result.extern_statements.insert(object, extern_statement);
                 Ok(())
             }
-            ExternStatement::Function { name, args, is_vararg, returns } => {
+            ExternStatement::Function { name, args: _, is_vararg: _, returns: _ } => {
                 let func_type = self.factory.get_type(object);
 
                 let extern_statement = ExternLinkedStatement::Function { typee: func_type.clone() };
