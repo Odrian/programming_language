@@ -81,9 +81,10 @@ pub fn compile_src(errors: &mut ErrorQueue, config: &CompileConfig, base_path: P
         }
     }
 
-    let statements = files.into_iter().map(|path| {
+    let statements = files.into_iter().map(|mut path| {
         parse_to_statements(errors, config, base_path.join(&path))
             .map(|result| {
+                path.set_extension("");
                 let path = path.to_str().expect("valid utf name").to_string();
                 (path, result)
             })
@@ -96,9 +97,8 @@ pub fn compile_src(errors: &mut ErrorQueue, config: &CompileConfig, base_path: P
 
     if errors.has_errors() { return Err(()) }
 
-    todo!("compile multimodule");
-    // compiling::parse_to_llvm(args, linked_module)
-    //     .map_err(|err| ErrorQueue::new_single_diag(err.to_diagnostic()))?;
+    compiling::parse_to_llvm(config, linked_module)
+        .map_err(|err| errors.add_diag(err.to_diagnostic()))?;
 
     Ok(())
 }
@@ -110,12 +110,14 @@ pub fn compile_file(errors: &mut ErrorQueue, config: &CompileConfig, file_path: 
 
     if errors.has_errors() { return Err(()) }
 
-    let linked_file = pr_ast_linked::link_file(errors, statements);
-    if config.args.gen_last { generate_last_file(errors, &filename, &linked_file) }
+    let linked_module = pr_ast_linked::link_file(errors, statements);
+    if config.args.gen_last { linked_module.files.iter().for_each(|(file, path)|
+        generate_last_file(errors, &path, file)
+    ) }
 
     if errors.has_errors() { return Err(()) }
 
-    compiling::parse_to_llvm(config, linked_file)
+    compiling::parse_to_llvm(config, linked_module)
         .map_err(|err| errors.add_diag(err.to_diagnostic()))?;
 
     Ok(())
@@ -208,7 +210,8 @@ fn generate_ast_file(errors: &mut ErrorQueue, filename: &String, statements: &Sy
 }
 
 fn generate_last_file(errors: &mut ErrorQueue, filename: &String, linked_file: &LinkedFile) {
-    let text = [&linked_file.extern_statements, &linked_file.type_statements, &linked_file.variable_statement, &linked_file.function_statement]
+    // FIXME: add file types
+    let text = [&linked_file.extern_statements, &linked_file.variable_statement, &linked_file.function_statement]
         .iter().map(|hashmap| hashmap.iter()
         .map(|(&object, statement)| statement.to_string::<true>(&linked_file.factory, object) + "\n")
         .collect::<String>()

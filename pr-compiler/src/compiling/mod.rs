@@ -1,28 +1,28 @@
 mod context_window;
 mod module_generator;
 
-use std::path::Path;
-use std::process::Command;
-use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine}, OptimizationLevel};
+use crate::error::LLVMError;
+use crate::CompileConfig;
 use inkwell::targets::TargetTriple;
+use inkwell::{context::Context, module::Module, targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine}, OptimizationLevel};
 use pr_ast_linked::linked_statement::GlobalLinkedStatement;
 use pr_ast_linked::object::{IntObjType, ObjType};
-use pr_ast_linked::LinkedFile;
-use crate::CompileConfig;
-use crate::error::LLVMError;
+use pr_ast_linked::LinkedModule;
+use std::path::Path;
+use std::process::Command;
 
 /// previous steps guarantees that every used variables is valid
-pub fn parse_to_llvm(config: &CompileConfig, linked_file: LinkedFile) -> Result<(), LLVMError> {
+pub fn parse_to_llvm(config: &CompileConfig, linked_module: LinkedModule) -> Result<(), LLVMError> {
     Target::initialize_all(&InitializationConfig::default());
     let context = Context::create();
 
-    verify_main_signature(&linked_file)?;
+    verify_have_main_signature(&linked_module)?;
 
     let target_machine = create_target_machine(config);
     let target_data = target_machine.get_target_data();
     assert_eq!(target_data.get_pointer_byte_size(None) * 8, config.target.pointer_width as u32);
 
-    let module = module_generator::parse_file(config, &context, &target_data, linked_file)?;
+    let module = module_generator::parse_file(config, &context, &target_data, linked_module)?;
     module.set_triple(&target_machine.get_triple());
 
     if let Err(err) = module.verify() {
@@ -33,20 +33,29 @@ pub fn parse_to_llvm(config: &CompileConfig, linked_file: LinkedFile) -> Result<
     Ok(())
 }
 
-fn verify_main_signature(linked_module: &LinkedFile) -> Result<(), LLVMError> {
-    for (object, statement) in &linked_module.function_statement {
-        if let GlobalLinkedStatement::Function { returns, args, body: _body } = statement {
-            let name = linked_module.factory.get_name(*object);
-            if name.value == "main" {
-                if returns != &ObjType::Integer(IntObjType::I32) {
-                    return Err(LLVMError::incorrect_main_signature(name.range))
+fn verify_have_main_signature(linked_module: &LinkedModule) -> Result<(), LLVMError> {
+    let mut found = false;
+    for (linked_file, _) in &linked_module.files {
+        for (object, statement) in &linked_file.function_statement {
+            if let GlobalLinkedStatement::Function { returns, args, body: _body } = statement {
+                let name = linked_module.factory.get_name(*object);
+                if name.value == "main" {
+                    if returns != &ObjType::Integer(IntObjType::I32) {
+                        return Err(LLVMError::incorrect_main_signature(name.range))
+                    }
+                    if args != &vec![] {
+                        return Err(LLVMError::incorrect_main_signature(name.range))
+                    }
+                    if found {
+                        return Err(LLVMError::second_main_function(name.range))
+                    }
+                    found = true;
                 }
-                if args != &vec![] {
-                    return Err(LLVMError::incorrect_main_signature(name.range))
-                }
-                return Ok(())
             }
         }
+    }
+    if found {
+        return Ok(())
     }
     Err(LLVMError::no_main_function())
 }

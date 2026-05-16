@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use crate::error::LinkingError;
+use crate::object::Object;
+use crate::ModuleLiningContext;
 use pr_ast::statement::{ComptimeStatement, Statement};
 use pr_common::error::ErrorQueue;
 use pr_common::ranged::RString;
-use crate::error::LinkingError;
-use crate::ModuleLiningContext;
-use crate::object::Object;
+use std::collections::HashMap;
 
 pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext) {
     let mut path_map = HashMap::new();
@@ -19,6 +19,7 @@ pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext)
     let mut new_names: Vec<Vec<(RString, Object)>> = vec![Default::default(); imports.len()];
 
     for (file_id, import_statements) in imports.into_iter().enumerate() {
+        let new_names = &mut new_names[file_id];
         let file_path = &context.file_paths[file_id];
         for import_statement in import_statements {
             let Statement::ComptimeStatement(statement) = import_statement.value else { unreachable!() };
@@ -39,10 +40,10 @@ pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext)
 
                 match as_name {
                     Some(name) => {
-                        new_names[file_id].push((name, object));
+                        new_names.push((name, object));
                     }
                     None => {
-                        new_names[file_id].push((name, object));
+                        new_names.push((name, object));
                     }
                 }
             }
@@ -78,19 +79,22 @@ fn parse_path(module_path: String, from: impl Iterator<Item=RString>) -> String 
     for delta in from {
         let delta = delta.value;
 
+        assert!(!delta.contains('\\'));
         match delta.as_str() {
             "super" => {
                 if let Some(index) = path.rfind("\\") {
                     path.truncate(index)
+                } else if !path.is_empty() {
+                    path.clear();
                 } else {
                     panic!("can't use super out of module");
-                    // path.clear();
-                    // path.push_str("..");
                 }
             }
             "self" => {}
             _ => {
-                path.push('\\');
+                if !path.is_empty() {
+                    path.push('\\');
+                }
                 path.push_str(&delta);
             }
         }

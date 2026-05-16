@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-use pr_common::error::{Diagnostic, ErrorQueue};
-use pr_common::ranged::RString;
-use pr_ast::statement::{DeclarationStatement, RStatement, RTypee, Statement, Typee};
 use crate::dependency_resolver::DependencyResolver;
 use crate::error::LinkingError;
 use crate::linked_statement::GlobalLinkedStatement;
 use crate::object::{parse_primitive_type, ObjType, Object};
 use crate::ModuleLiningContext;
+use pr_ast::statement::{DeclarationStatement, RStatement, RTypee, Statement, Typee};
+use pr_common::error::{Diagnostic, ErrorQueue};
+use pr_common::ranged::RString;
+use std::collections::HashMap;
 
 pub fn parse_types(errors: &mut ErrorQueue, context: &mut ModuleLiningContext) {
     let mut resolver = TypeResolver::new(errors, context);
@@ -100,9 +100,8 @@ impl TypeResolver<'_> {
         self.dependency_resolver.key_done(object);
 
         let linked_statement = GlobalLinkedStatement::new_struct(linked_fields, field_names);
-        let file = &mut self.context.files[file_id];
-        file.result.type_statements_order.push(object);
-        file.result.type_statements.insert(object, linked_statement);
+        self.context.type_statements_order.push(object);
+        self.context.type_statements.insert(object, linked_statement);
 
         Ok(())
     }
@@ -123,7 +122,7 @@ impl TypeResolver<'_> {
                     return Err(LinkingError::name_not_found(RString::new(string.clone(), typee.range)))
                 }
 
-                if is_ref || file.result.type_statements.contains_key(&object) {
+                if is_ref || self.context.type_statements.contains_key(&object) {
                     Ok(ObjType::Struct(object))
                 } else {
                     dependencies.push(object);

@@ -144,4 +144,12 @@ impl ObjectFactory {
     pub fn get_name(&self, object: Object) -> &RString {
         &self.array_name[object.id as usize]
     }
+    pub fn asset_no_unknown(&self) {
+        for (index, typee) in self.array_type.iter().enumerate() {
+            if typee == &ObjType::Unknown {
+                let name = &self.array_name[index];
+                panic!("object '{name}' at {:?} somehow has unknown type", name.range)
+            }
+        }
+    }
 }

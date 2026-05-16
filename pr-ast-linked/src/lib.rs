@@ -5,44 +5,51 @@ mod error;
 mod dependency_resolver;
 mod context_window;
 
-mod parse_imports;
-mod parser_linked_statement;
 mod parse_available_names;
+mod parse_imports;
 mod parse_types;
+mod parse_declaration_types;
+mod parser_linked_statement;
 
-use std::collections::HashMap;
-use pr_common::error::ErrorQueue;
-use pr_ast::statement::RStatement;
 use linked_statement::GlobalLinkedStatement;
 use object::{Object, ObjectFactory};
+use pr_ast::statement::RStatement;
 use pr_ast::SyntacticResult;
+use pr_common::error::ErrorQueue;
+use std::collections::HashMap;
+use std::sync::Arc;
 
+#[derive(Default)]
 struct ModuleLiningContext {
     factory: ObjectFactory,
 
     files: Vec<FileLinkingContext>,
     file_paths: Vec<String>,
+    type_statements: HashMap<Object, GlobalLinkedStatement>,
+    type_statements_order: Vec<Object>, // consumed in parse_types
 }
 
 impl ModuleLiningContext {
     fn consume(self) -> LinkedModule {
-        let factory = self.factory; // TODO: clone in parse_linked_statements
+        let factory = Arc::new(self.factory);
 
         let files = (self.files.into_iter()).zip(self.file_paths.into_iter()).map(|(m, path)| {
             let mut result = m.result;
-            result.factory = factory.clone();
+            result.factory = factory.clone(); // FIXME: bad
             (result, path)
         }).collect();
 
         LinkedModule {
             factory,
             files,
+            type_statements: self.type_statements,
+            type_statements_order: self.type_statements_order,
         }
     }
 }
 
 #[derive(Default)]
-pub struct FileLinkingContext {
+struct FileLinkingContext {
     file_id: usize,
 
     available_names: HashMap<String, Object>,
@@ -57,18 +64,17 @@ pub struct FileLinkingContext {
 }
 
 pub struct LinkedModule {
-    pub factory: ObjectFactory,
+    pub factory: Arc<ObjectFactory>,
 
+    pub type_statements: HashMap<Object, GlobalLinkedStatement>,
+    pub type_statements_order: Vec<Object>, // consumed in parse_types
     pub files: Vec<(LinkedFile, String)>,
 }
 
 #[derive(Debug, Default)]
 pub struct LinkedFile {
-    pub factory: ObjectFactory,
+    pub factory: Arc<ObjectFactory>,
 
-    // pub import_statements: Vec<Object>,
-    pub type_statements_order: Vec<Object>,
-    pub type_statements: HashMap<Object, GlobalLinkedStatement>,
     pub extern_statements: HashMap<Object, GlobalLinkedStatement>,
     pub function_statement: HashMap<Object, GlobalLinkedStatement>,
     pub variable_statement: HashMap<Object, GlobalLinkedStatement>,
@@ -85,6 +91,8 @@ pub fn link_module(
     parse_imports::parse_imports(errors, &mut context);
 
     parse_types::parse_types(errors, &mut context);
+    parse_declaration_types::parse_declaration_types(errors, &mut context);
+    context.factory.asset_no_unknown();
 
     parser_linked_statement::link_objects(errors, &mut context);
 
@@ -94,12 +102,8 @@ pub fn link_module(
 pub fn link_file(
     errors: &mut ErrorQueue,
     statements: SyntacticResult,
-) -> LinkedFile {
-    let mut module = link_module(
-        errors,
-        vec![("unused string".to_string(), statements)]
-    );
-    module.files.pop().unwrap().0
+) -> LinkedModule {
+    link_module(errors, vec![("unused string".to_string(), statements)])
 }
 
 fn create_context(
@@ -108,8 +112,7 @@ fn create_context(
 ) -> ModuleLiningContext {
     let mut global_context = ModuleLiningContext {
         factory: ObjectFactory::default(),
-        files: vec![],
-        file_paths: vec![],
+        ..Default::default()
     };
 
     for (file_id, (path, result)) in statements.into_iter().enumerate() {

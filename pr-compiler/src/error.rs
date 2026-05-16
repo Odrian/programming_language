@@ -21,6 +21,12 @@ impl LLVMError {
             "Error: No main function".to_string()
         )
     }
+    pub fn second_main_function(range: Range) -> Self {
+        Self::RangedError(
+            "Error: Two main functions".to_string(),
+            range
+        )
+    }
     pub fn incorrect_main_signature(range: Range) -> Self {
         Self::RangedError(
             "Error: incorrect main signature, only () -> Diagnostic i32 allowed".to_string(),

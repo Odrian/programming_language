@@ -1,9 +1,9 @@
-use pr_common::error::ErrorQueue;
-use pr_common::operations::*;
-use pr_common::Target;
 use pr_ast_linked::linked_statement::*;
 use pr_ast_linked::object::*;
 use pr_ast_linked::LinkedFile;
+use pr_common::error::ErrorQueue;
+use pr_common::operations::*;
+use pr_common::Target;
 
 fn parse(text: &str) -> Result<LinkedFile, ErrorQueue> {
     let mut errors = ErrorQueue::default();
@@ -13,7 +13,8 @@ fn parse(text: &str) -> Result<LinkedFile, ErrorQueue> {
     if errors.has_errors() {
         return Err(errors)
     }
-    let file = pr_ast_linked::link_file(&mut errors, statements);
+    let mut file = pr_ast_linked::link_file(&mut errors, statements);
+    let file = file.files.pop().unwrap().0;
     if errors.has_errors() {
         return Err(errors)
     }
