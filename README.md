@@ -4,6 +4,8 @@
 
 # My Programming language
 
+Every line of code was written by hand because I love programming.
+
 ### Usage
 
 Create directory `src` with flie `main.pr` with code.  
@@ -204,3 +206,4 @@ Integer and float may contain any number of `_` (first char must be a digit)
 
 ### [Attributes](docs/Attributes.md)  
 ### [Extern](docs/Extern.md)  
+### [Modules](docs/Module.md)
