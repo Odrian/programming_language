@@ -1,12 +1,12 @@
+use core::fmt::Debug;
 use pr_ast::SyntacticResult;
 use pr_ast::statement::*;
 use pr_common::ranged::Ranged;
 use pr_common::ranged_tree::NodeRef;
 use pr_lexer::{TokenIter, TokenLinearTree};
-use std::fmt::Debug;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Range};
 
-#[allow(dead_code)]
+#[cfg_attr(not(feature = "debug-tokens"), expect(dead_code))]
 pub fn token_diag(tokens: &TokenLinearTree) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut debug = DebugDiagnostics::new(&mut diagnostics);
@@ -14,7 +14,7 @@ pub fn token_diag(tokens: &TokenLinearTree) -> Vec<Diagnostic> {
     diagnostics
 }
 
-#[allow(dead_code)]
+#[cfg_attr(not(feature = "debug-statements"), expect(dead_code))]
 pub fn statement_diag(statements: &SyntacticResult) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut debug = DebugDiagnostics::new(&mut diagnostics);
@@ -43,7 +43,9 @@ impl DebugDiagnostics<'_> {
         self.hint_diag(format!("{:?}", ranged.value), ranged.range)
     }
     fn hint_ranged_option<T: Debug>(&mut self, ranged: &Option<Ranged<T>>) {
-        ranged.as_ref().map(|r| self.hint_ranged(r));
+        if let Some(r) = ranged.as_ref() {
+            self.hint_ranged(r)
+        }
     }
 
     /// add hints to all tokens
@@ -55,8 +57,8 @@ impl DebugDiagnostics<'_> {
                     start1.character += 1;
                     let mut end1 = range.end;
                     end1.character -= 1;
-                    self.hint_diag(bracket.to_open_string().to_string(), Range::new(range.start, start1));
-                    self.hint_diag(bracket.to_close_string().to_string(), Range::new(end1, range.end));
+                    self.hint_diag(bracket.to_open_string().to_owned(), Range::new(range.start, start1));
+                    self.hint_diag(bracket.to_close_string().to_owned(), Range::new(end1, range.end));
                     self.token_diags(body)
                 }
                 NodeRef::Elem(token) => {

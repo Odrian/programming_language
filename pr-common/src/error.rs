@@ -1,3 +1,5 @@
+use core::fmt;
+use core::fmt::Formatter;
 use lsp_types::{DiagnosticSeverity, Position, Range};
 
 pub struct DiagnosticString {
@@ -9,7 +11,7 @@ impl DiagnosticString {
         Self { message }
     }
     pub fn from_text(text: &str) -> Self {
-        Self::new(text.to_string())
+        Self::new(text.to_owned())
     }
     pub fn to_diag0(self) -> Diagnostic {
         Diagnostic::new(None, self.message, DiagnosticSeverity::ERROR)
@@ -53,26 +55,23 @@ impl Diagnostic {
     pub fn new_error_unranged(message: String) -> Self {
         Self::new(None, message, DiagnosticSeverity::ERROR)
     }
-    pub fn to_string(&self) -> String {
+    pub fn print(&self) {
+        println!("{self}")
+    }
+}
+
+impl fmt::Display for Diagnostic {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.range {
-            Some(range) => format!("{} at {}", self.message, range_to_str(range)),
-            None => format!("{}", self.message),
+            Some(range) => write!(f, "{} at {}", self.message, range_to_str(range)),
+            None => write!(f, "{}", self.message),
         }
     }
-    pub fn print(&self) {
-        println!("{}", self.to_string())
-    }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct ErrorQueue {
     vec: Vec<Diagnostic>,
-}
-
-impl Default for ErrorQueue {
-    fn default() -> Self {
-        Self { vec: Vec::new() }
-    }
 }
 
 impl ErrorQueue {

@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::Parser as _;
 use clap::builder::OsStr;
 use pr_common::Target;
 use pr_common::error::{DiagnosticString, ErrorQueue};

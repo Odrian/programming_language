@@ -13,12 +13,13 @@ impl ParsingState<'_, '_, '_> {
         let mut operations_stack = Vec::<RTwoSidedOperation>::new();
         // let mut range = Range::default();
 
+        #[expect(clippy::len_zero)]
         fn reduce_top(expr_stack: &mut Vec<RExpression>, op_stack: &mut Vec<RTwoSidedOperation>) {
             assert!(expr_stack.len() >= 2);
             assert!(op_stack.len() >= 1);
-            let rhs = expr_stack.pop().unwrap();
-            let lhs = expr_stack.pop().unwrap();
-            let op = op_stack.pop().unwrap();
+            let rhs = expr_stack.pop().expect("checked above");
+            let lhs = expr_stack.pop().expect("checked above");
+            let op = op_stack.pop().expect("checked above");
             let range = Range::new(lhs.range.start, rhs.range.end);
             expr_stack.push(Expression::new_operation(lhs, rhs, op).add_range(range));
         }
@@ -62,7 +63,7 @@ impl ParsingState<'_, '_, '_> {
         assert_eq!(expressions_stack.len(), 1);
         assert_eq!(operations_stack.len(), 0);
 
-        let result = expressions_stack.pop().unwrap();
+        let result = expressions_stack.pop().expect("checked above");
         Ok(result)
     }
     pub fn parse_expression_without_ops(&mut self, was_unary: bool, in_cond: bool) -> Result<RExpression, ()> {

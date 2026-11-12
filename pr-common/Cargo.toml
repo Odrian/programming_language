@@ -1,11 +1,20 @@
 [package]
 name = "pr-common"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+all = []
+
+[lints]
+workspace = true
 
 [dependencies]
-lsp-types = { workspace = true }
-linear-tree = { path = "../linear-tree" }
+linear-tree.workspace = true
 
+lsp-types.workspace = true
 strum = "0.28"
 strum_macros = "0.28"

@@ -81,6 +81,7 @@ fn create_executable(config: &CompileConfig, tm: &TargetMachine, module: &Module
     let executable_name = args.exe_name.clone();
 
     // create assembly file
+    #[expect(clippy::collapsible_if)]
     if args.gen_llvm {
         if let Err(err) = module.print_to_file(assembly_name) {
             return Err(LLVMError::llvm_failed_to_create_assembly(err.to_string()));
@@ -105,6 +106,7 @@ fn create_executable(config: &CompileConfig, tm: &TargetMachine, module: &Module
         None
     };
 
+    #[expect(clippy::collapsible_if)]
     if !args.gen_object {
         if let Err(err) = std::fs::remove_file(object_name.clone()) {
             return Err(LLVMError::cant_delete_object_file(object_name, err.to_string()));
@@ -116,7 +118,11 @@ fn create_executable(config: &CompileConfig, tm: &TargetMachine, module: &Module
         match status {
             Ok(exit_status) => {
                 if !exit_status.success() {
-                    let description = format!("exit with code {}", exit_status.code().unwrap());
+                    let exit_code = exit_status
+                        .code()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "unknown".to_owned());
+                    let description = format!("exit with code {exit_code}");
                     return Err(LLVMError::linker_error(description));
                 }
             }

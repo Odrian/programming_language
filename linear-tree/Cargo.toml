@@ -1,6 +1,15 @@
 [package]
 name = "linear-tree"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+all = []
+
+[lints]
+workspace = true
 
 [dependencies]

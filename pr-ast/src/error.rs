@@ -1,36 +1,36 @@
+use core::fmt::{Display, Formatter};
+use core::ops::BitOr;
 use lsp_types::Range;
 use pr_common::error::Diagnostic;
-use std::fmt::{Display, Formatter};
-use std::ops::BitOr;
 
 pub struct SyntacticError {}
 
 impl SyntacticError {
     pub fn from_text(text: &str, range: Range) -> Diagnostic {
-        Diagnostic::new_error(range, text.to_string())
+        Diagnostic::new_error(range, text.to_owned())
     }
     pub fn new_local_global(name: &str, range: Range) -> Diagnostic {
         Diagnostic::new_error(range, format!("local {name} not supported"))
     }
     pub fn unexpected_end(range: Range) -> Diagnostic {
-        Diagnostic::new_error(range, "unexpected end".to_string())
+        Diagnostic::new_error(range, "unexpected end".to_owned())
     }
 
     pub fn unnecessary_semicolon(range: Range) -> Diagnostic {
-        Diagnostic::new_hint(range, "unnecessary semicolon".to_string())
+        Diagnostic::new_hint(range, "unnecessary semicolon".to_owned())
     }
     pub fn expected_semicolon(mut range_before: Range) -> Diagnostic {
         range_before.start = range_before.end;
         range_before.end.character += 1;
 
-        Diagnostic::new_error(range_before, "expected semicolon".to_string())
+        Diagnostic::new_error(range_before, "expected semicolon".to_owned())
     }
 
     pub fn incorrect_variable_definition(range: Range) -> Diagnostic {
-        Diagnostic::new_error(range, "incorrect variable definition".to_string())
+        Diagnostic::new_error(range, "incorrect variable definition".to_owned())
     }
     pub fn incorrect_call(range: Range) -> Diagnostic {
-        Diagnostic::new_error(range, "incorrect function call".to_string())
+        Diagnostic::new_error(range, "incorrect function call".to_owned())
     }
     pub fn unknown_attribute(range: Range, attribute: &str) -> Diagnostic {
         Diagnostic::new_error(range, format!("unknown attribute {attribute}"))
@@ -59,9 +59,9 @@ pub enum ExpectedEnum {
     DoubleDot,
     TripleDot,
     Undefined,
-    #[allow(non_camel_case_types)]
+    #[expect(non_camel_case_types)]
     In_KW,
-    #[allow(non_camel_case_types)]
+    #[expect(non_camel_case_types)]
     Struct_KW,
 }
 
@@ -72,19 +72,10 @@ impl ExpectedError {
         }
     }
     pub fn diagnostic(&self, range: Range) -> Diagnostic {
-        Diagnostic::new_error(range, self.to_string())
+        Diagnostic::new_error(range, format!("expected {self}"))
     }
     pub fn diagnostic_after(&self, range: Range) -> Diagnostic {
-        Diagnostic::new_error(range, self.to_string() + " after that")
-    }
-    fn to_string(&self) -> String {
-        let variants = self
-            .variants
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(" or ");
-        format!("expected {variants}")
+        Diagnostic::new_error(range, format!("expected {self} after that"))
     }
 }
 impl ExpectedEnum {
@@ -95,12 +86,12 @@ impl ExpectedEnum {
         ExpectedError::from(self).diagnostic_after(range)
     }
     pub fn new_string(str: &str) -> Self {
-        Self::String(str.to_string())
+        Self::String(str.to_owned())
     }
 }
 
 impl BitOr<ExpectedEnum> for ExpectedError {
-    type Output = ExpectedError;
+    type Output = Self;
 
     fn bitor(mut self, rhs: ExpectedEnum) -> Self::Output {
         self.variants.push(rhs);
@@ -118,8 +109,20 @@ impl BitOr for ExpectedEnum {
     }
 }
 
+impl Display for ExpectedError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let string = self
+            .variants
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" or ");
+        write!(f, "{string}")
+    }
+}
+
 impl Display for ExpectedEnum {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Name => write!(f, "string"),
             Self::String(str) => write!(f, "{str}"),

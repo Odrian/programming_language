@@ -112,7 +112,7 @@ impl IntoTreeCollector {
         self0.collect(tree.into_iter().iterator());
         self0.vec
     }
-    fn collect<'outer>(&mut self, nodes: &mut NodeIntoIterator<Elem, Block, ()>) {
+    fn collect(&mut self, nodes: &mut NodeIntoIterator<Elem, Block, ()>) {
         loop {
             let Some(node) = nodes.next() else {
                 return;

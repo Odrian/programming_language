@@ -1,11 +1,20 @@
 [package]
 name = "pr-ast-linked"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+all = []
+
+[lints]
+workspace = true
 
 [dependencies]
-pr-common = { path = "../pr-common" }
-pr-lexer = { path = "../pr-lexer" }
-pr-ast = { path = "../pr-ast" }
+pr-common.workspace = true
+pr-lexer.workspace = true
+pr-ast.workspace = true
 
-lsp-types = { workspace = true }
+lsp-types.workspace = true

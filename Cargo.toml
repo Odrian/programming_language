@@ -14,7 +14,31 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
+authors = ["Adrian Radyuk <radukaa@mail.ru>"]
 edition = "2024"
+rust-version = "1.93.0"
+
+[workspace.lints]
+rust.unsafe_code = "deny"
+rust.dead_code = "warn"
+clippy.all = { level = "warn", priority = -1 }
+#clippy.pedantic = { level = "warn", priority = -1 }
+clippy.alloc_instead_of_core = "warn"
+clippy.allow_attributes = "warn"
+clippy.clone_on_ref_ptr = "warn"
+clippy.deref_by_slicing = "warn"
+clippy.std_instead_of_alloc = "warn"
+clippy.std_instead_of_core = "warn"
+clippy.str_to_string = "warn"
+clippy.implicit_clone = "warn"
+clippy.suboptimal_flops = "warn"
+clippy.unnecessary_self_imports = "warn"
+clippy.unused_trait_names = "warn"
+clippy.unwrap_used = "warn"
+clippy.use_self = "warn"
+clippy.too_many_lines = "allow"
+clippy.missing_errors_doc = "allow"
+clippy.missing_panics_doc = "allow"
 
 [workspace.dependencies]
 clap = { version = "4.5.53", features = ["derive"]}
@@ -25,6 +49,14 @@ tower-lsp = "0.20"
 lsp-types = { version = "0.94.1" } # as in tower-lsp 0.20.0
 
 inkwell = { version = "0.9.0", features = ["llvm21-1"] }
+
+pr-lexer = { path = "pr-lexer" }
+pr-ast = { path = "pr-ast" }
+pr-ast-linked = { path = "pr-ast-linked" }
+pr-compiler = { path = "pr-compiler" }
+pr-lsp = { path = "pr-lsp" }
+pr-common = { path = "pr-common" }
+linear-tree = { path = "linear-tree" }
 
 [profile.release]
 lto = "fat"

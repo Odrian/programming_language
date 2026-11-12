@@ -51,6 +51,7 @@ pub struct Args {
     pub gen_object: bool,
 }
 
+#[expect(clippy::result_unit_err)]
 pub fn compile_src(errors: &mut ErrorQueue, config: &CompileConfig, base_path: PathBuf) -> Result<(), ()> {
     let mut files = Vec::new();
     find_files(&mut files, &base_path, PathBuf::new());
@@ -76,7 +77,11 @@ pub fn compile_src(errors: &mut ErrorQueue, config: &CompileConfig, base_path: P
                 files.push(file_path);
             }
             if metadata.is_dir() {
-                let name = entry.file_name().to_str().unwrap().to_owned();
+                let name = entry
+                    .file_name()
+                    .to_str()
+                    .unwrap_or_else(|| panic!("{} is not valid utf8", entry.file_name().display()))
+                    .to_owned();
 
                 let mut dir_path = path.clone();
                 dir_path.push(name);
@@ -91,7 +96,7 @@ pub fn compile_src(errors: &mut ErrorQueue, config: &CompileConfig, base_path: P
         .map(|mut path| {
             parse_to_statements(errors, config, base_path.join(&path)).map(|result| {
                 path.set_extension("");
-                let path = path.to_str().expect("valid utf name").to_string();
+                let path = path.to_str().expect("valid utf name").to_owned();
                 (path, result)
             })
         })
@@ -102,18 +107,19 @@ pub fn compile_src(errors: &mut ErrorQueue, config: &CompileConfig, base_path: P
         linked_module
             .files
             .iter()
-            .for_each(|(file, path)| generate_last_file(errors, &path, file))
+            .for_each(|(file, path)| generate_last_file(errors, path, file))
     }
 
     if errors.has_errors() {
         return Err(());
     }
 
-    compiling::parse_to_llvm(config, linked_module).map_err(|err| errors.add_diag(err.to_diagnostic()))?;
+    compiling::parse_to_llvm(config, linked_module).map_err(|err| errors.add_diag(err.into_diagnostic()))?;
 
     Ok(())
 }
 
+#[expect(clippy::result_unit_err)]
 pub fn compile_file(errors: &mut ErrorQueue, config: &CompileConfig, file_path: PathBuf) -> Result<(), ()> {
     let statements = parse_to_statements(errors, config, file_path)?;
 
@@ -126,14 +132,14 @@ pub fn compile_file(errors: &mut ErrorQueue, config: &CompileConfig, file_path: 
         linked_module
             .files
             .iter()
-            .for_each(|(file, path)| generate_last_file(errors, &path, file))
+            .for_each(|(file, path)| generate_last_file(errors, path, file))
     }
 
     if errors.has_errors() {
         return Err(());
     }
 
-    compiling::parse_to_llvm(config, linked_module).map_err(|err| errors.add_diag(err.to_diagnostic()))?;
+    compiling::parse_to_llvm(config, linked_module).map_err(|err| errors.add_diag(err.into_diagnostic()))?;
 
     Ok(())
 }
@@ -143,10 +149,15 @@ fn parse_to_statements(
     config: &CompileConfig,
     file_path: PathBuf,
 ) -> Result<SyntacticResult, ()> {
-    let filename = file_path.file_name().unwrap().to_str().unwrap().to_owned();
+    let filename = file_path
+        .file_name()
+        .expect("expects valid utf8 filename")
+        .to_str()
+        .expect("expects valid utf8 filename")
+        .to_owned();
+
     let text = fs::read_to_string(&file_path).map_err(|err| {
-        errors.add_diag(LLVMError::source_file_reading_error(file_path, err.to_string()).to_diagnostic());
-        ()
+        errors.add_diag(LLVMError::source_file_reading_error(file_path, err.to_string()).into_diagnostic());
     })?;
 
     let tokens = pr_lexer::tokenize(errors, &text);
@@ -197,7 +208,7 @@ fn tokens_to_str(tokens: TokenIter<'_>, layer: u8) -> String {
                     format!("{left} {range}\n{body}\n{spaces}{right}")
                 }
             };
-            "    ".repeat(layer as usize).to_owned() + &str
+            "    ".repeat(layer as usize) + &str
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -206,11 +217,12 @@ fn tokens_to_str(tokens: TokenIter<'_>, layer: u8) -> String {
 fn generate_tokens_file(errors: &mut ErrorQueue, filename: &String, tokens: &TokenLinearTree) {
     let text = tokens_to_str(tokens.iter(), 0);
 
-    fs::create_dir_all(ARTIFACT_DIR).unwrap();
+    fs::create_dir_all(ARTIFACT_DIR).expect("failed to create ARTIFACT_DIR");
     let filepath = format!("{ARTIFACT_DIR}/{filename}_tokens.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
-        errors.add_diag(LLVMError::file_writing_error(filepath, "tokens".to_owned(), err.to_string()).to_diagnostic());
+        errors
+            .add_diag(LLVMError::file_writing_error(filepath, "tokens".to_owned(), err.to_string()).into_diagnostic());
     }
 }
 
@@ -222,12 +234,12 @@ fn generate_ast_file(errors: &mut ErrorQueue, filename: &String, statements: &Sy
         .collect::<Vec<_>>()
         .join("\n");
 
-    fs::create_dir_all(ARTIFACT_DIR).unwrap();
+    fs::create_dir_all(ARTIFACT_DIR).expect("failed to create ARTIFACT_DIR");
     let filepath = format!("{ARTIFACT_DIR}/{filename}_AST.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
         errors.add_diag(
-            LLVMError::file_writing_error(filepath, "unlinked AST".to_owned(), err.to_string()).to_diagnostic(),
+            LLVMError::file_writing_error(filepath, "unlinked AST".to_owned(), err.to_string()).into_diagnostic(),
         );
     }
 }
@@ -248,10 +260,10 @@ fn generate_last_file(errors: &mut ErrorQueue, filename: &String, linked_file: &
     })
     .collect::<String>();
 
-    fs::create_dir_all(ARTIFACT_DIR).unwrap();
+    fs::create_dir_all(ARTIFACT_DIR).expect("failed to create ARTIFACT_DIR");
     let filepath = format!("{ARTIFACT_DIR}/{filename}_LAST.txt");
     let write_result = fs::write(&filepath, text);
     if let Err(err) = write_result {
-        errors.add_diag(LLVMError::file_writing_error(filepath, "AST".to_owned(), err.to_string()).to_diagnostic());
+        errors.add_diag(LLVMError::file_writing_error(filepath, "AST".to_owned(), err.to_string()).into_diagnostic());
     }
 }

@@ -665,7 +665,6 @@ name = "pr-lsp"
 version = "0.1.0"
 dependencies = [
  "pr-ast",
- "pr-ast-linked",
  "pr-common",
  "pr-lexer",
  "tokio",

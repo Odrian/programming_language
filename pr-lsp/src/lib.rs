@@ -1,7 +1,9 @@
+extern crate alloc;
+
+use alloc::sync::Arc;
 use pr_common::Target;
 use pr_common::error::ErrorQueue;
 use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::Client;
 use tower_lsp::jsonrpc::Result;
@@ -46,7 +48,7 @@ impl Backend {
                 uri,
                 File {
                     version,
-                    text: text.to_string(),
+                    text: text.to_owned(),
                 },
             );
         }
@@ -67,7 +69,7 @@ impl Backend {
             return;
         }
 
-        #[allow(unused)]
+        #[cfg_attr(not(feature = "debug-statements"), expect(unused_variables))]
         let statements = pr_ast::parse_ast(&mut errors, &self.target, tokens);
         #[cfg(feature = "debug-statements")]
         {
@@ -95,7 +97,7 @@ impl tower_lsp::LanguageServer for Backend {
                 })),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: Some(vec![".".to_string()]),
+                    trigger_characters: Some(vec![".".to_owned()]),
                     ..Default::default()
                 }),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
@@ -103,7 +105,7 @@ impl tower_lsp::LanguageServer for Backend {
             },
             server_info: Some(ServerInfo {
                 name: "pr lsp".to_owned(),
-                version: Some(LSP_VERSION.to_string()),
+                version: Some(LSP_VERSION.to_owned()),
             }),
         })
     }
@@ -149,15 +151,15 @@ impl tower_lsp::LanguageServer for Backend {
     async fn hover(&self, _: HoverParams) -> Result<Option<Hover>> {
         let contents = HoverContents::Markup(MarkupContent {
             kind: MarkupKind::Markdown,
-            value: "Simple hover information".to_string(),
+            value: "Simple hover information".to_owned(),
         });
         Ok(Some(Hover { contents, range: None }))
     }
 
     async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
         let item = CompletionItem {
-            label: "hello".to_string(),
-            detail: Some("example completion".to_string()),
+            label: "hello".to_owned(),
+            detail: Some("example completion".to_owned()),
             kind: Some(CompletionItemKind::KEYWORD),
             ..Default::default()
         };

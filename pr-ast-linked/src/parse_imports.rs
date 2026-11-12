@@ -15,7 +15,7 @@ pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext)
     let imports = context
         .files
         .iter_mut()
-        .map(|file| std::mem::take(&mut file.import_statements))
+        .map(|file| core::mem::take(&mut file.import_statements))
         .collect::<Vec<_>>();
 
     let mut new_names: Vec<Vec<(RString, Object)>> = vec![Default::default(); imports.len()];
@@ -67,7 +67,7 @@ pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext)
     }
 }
 
-fn find_file(current_module: &String, from: Vec<RString>) -> String {
+fn find_file(current_module: &str, from: Vec<RString>) -> String {
     if from.is_empty() {
         unimplemented!("import just a module")
     }
@@ -77,7 +77,7 @@ fn find_file(current_module: &String, from: Vec<RString>) -> String {
         // TODO: try to find module
     }
 
-    parse_path(current_module.clone(), from.into_iter())
+    parse_path(current_module.to_owned(), from.into_iter())
 }
 
 fn parse_path(module_path: String, from: impl Iterator<Item = RString>) -> String {

@@ -31,8 +31,8 @@ fn assert_result(str: &str, result: TokenLinearTree) {
     assert!(
         actual.eq_without_meta(&result),
         "assertion `left == right` failed\n  left = {0:?}\n right = {1:?}",
-        &actual,
-        &result
+        actual,
+        result
     );
 }
 
@@ -149,16 +149,16 @@ fn test_correct_token_position() {
     assert_eq!(
         parse("a b\nc"),
         Ok(build![
-            Token::String("a".to_string()), Range::new(Position::new(0, 0), Position::new(0, 1));
-            Token::String("b".to_string()), Range::new(Position::new(0, 2), Position::new(0, 3));
-            Token::String("c".to_string()), Range::new(Position::new(1, 0), Position::new(1, 1));
+            Token::String("a".to_owned()), Range::new(Position::new(0, 0), Position::new(0, 1));
+            Token::String("b".to_owned()), Range::new(Position::new(0, 2), Position::new(0, 3));
+            Token::String("c".to_owned()), Range::new(Position::new(1, 0), Position::new(1, 1));
         ]),
     );
 
     assert_eq!(
         parse("\"a\nbb\""),
         Ok(build![
-            Token::DoubleQuotes("a\nbb".to_string()), Range::new(Position::new(0, 0), Position::new(1, 3));
+            Token::DoubleQuotes("a\nbb".to_owned()), Range::new(Position::new(0, 0), Position::new(1, 3));
         ]),
     );
 }
@@ -167,6 +167,6 @@ fn test_correct_token_position() {
 fn test_escapes() {
     assert_result(
         r#""\\ \n \t \r \0 \" \x5F""#,
-        build_no_meta![Token::DoubleQuotes("\\ \n \t \r \0 \" \x5F".to_string()),],
+        build_no_meta![Token::DoubleQuotes("\\ \n \t \r \0 \" \x5F".to_owned()),],
     );
 }

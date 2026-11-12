@@ -34,12 +34,12 @@ impl<'ctx> ValueContextWindow<'ctx> {
         self.contexts.iter().rev().find_map(|obj_con| obj_con.get(object))
     }
     pub fn get_pointer_unwrap(&self, object: Object) -> PointerValue<'ctx> {
-        self.get(object).unwrap().into_pointer_value()
+        self.get(object).expect("checked above").into_pointer_value()
     }
     pub fn get_function_unwrap(&self, object: Object) -> FunctionValue<'ctx> {
-        self.get(object).unwrap().into_function_value()
+        self.get(object).expect("checked above").into_function_value()
     }
     pub fn add(&mut self, object: Object, value: AnyValueEnum<'ctx>) {
-        self.contexts.last_mut().unwrap().add(object, value);
+        self.contexts.last_mut().expect("checked above").add(object, value);
     }
 }

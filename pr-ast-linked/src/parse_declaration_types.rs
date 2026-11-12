@@ -2,10 +2,10 @@ use crate::ModuleLiningContext;
 use crate::error::LinkingError;
 use crate::linked_statement::GlobalLinkedStatement;
 use crate::object::{ObjType, Object, ObjectFactory, parse_primitive_type};
+use core::cell::RefCell;
 use pr_ast::statement::{DeclarationStatement, ExternStatement, RStatement, RTypee, Statement, Typee};
 use pr_common::error::{Diagnostic, ErrorQueue};
 use pr_common::ranged::RString;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 pub fn parse_declaration_types(errors: &mut ErrorQueue, context: &mut ModuleLiningContext) {

@@ -1,3 +1,5 @@
+extern crate alloc;
+
 pub mod linked_statement;
 pub mod object;
 
@@ -11,13 +13,13 @@ mod parse_imports;
 mod parse_types;
 mod parser_linked_statement;
 
+use alloc::sync::Arc;
 use linked_statement::GlobalLinkedStatement;
 use object::{Object, ObjectFactory};
 use pr_ast::SyntacticResult;
 use pr_ast::statement::RStatement;
 use pr_common::error::ErrorQueue;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 #[derive(Default)]
 struct ModuleLiningContext {
@@ -33,11 +35,13 @@ impl ModuleLiningContext {
     fn consume(self) -> LinkedModule {
         let factory = Arc::new(self.factory);
 
-        let files = (self.files.into_iter())
-            .zip(self.file_paths.into_iter())
+        let files = self
+            .files
+            .into_iter()
+            .zip(self.file_paths)
             .map(|(m, path)| {
                 let mut result = m.result;
-                result.factory = factory.clone(); // FIXME: bad
+                result.factory = Arc::clone(&factory); // FIXME: bad
                 (result, path)
             })
             .collect();
@@ -107,7 +111,7 @@ pub fn link_module(errors: &mut ErrorQueue, statements: Vec<(String, SyntacticRe
 }
 
 pub fn link_file(errors: &mut ErrorQueue, statements: SyntacticResult) -> LinkedModule {
-    link_module(errors, vec![("unused string".to_string(), statements)])
+    link_module(errors, vec![("unused string".to_owned(), statements)])
 }
 
 fn create_context(errors: &mut ErrorQueue, statements: Vec<(String, SyntacticResult)>) -> ModuleLiningContext {

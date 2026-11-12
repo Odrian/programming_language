@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::Parser as _;
 use pr_common::Target;
 use pr_common::error::ErrorQueue;
 use pr_compiler::{Args, CompileConfig, compile_src};

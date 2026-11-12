@@ -44,6 +44,6 @@ impl ObjectContextWindow {
         }
     }
     pub fn add(&mut self, name: RString, object: Object) {
-        self.contexts.last_mut().unwrap().add(name, object);
+        self.contexts.last_mut().expect("checked above").add(name, object);
     }
 }

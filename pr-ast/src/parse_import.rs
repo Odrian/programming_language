@@ -17,9 +17,11 @@ impl ParsingState<'_, '_, '_> {
         let mut from: Vec<RString> = vec![RString::new(string, range)];
         loop {
             let Some((token, _)) = self.peek() else {
-                self.add_diag(SyntacticError::expected_semicolon(from.last().unwrap().range));
+                self.add_diag(SyntacticError::expected_semicolon(
+                    from.last().expect("checked above").range,
+                ));
 
-                let what = vec![(from.pop().unwrap(), None)];
+                let what = vec![(from.pop().expect("checked above"), None)];
                 result.push(Statement::new_import(from, what).add_range(range_st));
                 return Ok(());
             };
@@ -40,15 +42,15 @@ impl ParsingState<'_, '_, '_> {
 
                     self.consume_semicolon(as_name.range);
 
-                    let what = vec![(from.pop().unwrap(), Some(as_name))];
+                    let what = vec![(from.pop().expect("checked above"), Some(as_name))];
                     result.push(Statement::new_import(from, what).add_range(range_st));
                     return Ok(());
                 }
                 _ => {
                     // ::x
-                    self.consume_semicolon(from.last().unwrap().range);
+                    self.consume_semicolon(from.last().expect("checked above").range);
 
-                    let what = vec![(from.pop().unwrap(), None)];
+                    let what = vec![(from.pop().expect("checked above"), None)];
                     result.push(Statement::new_import(from, what).add_range(range_st));
                     return Ok(());
                 }

@@ -1,5 +1,5 @@
+use core::fmt;
 use lsp_types::Range;
-use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct Ranged<T> {

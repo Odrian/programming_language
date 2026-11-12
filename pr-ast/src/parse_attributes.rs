@@ -88,6 +88,7 @@ impl ParsingState<'_, '_, '_> {
             }
             string => {
                 self.add_diag(SyntacticError::unknown_attribute(range, string));
+                #[expect(clippy::needless_return)]
                 return;
             }
         }

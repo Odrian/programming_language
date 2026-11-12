@@ -128,7 +128,7 @@ impl ParsingState<'_, '_, '_> {
                             body,
                             Statement::new_set(
                                 Expression::Variable(name).add_no_range(),
-                                Expression::from(LiteralExpression::NumberLiteral("1".to_string())).add_no_range(),
+                                Expression::from(LiteralExpression::NumberLiteral("1".to_owned())).add_no_range(),
                                 Some(TwoSidedOperation::from(NumberOperation::Add).add_no_range()),
                             )
                             .add_no_range(),

@@ -1,9 +1,18 @@
 [package]
 name = "pr-lexer"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+all = []
+
+[lints]
+workspace = true
 
 [dependencies]
-pr-common = { path = "../pr-common" }
+pr-common.workspace = true
 
-lsp-types = { workspace = true }
+lsp-types.workspace = true

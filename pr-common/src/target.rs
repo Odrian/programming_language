@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use core::str::FromStr as _;
 use strum_macros::EnumString;
 
 pub struct Target {
@@ -10,7 +10,7 @@ pub struct Target {
 }
 
 impl Target {
-    pub fn get_current() -> Target {
+    pub fn get_current() -> Self {
         let target = env!("BUILD_TARGET");
         let Ok(target) = AvailableTargets::from_str(target) else {
             panic!("unknown target {}", target);
@@ -39,8 +39,8 @@ impl Target {
     }
 }
 
-#[allow(non_camel_case_types)]
-#[derive(EnumString)]
+#[expect(non_camel_case_types)]
+#[derive(EnumString, Copy, Clone)]
 enum AvailableTargets {
     #[strum(serialize = "x86_64-unknown-linux-gnu")]
     x86_64_unknown_linux_gnu,
@@ -53,19 +53,19 @@ enum AvailableTargets {
 impl AvailableTargets {
     fn to_target(self) -> Target {
         match self {
-            AvailableTargets::x86_64_unknown_linux_gnu => Target {
+            Self::x86_64_unknown_linux_gnu => Target {
                 llvm_target: "x86_64-unknown-linux-gnu",
                 pointer_width: 64,
                 target_os: "linux",
                 target_arch: "x86_64",
             },
-            AvailableTargets::aarch64_apple_darwin => Target {
+            Self::aarch64_apple_darwin => Target {
                 llvm_target: "aarch64-apple-darwin",
                 pointer_width: 64,
                 target_os: "macos",
                 target_arch: "aarch64",
             },
-            AvailableTargets::x86_64_pc_windows_msvc => Target {
+            Self::x86_64_pc_windows_msvc => Target {
                 llvm_target: "x86_64-pc-windows-msvc",
                 pointer_width: 64,
                 target_os: "windows",

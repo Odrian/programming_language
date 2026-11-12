@@ -1,5 +1,5 @@
+use core::fmt::{Display, Formatter};
 use pr_common::{BracketType, operations::*};
-use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
@@ -85,7 +85,7 @@ impl From<CompareOperator> for Token {
 }
 
 impl Display for EqualOperation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Equal => write!(f, "="),
             Self::ColonEqual => write!(f, ":="),

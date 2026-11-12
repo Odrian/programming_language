@@ -1,9 +1,9 @@
 use crate::object::{FloatObjType, IntObjType, ObjType, Object, ObjectFactory};
+use core::fmt::Debug;
 use lsp_types::Range;
 use pr_common::operations::{ROneSidedOperation, RTwoSidedOperation};
 use pr_common::ranged::Ranged;
 use std::collections::HashMap;
-use std::fmt::Debug;
 
 pub type RTypedExpression = Ranged<TypedExpression>;
 pub type RLinkedStatement = Ranged<LinkedStatement>;
@@ -209,7 +209,10 @@ impl GlobalLinkedStatement {
                     .iter()
                     .enumerate()
                     .map(|(index, typee)| {
-                        let (name, _) = field_names.iter().find(|(_, index1)| index as u32 == **index1).unwrap();
+                        let (name, _) = field_names
+                            .iter()
+                            .find(|(_, index1)| index as u32 == **index1)
+                            .expect("checked above");
                         let typee = typee.to_string::<WITH_ID>(factory);
                         format!("{name}: {typee}")
                     })
@@ -244,12 +247,12 @@ impl GlobalLinkedStatement {
 impl ExternLinkedStatement {
     pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory, object: Object) -> String {
         match self {
-            ExternLinkedStatement::Variable { typee } => {
+            Self::Variable { typee } => {
                 let name = factory.get_out_name::<WITH_ID>(object);
                 let typee = typee.to_string::<WITH_ID>(factory);
                 format!("{name}: {typee};")
             }
-            ExternLinkedStatement::Function { typee } => {
+            Self::Function { typee } => {
                 let name = factory.get_out_name::<WITH_ID>(object);
                 let typee = typee.to_string::<WITH_ID>(factory);
                 format!("{name} :: {typee};")
@@ -288,7 +291,7 @@ impl LinkedStatement {
             }
             Self::Return(exp) => match exp {
                 Some(exp) => format!("return {}", exp.value.to_string::<WITH_ID>(factory)),
-                None => "return".to_string(),
+                None => "return".to_owned(),
             },
         }
     }
@@ -348,8 +351,8 @@ impl LinkedLiteralExpression {
     pub fn to_string<const WITH_ID: bool>(&self, factory: &ObjectFactory) -> String {
         match self {
             Self::Undefined { obj_type: _, is_zeroed } => match is_zeroed {
-                false => "---".to_string(),
-                true => "#zeroed".to_string(),
+                false => "---".to_owned(),
+                true => "#zeroed".to_owned(),
             },
             Self::IntLiteral(number, object_type) => {
                 let object_type = object_type.to_string::<WITH_ID>(factory);
@@ -360,8 +363,8 @@ impl LinkedLiteralExpression {
                 format!("{number}_{object_type}")
             }
             Self::BoolLiteral(value) => match value {
-                true => "true".to_string(),
-                false => "false".to_string(),
+                true => "true".to_owned(),
+                false => "false".to_owned(),
             },
             Self::CharLiteral(char) => format!("'{}'", *char as char),
             Self::StringLiteral(str) => format!("\"{str}\""),
@@ -390,9 +393,9 @@ impl ObjType {
                 let obj_type = obj_type.to_string::<WITH_ID>(factory);
                 format!("&weak {obj_type}")
             }
-            Self::Unknown => "unknown".to_string(),
-            Self::Void => "void".to_string(),
-            Self::Char => "char".to_string(),
+            Self::Unknown => "unknown".to_owned(),
+            Self::Void => "void".to_owned(),
+            Self::Char => "char".to_owned(),
             Self::Integer(int) => {
                 let string = match int {
                     IntObjType::Bool => "bool",
@@ -409,11 +412,11 @@ impl ObjType {
                     IntObjType::U128 => "u128",
                     IntObjType::USize => "usize",
                 };
-                string.to_string()
+                string.to_owned()
             }
             Self::Float(float) => match float {
-                FloatObjType::F32 => "f32".to_string(),
-                FloatObjType::F64 => "f64".to_string(),
+                FloatObjType::F32 => "f32".to_owned(),
+                FloatObjType::F64 => "f64".to_owned(),
             },
             Self::Struct(object) => {
                 let name = factory.get_out_name::<WITH_ID>(*object);

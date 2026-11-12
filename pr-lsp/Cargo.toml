@@ -1,17 +1,24 @@
 [package]
 name = "pr-lsp"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
-
-[dependencies]
-pr-common = { path = "../pr-common" }
-pr-lexer = { path = "../pr-lexer" }
-pr-ast = { path = "../pr-ast" }
-pr-ast-linked = { path = "../pr-ast-linked" }
-
-tokio = { workspace = true }
-tower-lsp = { workspace = true }
+rust-version.workspace = true
+publish = false
 
 [features]
+all = []
 debug-tokens = []
 debug-statements = []
+
+[lints]
+workspace = true
+
+[dependencies]
+pr-common.workspace = true
+pr-lexer.workspace = true
+pr-ast.workspace = true
+#pr-ast-linked.workspace = true
+
+tokio.workspace = true
+tower-lsp.workspace = true

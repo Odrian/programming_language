@@ -78,6 +78,8 @@
 //! assert_eq!(vec, vec![1, 2, 3, 4, 5]);
 //! ```
 
+#![expect(unsafe_code)]
+
 mod builder;
 pub use builder::TreeBuilder;
 

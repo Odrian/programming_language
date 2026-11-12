@@ -1,6 +1,6 @@
 use crate::{LinearTree, NodeWithMeta, TreeNode};
-use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
+use core::marker::PhantomData;
+use core::mem::ManuallyDrop;
 
 /// node that "owns" itself and subnodes
 pub enum Node<'inner, Elem, Block, Meta> {
@@ -9,6 +9,7 @@ pub enum Node<'inner, Elem, Block, Meta> {
 }
 
 impl<Elem, Block, Meta> LinearTree<Elem, Block, Meta> {
+    #[expect(clippy::should_implement_trait)]
     pub fn into_iter(self) -> RootNodeIntoIterator<'static, Elem, Block, Meta> {
         unsafe {
             let mut me = ManuallyDrop::new(self);
@@ -98,7 +99,7 @@ impl<'outer, Elem, Block, Meta> Iterator for NodeIntoIterator<'outer, Elem, Bloc
         }
 
         unsafe {
-            let node = std::ptr::read(self.begin);
+            let node = core::ptr::read(self.begin);
 
             match node.0 {
                 TreeNode::Elem(elem) => {
@@ -128,7 +129,7 @@ impl<Enum, Block, Meta> Drop for NodeIntoIterator<'_, Enum, Block, Meta> {
     fn drop(&mut self) {
         unsafe {
             while self.begin != self.end {
-                std::ptr::drop_in_place(self.begin);
+                core::ptr::drop_in_place(self.begin);
                 self.begin = self.begin.add(1);
             }
         }

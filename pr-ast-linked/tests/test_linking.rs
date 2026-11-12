@@ -14,7 +14,7 @@ fn parse(text: &str) -> Result<LinkedFile, ErrorQueue> {
         return Err(errors);
     }
     let mut file = pr_ast_linked::link_file(&mut errors, statements);
-    let file = file.files.pop().unwrap().0;
+    let file = file.files.pop().expect("link_file generate single module").0;
     if errors.has_errors() {
         return Err(errors);
     }

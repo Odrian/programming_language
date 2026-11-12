@@ -1,7 +1,7 @@
+use core::fmt;
 use lsp_types::Range;
 use pr_common::operations::{ROneSidedOperation, RTwoSidedOperation};
 use pr_common::ranged::{RString, Ranged};
-use std::fmt;
 
 pub type RStatement = Ranged<Statement>;
 pub type RTypee = Ranged<Typee>;
@@ -201,7 +201,7 @@ impl Statement {
     }
     pub fn new_for(before: RStatement, cond: RExpression, mut body: Vec<RStatement>, inc: RStatement) -> Self {
         body.push(inc);
-        Statement::new_brackets(vec![before, Statement::new_while(cond, body).add_no_range()])
+        Self::new_brackets(vec![before, Self::new_while(cond, body).add_no_range()])
     }
 }
 
@@ -280,7 +280,7 @@ impl fmt::Display for Statement {
                 DeclarationStatement::Function { args, returns, body } => {
                     let args: Vec<String> = args.iter().map(|s| format!("{}: {}", s.0, s.1)).collect();
                     let args = args.join(", ");
-                    let returns = returns.as_ref().map_or("()".to_string(), ToString::to_string);
+                    let returns = returns.as_ref().map_or("()".to_owned(), ToString::to_string);
                     let inside = to_string_with_tabs(body);
                     write!(f, "{name} :: ({args}) -> {returns} {{\n{inside}\n}}")
                 }
@@ -301,7 +301,7 @@ impl fmt::Display for Statement {
                         .map(|(name, as_name)| {
                             format!(
                                 "{name}{}",
-                                as_name.as_ref().map_or("".to_string(), |s| format!(" as {s}"))
+                                as_name.as_ref().map_or("".to_owned(), |s| format!(" as {s}"))
                             )
                         })
                         .collect::<Vec<_>>();
@@ -322,10 +322,10 @@ impl fmt::Display for Statement {
 impl fmt::Display for ExternStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ExternStatement::Variable { name, typee } => {
+            Self::Variable { name, typee } => {
                 write!(f, "{name}: {typee};")
             }
-            ExternStatement::Function {
+            Self::Function {
                 name,
                 args,
                 is_vararg,

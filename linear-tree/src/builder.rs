@@ -1,5 +1,5 @@
 use crate::{LinearTree, NodeBlock, NodeWithMeta, TreeNode};
-use std::mem::MaybeUninit;
+use core::mem::MaybeUninit;
 
 pub struct TreeBuilder<Elem, Block, Meta> {
     tree: Vec<MaybeUninit<NodeWithMeta<Elem, Block, Meta>>>,
@@ -67,7 +67,12 @@ impl<Elem, Block, Meta> TreeBuilder<Elem, Block, Meta> {
         }
         // Safety: only unfinished blocks uninit, self.steps is empty, so all init
         LinearTree {
-            tree: unsafe { std::mem::transmute(self.tree) },
+            tree: unsafe {
+                core::mem::transmute::<
+                    Vec<MaybeUninit<NodeWithMeta<Elem, Block, Meta>>>,
+                    Vec<NodeWithMeta<Elem, Block, Meta>>,
+                >(self.tree)
+            },
         }
     }
 }

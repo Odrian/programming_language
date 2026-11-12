@@ -1,9 +1,9 @@
 use crate::error::TokenizeError;
 use crate::token::*;
 use crate::{TokenLinearTree, TokenTreeBuilder};
+use core::str::Chars;
 use lsp_types::{Position, Range};
 use pr_common::{BracketType, error::ErrorQueue, operations::*};
-use std::str::Chars;
 
 pub fn parse_tokens(errors: &mut ErrorQueue, text: &str) -> TokenLinearTree {
     let mut tree = TokenTreeBuilder::new();
@@ -63,7 +63,7 @@ impl IndexedTextBuffer {
     }
     fn consume(&mut self) -> String {
         self.start_buffer_index = self.index;
-        std::mem::take(&mut self.text)
+        core::mem::take(&mut self.text)
     }
 }
 
@@ -119,8 +119,7 @@ fn parse_inside_brackets(
                             buffer.skip_char(); // skip 'x'
                             let mut escape_seq = String::new();
                             let Some(first) = text.next() else {
-                                errors
-                                    .add_diag(TokenizeError::incorrect_escape("x".to_string()).to_diag1(buffer.index));
+                                errors.add_diag(TokenizeError::incorrect_escape("x".to_owned()).to_diag1(buffer.index));
                                 return;
                             };
                             buffer.skip_char(); // skip first char
@@ -149,9 +148,8 @@ fn parse_inside_brackets(
                             buffer.add_char(ch);
                         }
                         None => {
-                            errors.add_diag(
-                                TokenizeError::incorrect_escape("*empty*".to_string()).to_diag1(buffer.index),
-                            );
+                            errors
+                                .add_diag(TokenizeError::incorrect_escape("*empty*".to_owned()).to_diag1(buffer.index));
                         }
                     }
                     continue;
@@ -439,7 +437,7 @@ impl<'a> TokenizeState<'a> {
 
     fn flush_buffer(&mut self) {
         if self.buffer_start != self.buffer_end {
-            let first_char = self.buffer.chars().next().unwrap();
+            let first_char = self.buffer.chars().next().expect("checked above");
 
             let token_text = self.buffer.split_off(0);
             let token = if first_char.is_ascii_digit() {

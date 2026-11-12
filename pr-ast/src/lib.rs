@@ -74,10 +74,7 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
     pub fn next(&mut self) -> Option<RangedToken<'b>> {
         self.tokens.next()
     }
-    pub fn next_unwrap(
-        &mut self,
-        gen_diag: impl Fn(&mut ParsingState<'e, 'a, 'b>) -> Diagnostic,
-    ) -> Result<RangedToken<'a>, ()> {
+    pub fn next_unwrap(&mut self, gen_diag: impl Fn(&mut Self) -> Diagnostic) -> Result<RangedToken<'a>, ()> {
         let Some((token, range)) = self.tokens.next() else {
             let diag = gen_diag(self);
             self.errors.add_diag(diag);

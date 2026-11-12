@@ -6,6 +6,13 @@
 
 Every line of code was written by hand because I love programming.
 
+### Local build
+
+```bash
+nix develop .#programming-language
+cargo build --workspace
+```
+
 ### Usage
 
 Create directory `src` with flie `main.pr` with code.  

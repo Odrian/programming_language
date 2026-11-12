@@ -22,16 +22,16 @@ struct TypeResolver<'c> {
 }
 
 impl<'c> TypeResolver<'c> {
-    fn new(errors: &'c mut ErrorQueue, context: &'c mut ModuleLiningContext) -> TypeResolver<'c> {
+    fn new(errors: &'c mut ErrorQueue, context: &'c mut ModuleLiningContext) -> Self {
         let mut dependency_resolver: DependencyResolver<Object> = Default::default();
 
         let mut statements = HashMap::new();
 
         for file in context.files.iter_mut() {
-            let file_statements = std::mem::take(&mut file.type_statements);
+            let file_statements = core::mem::take(&mut file.type_statements);
 
             dependency_resolver.add(file_statements.keys().copied());
-            statements.extend(file_statements.into_iter());
+            statements.extend(file_statements);
         }
 
         Self {
@@ -58,7 +58,7 @@ impl TypeResolver<'_> {
         let object_option = match self.dependency_resolver.next() {
             Ok(v) => v,
             Err(err_object) => {
-                let (statement, _file_id) = self.statements.get(&err_object).unwrap();
+                let (statement, _file_id) = self.statements.get(&err_object).expect("checked above");
                 let Statement::DeclarationStatement { name, statement: _ } = &statement.value else {
                     unreachable!()
                 };
@@ -70,7 +70,7 @@ impl TypeResolver<'_> {
             return Ok(());
         };
 
-        let (statement, file_id) = self.statements.get(&object).unwrap();
+        let (statement, file_id) = self.statements.get(&object).expect("checked above");
         let file_id = *file_id;
 
         let Statement::DeclarationStatement {

@@ -1,17 +1,26 @@
 [package]
 name = "pr-compiler"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+all = []
+
+[lints]
+workspace = true
 
 [dependencies]
-pr-common = { path = "../pr-common" }
-pr-lexer = { path = "../pr-lexer" }
-pr-ast = { path = "../pr-ast" }
-pr-ast-linked = { path = "../pr-ast-linked" }
+pr-common.workspace = true
+pr-lexer.workspace = true
+pr-ast.workspace = true
+pr-ast-linked.workspace = true
 
-inkwell = { workspace = true }
-clap = { workspace = true }
-lsp-types = { workspace = true }
+inkwell.workspace = true
+clap.workspace = true
+lsp-types.workspace = true
 
 [dev-dependencies]
-tempfile = { workspace = true }
+tempfile.workspace = true

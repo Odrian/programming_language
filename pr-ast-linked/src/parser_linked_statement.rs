@@ -3,12 +3,12 @@ use crate::error::LinkingError;
 use crate::linked_statement::*;
 use crate::object::{IntObjType, ObjType, Object, ObjectFactory, parse_primitive_type};
 use crate::{FileLinkingContext, LinkedFile, ModuleLiningContext};
+use core::cell::RefCell;
 use lsp_types::Range;
 use pr_ast::statement::*;
 use pr_common::error::{Diagnostic, ErrorQueue};
 use pr_common::operations::{OneSidedOperation, TwoSidedOperation};
 use pr_common::ranged::RString;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 pub fn link_objects(errors: &mut ErrorQueue, context: &mut ModuleLiningContext) {
@@ -26,24 +26,21 @@ pub fn link_file_objects(
     factory: &mut ObjectFactory,
     type_statements: &HashMap<Object, GlobalLinkedStatement>,
 ) {
-    let function_declarations = std::mem::take(&mut file.function_statement);
-    let variable_declarations = std::mem::take(&mut file.variable_statement);
-    let extern_declarations = std::mem::take(&mut file.extern_statements);
+    let function_declarations = core::mem::take(&mut file.function_statement);
+    let variable_declarations = core::mem::take(&mut file.variable_statement);
+    let extern_declarations = core::mem::take(&mut file.extern_statements);
 
     let mut linking_context = FunctionLinkingContext::new(errors, file, factory, type_statements);
 
     let r1 = extern_declarations
         .into_iter()
-        .map(|(object, statement)| linking_context.link_global_declaration(object, statement))
-        .collect::<Result<(), ()>>();
+        .try_for_each(|(object, statement)| linking_context.link_global_declaration(object, statement));
     let r2 = variable_declarations
         .iter()
-        .map(|(&object, statement)| linking_context.prelink_global_variable(object, statement))
-        .collect::<Result<(), ()>>();
+        .try_for_each(|(&object, statement)| linking_context.prelink_global_variable(object, statement));
     let r3 = function_declarations
         .iter()
-        .map(|(&object, statement)| linking_context.prelink_global_function(object, statement))
-        .collect::<Result<(), ()>>();
+        .try_for_each(|(&object, statement)| linking_context.prelink_global_function(object, statement));
 
     if r1.is_err() || r2.is_err() || r3.is_err() {
         return;
@@ -51,12 +48,10 @@ pub fn link_file_objects(
 
     let _ = variable_declarations
         .into_iter()
-        .map(|(object, statement)| linking_context.parse_global_variable(object, statement))
-        .collect::<Result<(), ()>>();
+        .try_for_each(|(object, statement)| linking_context.parse_global_variable(object, statement));
     let _ = function_declarations
         .into_iter()
-        .map(|(object, statement)| linking_context.parse_global_function(object, statement))
-        .collect::<Result<(), ()>>();
+        .try_for_each(|(object, statement)| linking_context.parse_global_function(object, statement));
 }
 
 struct FunctionLinkingContext<'a> {
@@ -568,7 +563,7 @@ impl FunctionLinkingContext<'_> {
                             unreachable!()
                         };
 
-                        let statement = &self.type_statements.get(object).unwrap();
+                        let statement = &self.type_statements.get(object).expect("checked above");
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else {
                             unreachable!()
                         };
@@ -579,7 +574,7 @@ impl FunctionLinkingContext<'_> {
                             ));
                             return Err(());
                         };
-                        let obj_type = fields.get(index as usize).unwrap().clone();
+                        let obj_type = fields.get(index as usize).expect("checked above").clone();
 
                         let result = TypedExpression {
                             object_type: ObjType::new_weak_reference(obj_type),
@@ -589,7 +584,7 @@ impl FunctionLinkingContext<'_> {
                         self.try_autocast(result, expected_type)
                     }
                     ObjType::Struct(object) => {
-                        let statement = self.type_statements.get(object).unwrap();
+                        let statement = self.type_statements.get(object).expect("checked above");
                         let GlobalLinkedStatement::Struct { fields, field_names } = statement else {
                             unreachable!()
                         };
@@ -600,7 +595,7 @@ impl FunctionLinkingContext<'_> {
                             ));
                             return Err(());
                         };
-                        let obj_type = fields.get(index as usize).unwrap().clone();
+                        let obj_type = fields.get(index as usize).expect("checked above").clone();
 
                         let struct_expr = TypedExpression {
                             object_type: ObjType::new_weak_reference(left.value.object_type.clone()),
@@ -642,7 +637,7 @@ impl FunctionLinkingContext<'_> {
                 let GlobalLinkedStatement::Struct {
                     fields: field_types,
                     field_names,
-                } = self.type_statements.get(&object).unwrap()
+                } = self.type_statements.get(&object).expect("checked above")
                 else {
                     unreachable!()
                 };
@@ -672,8 +667,11 @@ impl FunctionLinkingContext<'_> {
                     used_fields[index] = true;
                 }
                 if bad {
-                    let index = used_fields.iter().position(|x| !*x).unwrap();
-                    let (field_name, _) = field_names.iter().find(|(_, i)| **i == index as u32).unwrap();
+                    let index = used_fields.iter().position(|x| !*x).expect("checked above");
+                    let (field_name, _) = field_names
+                        .iter()
+                        .find(|(_, i)| **i == index as u32)
+                        .expect("checked above");
                     let field_name = field_name.clone();
                     self.add_diag(LinkingError::struct_field_missing_in_construction(
                         struct_name,
@@ -682,7 +680,10 @@ impl FunctionLinkingContext<'_> {
                     return Err(());
                 }
 
-                let fields = fields.into_iter().map(Option::unwrap).collect::<Vec<_>>();
+                let fields = fields
+                    .into_iter()
+                    .map(|field| field.expect("checked above"))
+                    .collect::<Vec<_>>();
 
                 let result = TypedExpression::new(
                     ObjType::new_weak_reference(struct_type),
@@ -861,10 +862,10 @@ fn check_is_returns(statements: &[RLinkedStatement]) -> bool {
     for statement in statements {
         match &statement.value {
             LinkedStatement::Return(_) => return true,
-            LinkedStatement::If { condition: _, body } | LinkedStatement::While { condition: _, body } => {
-                if check_is_returns(body) {
-                    return true;
-                }
+            LinkedStatement::If { condition: _, body } | LinkedStatement::While { condition: _, body }
+                if check_is_returns(body) =>
+            {
+                return true;
             }
             _ => (),
         }
@@ -874,7 +875,7 @@ fn check_is_returns(statements: &[RLinkedStatement]) -> bool {
 
 impl ObjType {
     fn to_str(&self, context: &FunctionLinkingContext) -> String {
-        self.to_string::<false>(&context.factory)
+        self.to_string::<false>(context.factory)
     }
     fn check_can_cast(from: &Self, other: &Self) -> bool {
         if other == &Self::Char {

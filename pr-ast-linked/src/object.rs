@@ -30,16 +30,16 @@ impl ObjType {
     pub const DEFAULT_INTEGER: Self = Self::Integer(IntObjType::I32);
     pub const DEFAULT_FLOAT: Self = Self::Float(FloatObjType::F64);
 
-    pub fn new_pointer(obj_type: ObjType) -> Self {
+    pub fn new_pointer(obj_type: Self) -> Self {
         Self::Pointer(Box::new(obj_type))
     }
-    pub fn new_reference(obj_type: ObjType) -> Self {
+    pub fn new_reference(obj_type: Self) -> Self {
         Self::Reference {
             obj_type: Box::new(obj_type),
             is_weak: false,
         }
     }
-    pub fn new_weak_reference(obj_type: ObjType) -> Self {
+    pub fn new_weak_reference(obj_type: Self) -> Self {
         Self::Reference {
             obj_type: Box::new(obj_type),
             is_weak: true,
@@ -66,7 +66,7 @@ impl ObjType {
         }
     }
     /// check that self and other are &T and *T or *T and &T
-    pub fn is_different_pointers(&self, other: &ObjType) -> bool {
+    pub fn is_different_pointers(&self, other: &Self) -> bool {
         let left = match self {
             Self::Reference {
                 obj_type,

@@ -1,5 +1,6 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::Hash;
+use alloc::collections::VecDeque;
+use core::hash::Hash;
+use std::collections::{HashMap, HashSet};
 
 pub struct DependencyResolver<Key: Eq + Hash + Copy> {
     queue: VecDeque<Key>,
@@ -45,7 +46,7 @@ impl<Key: Eq + Hash + Copy> DependencyResolver<Key> {
         }
     }
     fn get_dependency_cycle(&mut self) -> Key {
-        *self.waiting_for.iter().next().unwrap().0
+        *self.waiting_for.iter().next().expect("checked above").0
     }
     pub fn add_dependency(&mut self, what: Key, depends_on: Vec<Key>) {
         for &depends_on_one in &depends_on {

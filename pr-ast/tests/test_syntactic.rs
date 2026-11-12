@@ -20,7 +20,7 @@ fn parse_global(text: &str) -> Result<Vec<Statement>, ErrorQueue> {
 fn parse(text: &str) -> Result<Vec<Statement>, ErrorQueue> {
     let mut statements = parse_global(&format!("main :: () -> i32 {{ {text} }}"))?;
     assert_eq!(statements.len(), 1);
-    let Statement::DeclarationStatement { name: _, statement } = statements.pop().unwrap() else {
+    let Statement::DeclarationStatement { name: _, statement } = statements.pop().expect("asserted above") else {
         panic!()
     };
     let DeclarationStatement::Function {

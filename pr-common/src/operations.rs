@@ -1,6 +1,6 @@
 use crate::ranged::Ranged;
+use core::fmt;
 use lsp_types::Range;
-use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum OneSidedOperation {
