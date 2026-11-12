@@ -16,9 +16,22 @@ use pr_ast_linked::object::{IntObjType, ObjType};
 use std::path::Path;
 use std::process::Command;
 
+const TARGET_INIT_CONFIG: InitializationConfig = InitializationConfig {
+    asm_parser: true,
+    asm_printer: true,
+    base: true,
+    disassembler: false,
+    info: true,
+    machine_code: true,
+};
+
 /// previous steps guarantees that every used variables is valid
 pub fn parse_to_llvm(config: &CompileConfig, linked_module: LinkedModule) -> Result<(), LLVMError> {
-    Target::initialize_all(&InitializationConfig::default());
+    match config.target.target_arch {
+        "aarch64" => Target::initialize_aarch64(&TARGET_INIT_CONFIG),
+        "x86_64" => Target::initialize_x86(&TARGET_INIT_CONFIG),
+        arch => panic!("unsupported target: {}", arch),
+    }
     let context = Context::create();
 
     verify_have_main_signature(&linked_module)?;
