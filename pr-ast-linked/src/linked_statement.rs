@@ -67,6 +67,7 @@ pub enum LinkedStatement {
     If {
         condition: RTypedExpression,
         body: Vec<RLinkedStatement>,
+        else_body: Option<Vec<RLinkedStatement>>,
     },
     While {
         condition: RTypedExpression,
@@ -146,7 +147,22 @@ impl LinkedStatement {
         Self::SetVariable { what, value, op }
     }
     pub const fn new_if(condition: RTypedExpression, body: Vec<RLinkedStatement>) -> Self {
-        Self::If { condition, body }
+        Self::If {
+            condition,
+            body,
+            else_body: None,
+        }
+    }
+    pub const fn new_if_else(
+        condition: RTypedExpression,
+        body: Vec<RLinkedStatement>,
+        else_body: Vec<RLinkedStatement>,
+    ) -> Self {
+        Self::If {
+            condition,
+            body,
+            else_body: Some(else_body),
+        }
     }
     pub const fn new_while(condition: RTypedExpression, body: Vec<RLinkedStatement>) -> Self {
         Self::While { condition, body }
@@ -279,10 +295,22 @@ impl LinkedStatement {
                 }
             }
             Self::Expression(expression) => expression.value.to_string::<WITH_ID>(factory),
-            Self::If { condition, body } => {
+            Self::If {
+                condition,
+                body,
+                else_body,
+            } => {
                 let inside = to_string_with_tabs(body, |x| x.value.to_string::<WITH_ID>(factory));
                 let condition = condition.value.to_string::<WITH_ID>(factory);
-                format!("if {condition} {{\n{inside}\n}}")
+                let statement = format!("if {condition} {{\n{inside}\n}}");
+
+                match else_body {
+                    Some(else_body) => {
+                        let inside = to_string_with_tabs(else_body, |x| x.value.to_string::<WITH_ID>(factory));
+                        format!("{statement} else {{\n{inside}\n}}")
+                    }
+                    None => statement,
+                }
             }
             Self::While { condition, body } => {
                 let inside = to_string_with_tabs(body, |x| x.value.to_string::<WITH_ID>(factory));

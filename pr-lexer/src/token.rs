@@ -28,6 +28,7 @@ pub type TokenBlock = BracketType;
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TokenKeyword {
     If,
+    Else,
     While,
     For,
     Return,

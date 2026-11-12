@@ -446,6 +446,7 @@ impl<'a> TokenizeState<'a> {
                 match token_text.as_str() {
                     "return" => TokenKeyword::Return.into(),
                     "if" => TokenKeyword::If.into(),
+                    "else" => TokenKeyword::Else.into(),
                     "for" => TokenKeyword::For.into(),
                     "while" => TokenKeyword::While.into(),
                     "import" => TokenKeyword::Import.into(),

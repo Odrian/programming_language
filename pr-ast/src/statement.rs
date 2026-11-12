@@ -59,6 +59,7 @@ pub enum Statement {
     If {
         condition: RExpression,
         body: Vec<RStatement>,
+        else_body: Option<Vec<RStatement>>,
     },
     While {
         condition: RExpression,
@@ -171,7 +172,18 @@ impl Statement {
         Self::SetVariable { what, value, op }
     }
     pub const fn new_if(condition: RExpression, body: Vec<RStatement>) -> Self {
-        Self::If { condition, body }
+        Self::If {
+            condition,
+            body,
+            else_body: None,
+        }
+    }
+    pub const fn new_if_else(condition: RExpression, body: Vec<RStatement>, else_body: Vec<RStatement>) -> Self {
+        Self::If {
+            condition,
+            body,
+            else_body: Some(else_body),
+        }
     }
     pub const fn new_while(condition: RExpression, body: Vec<RStatement>) -> Self {
         Self::While { condition, body }
@@ -260,9 +272,18 @@ impl fmt::Display for Statement {
             Self::Expression(expression) => {
                 write!(f, "{expression}")
             }
-            Self::If { condition, body } => {
+            Self::If {
+                condition,
+                body,
+                else_body,
+            } => {
                 let inside = to_string_with_tabs(body);
-                write!(f, "if {condition} {{\n{inside}\n}}")
+                write!(f, "if {condition} {{\n{inside}\n}}")?;
+                if let Some(else_body) = else_body {
+                    let inside = to_string_with_tabs(else_body);
+                    write!(f, " else {{\n{inside}\n}}")?;
+                }
+                Ok(())
             }
             Self::While { condition, body } => {
                 let inside = to_string_with_tabs(body);

@@ -46,6 +46,51 @@ main :: () -> i32 {
 }
 
 #[test]
+fn test_else_if_evaluation_order() {
+    assert_eq!(
+        56,
+        get_exit_code(
+            "probe :: (checks: *i32, result: bool) -> bool {
+                *checks += 1;
+                return result;
+            }
+            choose :: (first: bool, second: bool) -> i32 {
+                checks := 0;
+                value := 0;
+                if probe(&checks, first) { value = 1; }
+                else if probe(&checks, second) { value = 2; }
+                else { value = 3; }
+                return checks * 10 + value;
+            }
+            main :: () -> i32 {
+                return choose(true, true) + choose(false, true) + choose(false, false);
+            }"
+        ),
+    );
+}
+
+#[test]
+fn test_if_else_nested_continuations() {
+    assert_eq!(
+        23,
+        get_exit_code(
+            "count :: (b: bool) -> i32 {
+                x := 0;
+                if b {
+                    if false { return 99; }
+                    while x < 2 { x += 1; }
+                } else {
+                    while x < 3 { x += 1; }
+                    if false { return 98; }
+                }
+                return x;
+            }
+            main :: () -> i32 { return count(true) * 10 + count(false); }"
+        ),
+    );
+}
+
+#[test]
 fn test_for() {
     assert_eq!(
         8,

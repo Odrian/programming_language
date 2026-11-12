@@ -179,6 +179,8 @@ impl FunctionLinkingContext<'_> {
         }
         let return_type = *return_type;
 
+        self.object_context_window.step_in();
+
         for (arg_name, _) in args {
             let object_type = arguments[arguments_obj.len()].clone();
             let object = self.factory.create_object(arg_name.clone(), object_type);
@@ -186,10 +188,10 @@ impl FunctionLinkingContext<'_> {
             arguments_obj.push(object);
         }
 
-        self.object_context_window.step_in();
         self.current_function_returns = Some(return_type.clone());
-        let mut body = self.link_statements_recursive(body)?;
+        let mut body = self.link_scoped_statements(body)?;
         self.current_function_returns = None;
+
         self.object_context_window.step_out();
 
         if !check_is_returns(&body) {
@@ -205,21 +207,29 @@ impl FunctionLinkingContext<'_> {
         self.result.function_statement.insert(object, linked_statement);
         Ok(())
     }
-    fn link_statements_recursive(&mut self, statements: Vec<RStatement>) -> Result<Vec<RLinkedStatement>, ()> {
+    fn link_scoped_statements(&mut self, statements: Vec<RStatement>) -> Result<Vec<RLinkedStatement>, ()> {
         let mut result = Vec::with_capacity(statements.len());
-        for statement in statements {
-            self.parse_statement(statement, &mut result)?;
-        }
+        self.link_scoped_statements_into(statements, &mut result)?;
         Ok(result)
     }
+    fn link_scoped_statements_into(
+        &mut self,
+        statements: Vec<RStatement>,
+        result: &mut Vec<RLinkedStatement>,
+    ) -> Result<(), ()> {
+        self.object_context_window.step_in();
+        for statement in statements {
+            self.parse_statement(statement, result)?;
+        }
+        self.object_context_window.step_out();
+        Ok(())
+    }
+
     fn parse_statement(&mut self, statement: RStatement, result: &mut Vec<RLinkedStatement>) -> Result<(), ()> {
         match statement.value {
             Statement::Brackets(body) => {
-                self.object_context_window.step_in();
-                for statement in body {
-                    self.parse_statement(statement, result)?;
-                }
-                self.object_context_window.step_out();
+                // TODO: add RLinkedStatement::Brackets
+                self.link_scoped_statements_into(body, result)?;
                 Ok(())
             }
             Statement::SetVariable { what, value, op } => {
@@ -255,19 +265,27 @@ impl FunctionLinkingContext<'_> {
                 result.push(LinkedStatement::Expression(expression).add_range(statement.range));
                 Ok(())
             }
-            Statement::If { condition, body } => {
+            Statement::If {
+                condition,
+                body,
+                else_body,
+            } => {
                 let condition = self.parse_expression(condition, Some(&ObjType::BOOL))?;
-                self.object_context_window.step_in();
-                let body = self.link_statements_recursive(body)?;
-                self.object_context_window.step_out();
-                result.push(LinkedStatement::new_if(condition, body).add_range(statement.range));
+                let body = self.link_scoped_statements(body)?;
+
+                let linked_statement = if let Some(else_body) = else_body {
+                    let else_body = self.link_scoped_statements(else_body)?;
+                    LinkedStatement::new_if_else(condition, body, else_body)
+                } else {
+                    LinkedStatement::new_if(condition, body)
+                };
+
+                result.push(linked_statement.add_range(statement.range));
                 Ok(())
             }
             Statement::While { condition, body } => {
                 let condition = self.parse_expression(condition, Some(&ObjType::BOOL))?;
-                self.object_context_window.step_in();
-                let body = self.link_statements_recursive(body)?;
-                self.object_context_window.step_out();
+                let body = self.link_scoped_statements(body)?;
                 result.push(LinkedStatement::new_while(condition, body).add_range(statement.range));
                 Ok(())
             }
@@ -862,10 +880,16 @@ fn check_is_returns(statements: &[RLinkedStatement]) -> bool {
     for statement in statements {
         match &statement.value {
             LinkedStatement::Return(_) => return true,
-            LinkedStatement::If { condition: _, body } | LinkedStatement::While { condition: _, body }
-                if check_is_returns(body) =>
+            LinkedStatement::If {
+                body,
+                else_body: Some(else_body),
+                ..
+            } =>
             {
-                return true;
+                #[expect(clippy::collapsible_match)]
+                if check_is_returns(body) && check_is_returns(else_body) {
+                    return true;
+                }
             }
             _ => (),
         }

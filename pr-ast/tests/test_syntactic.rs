@@ -189,6 +189,88 @@ fn test_if_while() {
 }
 
 #[test]
+fn test_if_else() {
+    let first = Expression::Variable(RString::new_no_range("first".to_owned())).add_no_range();
+    let second = Expression::Variable(RString::new_no_range("second".to_owned())).add_no_range();
+
+    assert_result(
+        "if first { return 1; } else { return 2; }",
+        vec![Statement::new_if_else(
+            first.clone(),
+            vec![
+                Statement::Return(Some(
+                    Expression::from(LiteralExpression::NumberLiteral("1".to_owned())).add_no_range(),
+                ))
+                .add_no_range(),
+            ],
+            vec![
+                Statement::Return(Some(
+                    Expression::from(LiteralExpression::NumberLiteral("2".to_owned())).add_no_range(),
+                ))
+                .add_no_range(),
+            ],
+        )],
+    );
+    assert_result(
+        "if first { return 1; } else if second { return 2; } else { return 3; }",
+        vec![Statement::new_if_else(
+            first.clone(),
+            vec![
+                Statement::Return(Some(
+                    Expression::from(LiteralExpression::NumberLiteral("1".to_owned())).add_no_range(),
+                ))
+                .add_no_range(),
+            ],
+            vec![
+                Statement::new_if_else(
+                    first.clone(),
+                    vec![
+                        Statement::Return(Some(
+                            Expression::from(LiteralExpression::NumberLiteral("2".to_owned())).add_no_range(),
+                        ))
+                        .add_no_range(),
+                    ],
+                    vec![
+                        Statement::Return(Some(
+                            Expression::from(LiteralExpression::NumberLiteral("3".to_owned())).add_no_range(),
+                        ))
+                        .add_no_range(),
+                    ],
+                )
+                .add_no_range(),
+            ],
+        )],
+    );
+
+    assert_result(
+        "if first {} if second {} else {}",
+        vec![
+            Statement::new_if(first, vec![]),
+            Statement::new_if_else(second, vec![], vec![]),
+        ],
+    );
+
+    assert_has_error("else {}");
+    assert_has_error("if first {} else");
+    assert_has_error("if first {} else ()");
+    assert_has_error("if first {} else return 0;");
+    assert_has_error("if first {} else while second {}");
+    assert_has_error("if first {} else if");
+    assert_has_error("if first {} else if {}");
+    assert_has_error("if first {} else if second");
+    assert_has_error("if first {} else {} else {}");
+    assert_has_error("if first {}; else {}");
+    assert_has_error("while first {} else {}");
+}
+
+#[test]
+fn test_cfg_skip_consumes_else_chain() {
+    let statements = parse("#cfg(false) if first {} else if second {} else {} return 5;").unwrap();
+    assert_eq!(statements.len(), 1);
+    assert_eq!(statements[0].to_string(), "return 5");
+}
+
+#[test]
 fn test_operations() {
     assert_no_error("a := a & a");
     assert_no_error("a := a | a");

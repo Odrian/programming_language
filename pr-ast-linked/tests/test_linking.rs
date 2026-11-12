@@ -199,6 +199,35 @@ fn test_functions() {
 }
 
 #[test]
+fn test_returns_on_all_paths() {
+    for body in [
+        "if b { return 1; } else { return 2; }",
+        "if b { return 1; } else if c { return 2; } else { return 3; }",
+        "if b { if c { return 1; } else { return 2; } } else { return 3; }",
+        "if b { return 1; } return 2;",
+        "if b {} else { return 1; } return 2;",
+        "while b { return 1; } return 2;",
+        "if b { while c { return 1; } return 2; } else { return 3; }",
+    ] {
+        assert_no_error_global(&format!("f :: (b: bool, c: bool) -> i32 {{ {body} }}"));
+    }
+
+    for body in [
+        "if b { return 1; }",
+        "if b { return 1; } else {}",
+        "if b {} else { return 1; }",
+        "if b { return 1; } else if c { return 2; }",
+        "if b { if c { return 1; } } else { return 2; }",
+        "if b { while c { return 1; } } else { return 2; }",
+        "while b { return 1; }",
+        "while b { if c { return 1; } else { return 2; } }",
+        "for i in 0..1 { return 1; }",
+    ] {
+        assert_has_error_global(&format!("f :: (b: bool, c: bool) -> i32 {{ {body} }}"));
+    }
+}
+
+#[test]
 fn test_function_with_while() {
     assert_has_error_global("a :: ()  {         if 0 != 0 { x := 0 } e := x }");
     assert_has_error_global("a :: (b: i32) {    if b != 0 { x := 0 } e := x }");

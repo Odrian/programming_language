@@ -54,23 +54,22 @@ impl ParsingState<'_, '_, '_> {
         let (token, range0) = self.next_unwrap(|_| unreachable!())?;
         match token {
             Node::Elem(Token::Keyword(keyword)) => match keyword {
-                TokenKeyword::If | TokenKeyword::While => {
-                    let condition = self.parse_expression(true)?;
-
-                    let (token, range_br) = self.next_unwrap(|s| ExpectedEnum::CurlyBracket.diagnostic(s.all_range))?;
-                    let Node::Block(BracketType::Curly, vec) = token else {
-                        self.add_diag(ExpectedEnum::CurlyBracket.diagnostic(range_br));
-                        return Err(());
-                    };
-                    let body = self.parse_statements(vec, range_br, false);
-
-                    let statement = if keyword == TokenKeyword::If {
-                        Statement::new_if(condition, body)
-                    } else {
-                        Statement::new_while(condition, body)
-                    };
+                TokenKeyword::If => {
+                    result.push(self.parse_if(range0)?);
+                    Ok(())
+                }
+                TokenKeyword::While => {
+                    let (condition, body, range_br) = self.parse_condition_and_body()?;
+                    let statement = Statement::new_while(condition, body);
                     result.push(statement.add_range(Range::new(range0.start, range_br.end)));
                     Ok(())
+                }
+                TokenKeyword::Else => {
+                    self.add_diag(SyntacticError::from_text(
+                        "unexpected `else` without a preceding `if`",
+                        range0,
+                    ));
+                    Err(())
                 }
                 TokenKeyword::For => {
                     let (token, range) = self.next_unwrap(|s| ExpectedEnum::Name.diagnostic_after(s.all_range))?;
@@ -352,5 +351,53 @@ impl ParsingState<'_, '_, '_> {
                 Ok(())
             }
         }
+    }
+    fn parse_condition_and_body(&mut self) -> Result<(RExpression, Vec<RStatement>, Range), ()> {
+        let condition = self.parse_expression(true)?;
+
+        let (token, range) = self.next_unwrap(|_| ExpectedEnum::CurlyBracket.diagnostic_after(condition.range))?;
+        let Node::Block(BracketType::Curly, tokens) = token else {
+            self.add_diag(ExpectedEnum::CurlyBracket.diagnostic(range));
+            return Err(());
+        };
+        let body = self.parse_statements(tokens, range, false);
+
+        Ok((condition, body, range))
+    }
+    fn parse_if(&mut self, if_range: Range) -> Result<RStatement, ()> {
+        let (condition, body, body_range) = self.parse_condition_and_body()?;
+        let mut end = body_range.end;
+
+        if !matches!(
+            self.peek(),
+            Some((RefNode::Elem(Token::Keyword(TokenKeyword::Else)), _))
+        ) {
+            return Ok(Statement::new_if(condition, body).add_range(Range::new(if_range.start, end)));
+        }
+
+        let (_, else_range) = self.next_unwrap(|_| unreachable!())?;
+        let (token, range) = self.next_unwrap(|_| {
+            (ExpectedEnum::CurlyBracket | ExpectedEnum::new_string("`if`")).diagnostic_after(else_range)
+        })?;
+
+        let else_body = match token {
+            // else { ... }
+            Node::Block(BracketType::Curly, tokens) => {
+                end = range.end;
+                self.parse_statements(tokens, range, false)
+            }
+            // else if ...
+            Node::Elem(Token::Keyword(TokenKeyword::If)) => {
+                let nested_if = self.parse_if(range)?;
+                end = nested_if.range.end;
+                vec![nested_if]
+            }
+            _ => {
+                self.add_diag((ExpectedEnum::CurlyBracket | ExpectedEnum::new_string("`if`")).diagnostic(range));
+                return Err(());
+            }
+        };
+
+        Ok(Statement::new_if_else(condition, body, else_body).add_range(Range::new(if_range.start, end)))
     }
 }

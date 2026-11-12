@@ -337,7 +337,11 @@ mod declaration_parsing {
                         self.parse_expression(expression.value.expr)?;
                     }
                 }
-                LinkedStatement::If { condition, body } => {
+                LinkedStatement::If {
+                    condition,
+                    body,
+                    else_body,
+                } => {
                     let condition_value = self
                         .parse_expression(condition.value.expr)?
                         .expect("checked above")
@@ -346,15 +350,34 @@ mod declaration_parsing {
                     let function = self.current_function.expect("checked above");
                     let then_bb = self.context.append_basic_block(function, "then");
                     let merge_bb = self.context.append_basic_block(function, "merge");
+                    let else_bb = if else_body.is_some() {
+                        self.context.append_basic_block(function, "else")
+                    } else {
+                        merge_bb
+                    };
                     self.builder
-                        .build_conditional_branch(condition_value, then_bb, merge_bb)?;
+                        .build_conditional_branch(condition_value, then_bb, else_bb)?;
 
                     self.builder.position_at_end(then_bb);
-                    let has_return = self.parse_statements(body)?;
-                    if !has_return {
+                    let then_has_return = self.parse_statements(body)?;
+                    if !then_has_return {
                         self.builder.build_unconditional_branch(merge_bb)?;
                     }
+
+                    let mut else_has_return = false;
+                    if let Some(else_body) = else_body {
+                        self.builder.position_at_end(else_bb);
+                        else_has_return = self.parse_statements(else_body)?;
+                        if !else_has_return {
+                            self.builder.build_unconditional_branch(merge_bb)?;
+                        }
+                    }
+
                     self.builder.position_at_end(merge_bb);
+                    if then_has_return && else_has_return {
+                        self.builder.build_unreachable()?;
+                        return Ok(true);
+                    }
                 }
                 LinkedStatement::While { condition, body } => {
                     let function = self.current_function.expect("checked above");
@@ -374,10 +397,9 @@ mod declaration_parsing {
 
                     self.builder.position_at_end(body_bb);
                     let has_return = self.parse_statements(body)?;
-                    if has_return {
-                        return Ok(true);
+                    if !has_return {
+                        self.builder.build_unconditional_branch(cond_bb)?;
                     }
-                    self.builder.build_unconditional_branch(cond_bb)?;
                     self.builder.position_at_end(after_bb);
                 }
                 LinkedStatement::SetVariable { what, value, op } => {

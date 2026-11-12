@@ -73,7 +73,7 @@ pub fn get_exit_code(text: &str) -> i32 {
 
     match result {
         Ok(value) => value,
-        Err(err) => panic!("{err:?}"),
+        Err(err) => panic!("{err}"),
     }
 }
 

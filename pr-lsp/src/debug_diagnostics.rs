@@ -131,8 +131,15 @@ impl DebugDiagnostics<'_> {
 
                 Statement::Brackets(body) => self.statements_diags(body),
                 Statement::Expression(expr) => self.expr_diags(&expr.clone().add_range(*range)),
-                Statement::If { condition, body } => {
+                Statement::If {
+                    condition,
+                    body,
+                    else_body,
+                } => {
                     self.statements_diags(body);
+                    if let Some(else_body) = else_body {
+                        self.statements_diags(else_body);
+                    }
                     self.expr_diags(condition)
                 }
                 Statement::While { condition, body } => {

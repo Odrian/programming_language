@@ -130,3 +130,12 @@ impl ErrKind {
         }
     }
 }
+
+impl fmt::Display for ErrorQueue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for error in &self.vec {
+            writeln!(f, "{error}")?;
+        }
+        Ok(())
+    }
+}
