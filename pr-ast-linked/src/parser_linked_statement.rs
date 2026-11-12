@@ -209,27 +209,19 @@ impl FunctionLinkingContext<'_> {
     }
     fn link_scoped_statements(&mut self, statements: Vec<RStatement>) -> Result<Vec<RLinkedStatement>, ()> {
         let mut result = Vec::with_capacity(statements.len());
-        self.link_scoped_statements_into(statements, &mut result)?;
-        Ok(result)
-    }
-    fn link_scoped_statements_into(
-        &mut self,
-        statements: Vec<RStatement>,
-        result: &mut Vec<RLinkedStatement>,
-    ) -> Result<(), ()> {
         self.object_context_window.step_in();
         for statement in statements {
-            self.parse_statement(statement, result)?;
+            self.parse_statement(statement, &mut result)?;
         }
         self.object_context_window.step_out();
-        Ok(())
+        Ok(result)
     }
 
     fn parse_statement(&mut self, statement: RStatement, result: &mut Vec<RLinkedStatement>) -> Result<(), ()> {
         match statement.value {
             Statement::Brackets(body) => {
-                // TODO: add RLinkedStatement::Brackets
-                self.link_scoped_statements_into(body, result)?;
+                let body = self.link_scoped_statements(body)?;
+                result.push(LinkedStatement::new_brackets(body).add_range(statement.range));
                 Ok(())
             }
             Statement::SetVariable { what, value, op } => {

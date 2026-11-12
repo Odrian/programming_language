@@ -337,6 +337,7 @@ mod declaration_parsing {
                         self.parse_expression(expression.value.expr)?;
                     }
                 }
+                LinkedStatement::Brackets(body) => return self.parse_statements(body),
                 LinkedStatement::If {
                     condition,
                     body,

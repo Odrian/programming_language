@@ -64,6 +64,7 @@ pub enum LinkedStatement {
     },
 
     Expression(RTypedExpression),
+    Brackets(Vec<RLinkedStatement>),
     If {
         condition: RTypedExpression,
         body: Vec<RLinkedStatement>,
@@ -145,6 +146,9 @@ impl LinkedStatement {
     }
     pub const fn new_set(what: RTypedExpression, value: RTypedExpression, op: Option<RTwoSidedOperation>) -> Self {
         Self::SetVariable { what, value, op }
+    }
+    pub const fn new_brackets(body: Vec<RLinkedStatement>) -> Self {
+        Self::Brackets(body)
     }
     pub const fn new_if(condition: RTypedExpression, body: Vec<RLinkedStatement>) -> Self {
         Self::If {
@@ -295,6 +299,10 @@ impl LinkedStatement {
                 }
             }
             Self::Expression(expression) => expression.value.to_string::<WITH_ID>(factory),
+            Self::Brackets(body) => {
+                let inside = to_string_with_tabs(body, |x| x.value.to_string::<WITH_ID>(factory));
+                format!("{{\n{inside}\n}}")
+            }
             Self::If {
                 condition,
                 body,
