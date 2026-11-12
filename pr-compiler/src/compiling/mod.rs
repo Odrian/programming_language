@@ -13,7 +13,7 @@ use inkwell::{
 use pr_ast_linked::LinkedModule;
 use pr_ast_linked::linked_statement::GlobalLinkedStatement;
 use pr_ast_linked::object::{IntObjType, ObjType};
-use pr_common::TargetArch;
+use pr_common::{TargetArch, TargetOs};
 use std::path::Path;
 use std::process::Command;
 
@@ -111,10 +111,9 @@ fn create_executable(config: &CompileConfig, tm: &TargetMachine, module: &Module
     }
 
     let status_option = if !args.no_exe {
-        let status = Command::new("gcc")
-            .args([object_name.as_str(), "-o", executable_name.as_str()])
-            .status();
-        Some(status)
+        let mut command = linker_command(config.target.target_os, &object_name, &executable_name);
+        let linker = command.get_program().to_string_lossy().into_owned();
+        Some((linker, command.status()))
     } else {
         None
     };
@@ -126,7 +125,7 @@ fn create_executable(config: &CompileConfig, tm: &TargetMachine, module: &Module
         }
     }
 
-    if let Some(status) = status_option {
+    if let Some((linker, status)) = status_option {
         // parse linking result
         match status {
             Ok(exit_status) => {
@@ -136,13 +135,39 @@ fn create_executable(config: &CompileConfig, tm: &TargetMachine, module: &Module
                         .map(|c| c.to_string())
                         .unwrap_or_else(|| "unknown".to_owned());
                     let description = format!("exit with code {exit_code}");
-                    return Err(LLVMError::linker_error(description));
+                    return Err(LLVMError::linker_error(&linker, description));
                 }
             }
-            Err(err) => return Err(LLVMError::linker_error(err.to_string())),
+            Err(err) => return Err(LLVMError::linker_error(&linker, err.to_string())),
         }
     }
     Ok(())
+}
+
+fn linker_command(target_os: TargetOs, object_name: &str, executable_name: &str) -> Command {
+    match target_os {
+        TargetOs::Linux | TargetOs::Macos => {
+            let mut command = Command::new("cc");
+            command.args([object_name, "-o", executable_name]);
+            command
+        }
+        TargetOs::Windows => {
+            let mut command = Command::new("link.exe");
+            command
+                .args(["/NOLOGO", "/SUBSYSTEM:CONSOLE"])
+                .arg(format!("/OUT:{executable_name}"))
+                .arg(object_name)
+                // IDK what it is, but it's probably necessary
+                .args([
+                    "/DEFAULTLIB:libcmt",
+                    "/DEFAULTLIB:libvcruntime",
+                    "/DEFAULTLIB:libucrt",
+                    "/DEFAULTLIB:legacy_stdio_definitions",
+                    "/DEFAULTLIB:kernel32",
+                ]);
+            command
+        }
+    }
 }
 
 fn create_target_machine(config: &CompileConfig) -> TargetMachine {

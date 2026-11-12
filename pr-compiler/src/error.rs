@@ -40,8 +40,8 @@ impl LLVMError {
     pub fn llvm_failed_to_create_assembly(llvm_error: String) -> Self {
         Self::Error(format!("Error: failed to create assembly file: {llvm_error}"))
     }
-    pub fn linker_error(description: String) -> Self {
-        Self::Error(format!("Error: failed to run 'gcc': {description}"))
+    pub fn linker_error(linker: &str, description: String) -> Self {
+        Self::Error(format!("Error: linker '{linker}' failed: {description}"))
     }
 
     pub fn source_file_reading_error(filepath: PathBuf, io_error: String) -> Self {
