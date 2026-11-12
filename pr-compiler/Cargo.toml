@@ -11,5 +11,7 @@ pr-ast-linked = { path = "../pr-ast-linked" }
 
 inkwell = { workspace = true }
 clap = { workspace = true }
-tempfile = { workspace = true }
 lsp-types = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

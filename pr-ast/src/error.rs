@@ -1,7 +1,7 @@
-use std::fmt::{Display, Formatter};
-use std::ops::BitOr;
 use lsp_types::Range;
 use pr_common::error::Diagnostic;
+use std::fmt::{Display, Formatter};
+use std::ops::BitOr;
 
 pub struct SyntacticError {}
 
@@ -25,7 +25,7 @@ impl SyntacticError {
 
         Diagnostic::new_error(range_before, "expected semicolon".to_string())
     }
-    
+
     pub fn incorrect_variable_definition(range: Range) -> Diagnostic {
         Diagnostic::new_error(range, "incorrect variable definition".to_string())
     }
@@ -38,7 +38,7 @@ impl SyntacticError {
 }
 
 pub struct ExpectedError {
-    variants: Vec<ExpectedEnum>
+    variants: Vec<ExpectedEnum>,
 }
 
 pub enum ExpectedEnum {
@@ -67,7 +67,9 @@ pub enum ExpectedEnum {
 
 impl ExpectedError {
     fn from(expected_enum: ExpectedEnum) -> Self {
-        Self { variants: vec![expected_enum] }
+        Self {
+            variants: vec![expected_enum],
+        }
     }
     pub fn diagnostic(&self, range: Range) -> Diagnostic {
         Diagnostic::new_error(range, self.to_string())
@@ -76,9 +78,12 @@ impl ExpectedError {
         Diagnostic::new_error(range, self.to_string() + " after that")
     }
     fn to_string(&self) -> String {
-        let variants = self.variants.iter()
+        let variants = self
+            .variants
+            .iter()
             .map(ToString::to_string)
-            .collect::<Vec<_>>().join(" or ");
+            .collect::<Vec<_>>()
+            .join(" or ");
         format!("expected {variants}")
     }
 }
@@ -107,7 +112,9 @@ impl BitOr for ExpectedEnum {
     type Output = ExpectedError;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        ExpectedError { variants: vec![self, rhs] }
+        ExpectedError {
+            variants: vec![self, rhs],
+        }
     }
 }
 

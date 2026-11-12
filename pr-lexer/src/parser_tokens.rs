@@ -2,11 +2,7 @@ use crate::error::TokenizeError;
 use crate::token::*;
 use crate::{TokenLinearTree, TokenTreeBuilder};
 use lsp_types::{Position, Range};
-use pr_common::{
-    error::ErrorQueue,
-    operations::*,
-    BracketType,
-};
+use pr_common::{BracketType, error::ErrorQueue, operations::*};
 use std::str::Chars;
 
 pub fn parse_tokens(errors: &mut ErrorQueue, text: &str) -> TokenLinearTree {
@@ -17,7 +13,9 @@ pub fn parse_tokens(errors: &mut ErrorQueue, text: &str) -> TokenLinearTree {
 
 #[inline]
 fn add_one(next: Option<char>, position: &mut Position) {
-    let Some(next) = next else { return; };
+    let Some(next) = next else {
+        return;
+    };
 
     if next == '\n' {
         position.line += 1;
@@ -74,30 +72,33 @@ fn parse_inside_brackets(
     errors: &mut ErrorQueue,
     text: &mut Chars,
     start_position: Position,
-    open_bracket_type: Option<BracketType>
+    open_bracket_type: Option<BracketType>,
 ) -> (Position, Range) {
     let mut buffer = {
         let mut start_buffer_index = start_position;
-        if open_bracket_type.is_some() { add_one(Some('('), &mut start_buffer_index); }
+        if open_bracket_type.is_some() {
+            add_one(Some('('), &mut start_buffer_index);
+        }
         IndexedTextBuffer::new(start_buffer_index)
     };
 
     let mut text_was: Chars;
     loop {
         text_was = text.clone();
-        let Some(char) = text.next() else { break; };
+        let Some(char) = text.next() else {
+            break;
+        };
 
         if char == '"' || char == '\'' || char == '`' {
             buffer.flush(tree, errors);
 
             let quotes_start_position = buffer.index;
             buffer.skip_char();
-            loop { // here index map to previous char in start of loop
+            loop {
+                // here index map to previous char in start of loop
                 let Some(next_char) = text.next() else {
-                    errors.add_diag(
-                        TokenizeError::quotes_not_closed()
-                            .to_diag1(quotes_start_position));
-                    break
+                    errors.add_diag(TokenizeError::quotes_not_closed().to_diag1(quotes_start_position));
+                    break;
                 };
                 if next_char == char {
                     buffer.skip_char(); // skip next_char
@@ -113,13 +114,13 @@ fn parse_inside_brackets(
                         Some('r') => buffer.add_escape_char('\r'),
                         Some('"') => buffer.add_char('"'),
                         Some('\'') => buffer.add_char('\''),
-                        Some('x') => (|| { // closure
+                        Some('x') => (|| {
+                            // closure
                             buffer.skip_char(); // skip 'x'
                             let mut escape_seq = String::new();
                             let Some(first) = text.next() else {
-                                errors.add_diag(
-                                    TokenizeError::incorrect_escape("x".to_string())
-                                        .to_diag1(buffer.index));
+                                errors
+                                    .add_diag(TokenizeError::incorrect_escape("x".to_string()).to_diag1(buffer.index));
                                 return;
                             };
                             buffer.skip_char(); // skip first char
@@ -127,8 +128,8 @@ fn parse_inside_brackets(
 
                             let Some(second) = text.next() else {
                                 errors.add_diag(
-                                    TokenizeError::incorrect_escape(format!("x{escape_seq}"))
-                                        .to_diag1(buffer.index));
+                                    TokenizeError::incorrect_escape(format!("x{escape_seq}")).to_diag1(buffer.index),
+                                );
                                 return;
                             };
                             buffer.skip_char(); // skip second char
@@ -136,26 +137,24 @@ fn parse_inside_brackets(
 
                             let Ok(hex) = u8::from_str_radix(&escape_seq, 16) else {
                                 errors.add_diag(
-                                    TokenizeError::incorrect_escape(format!("x{escape_seq}"))
-                                        .to_diag1(buffer.index));
+                                    TokenizeError::incorrect_escape(format!("x{escape_seq}")).to_diag1(buffer.index),
+                                );
                                 return;
                             };
 
                             buffer.add_escape_char(hex as char);
                         })(), // closure end
                         Some(ch) => {
-                            errors.add_diag(
-                                TokenizeError::incorrect_escape(ch.to_string())
-                                    .to_diag1(buffer.index));
+                            errors.add_diag(TokenizeError::incorrect_escape(ch.to_string()).to_diag1(buffer.index));
                             buffer.add_char(ch);
                         }
                         None => {
                             errors.add_diag(
-                                TokenizeError::incorrect_escape("*empty*".to_string())
-                                    .to_diag1(buffer.index));
+                                TokenizeError::incorrect_escape("*empty*".to_string()).to_diag1(buffer.index),
+                            );
                         }
                     }
-                    continue
+                    continue;
                 } else {
                     buffer.add_char(next_char);
                 }
@@ -166,7 +165,7 @@ fn parse_inside_brackets(
                 '\'' => Token::Quotes(quotes_text),
                 '"' => Token::DoubleQuotes(quotes_text),
                 '`' => Token::String(quotes_text),
-                _ => unreachable!()
+                _ => unreachable!(),
             };
 
             let position = Range::new(quotes_start_position, buffer.index);
@@ -176,26 +175,21 @@ fn parse_inside_brackets(
             buffer.flush(tree, errors);
 
             tree.start_new_block();
-            let (new_index, range) =
-                parse_inside_brackets(tree, errors, text, buffer.index, Some(bracket_type));
+            let (new_index, range) = parse_inside_brackets(tree, errors, text, buffer.index, Some(bracket_type));
             tree.close_block(bracket_type, range);
 
             buffer.set_new_index(new_index);
         } else if let Some(bracket_type) = parse_close_bracket(char) {
             // close bracket
             let Some(open_bracket_type) = open_bracket_type else {
-                errors.add_diag(
-                    TokenizeError::bracket_not_opened(bracket_type)
-                        .to_diag1(buffer.index)
-                );
+                errors.add_diag(TokenizeError::bracket_not_opened(bracket_type).to_diag1(buffer.index));
                 buffer.skip_char();
                 continue;
             };
 
             if bracket_type != open_bracket_type {
                 errors.add_diag(
-                    TokenizeError::wrong_bracket_closed(open_bracket_type, bracket_type)
-                        .to_diag1(buffer.index)
+                    TokenizeError::wrong_bracket_closed(open_bracket_type, bracket_type).to_diag1(buffer.index),
                 );
 
                 // expect {  [  }, so unconsume close bracket and step out
@@ -216,10 +210,7 @@ fn parse_inside_brackets(
     buffer.flush(tree, errors);
 
     if let Some(open_bracket_type) = open_bracket_type {
-        errors.add_diag(
-            TokenizeError::bracket_not_closed(open_bracket_type)
-                .to_diag1(start_position)
-        );
+        errors.add_diag(TokenizeError::bracket_not_closed(open_bracket_type).to_diag1(start_position));
     }
 
     let unused_position = Position::default();
@@ -233,7 +224,7 @@ const fn parse_open_bracket(char: char) -> Option<BracketType> {
         '{' => Some(BracketType::Curly),
         '(' => Some(BracketType::Round),
         '[' => Some(BracketType::Square),
-        _ => None
+        _ => None,
     }
 }
 
@@ -242,7 +233,7 @@ const fn parse_close_bracket(char: char) -> Option<BracketType> {
         '}' => Some(BracketType::Curly),
         ')' => Some(BracketType::Round),
         ']' => Some(BracketType::Square),
-        _ => None
+        _ => None,
     }
 }
 
@@ -250,7 +241,7 @@ pub fn split_text_without_brackets(
     tree: &mut TokenTreeBuilder,
     errors: &mut ErrorQueue,
     text: &str,
-    offset_position: Position
+    offset_position: Position,
 ) {
     let mut iter = text.chars().peekable();
     let mut state = TokenizeState::new(tree, offset_position);
@@ -270,7 +261,7 @@ pub fn split_text_without_brackets(
                     Some('=') => {
                         iter.next();
                         state.add(2, CompareOperator::NotEqual.into()); // !=
-                    },
+                    }
                     _ => state.add(1, OneSidedOperation::BoolNot.into()), // !
                 }
             }
@@ -324,7 +315,7 @@ pub fn split_text_without_brackets(
                     '*' => NumberOperation::Mul.into(),
                     '/' => NumberOperation::Div.into(),
                     '%' => NumberOperation::Rem.into(),
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 };
                 match iter.peek() {
                     Some('=') => {
@@ -394,10 +385,7 @@ pub fn split_text_without_brackets(
                 }
             }
             _ => {
-                errors.add_diag(
-                    TokenizeError::unexpected_char()
-                        .to_diag1(state.buffer_end)
-                );
+                errors.add_diag(TokenizeError::unexpected_char().to_diag1(state.buffer_end));
                 state.use_char_in_string(char);
             }
         }
@@ -463,7 +451,7 @@ impl<'a> TokenizeState<'a> {
                     "for" => TokenKeyword::For.into(),
                     "while" => TokenKeyword::While.into(),
                     "import" => TokenKeyword::Import.into(),
-                    _ => Token::String(token_text)
+                    _ => Token::String(token_text),
                 }
             };
             let place_info = Range::new(self.buffer_start, self.buffer_end);

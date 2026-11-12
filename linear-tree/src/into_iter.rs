@@ -5,7 +5,7 @@ use std::mem::ManuallyDrop;
 /// node that "owns" itself and subnodes
 pub enum Node<'inner, Elem, Block, Meta> {
     Elem(Elem),
-    Block(Block, NodeIntoIterator<'inner, Elem, Block, Meta>)
+    Block(Block, NodeIntoIterator<'inner, Elem, Block, Meta>),
 }
 
 impl<Elem, Block, Meta> LinearTree<Elem, Block, Meta> {
@@ -20,9 +20,12 @@ impl<Elem, Block, Meta> LinearTree<Elem, Block, Meta> {
             let end = ptr.add(me.tree.len());
 
             RootNodeIntoIterator {
-                iterator: ManuallyDrop::new(
-                    NodeIntoIterator { ptr, begin, end, phantom: PhantomData }
-                ),
+                iterator: ManuallyDrop::new(NodeIntoIterator {
+                    ptr,
+                    begin,
+                    end,
+                    phantom: PhantomData,
+                }),
                 capacity,
             }
         }
@@ -41,7 +44,6 @@ impl<'a, Elem, Block, Meta> RootNodeIntoIterator<'a, Elem, Block, Meta> {
     }
 }
 
-
 /// Safety: owns memory in [begin, end), but not the container
 pub struct NodeIntoIterator<'a, Elem, Block, Meta> {
     /// vector ptr
@@ -51,7 +53,7 @@ pub struct NodeIntoIterator<'a, Elem, Block, Meta> {
     /// after last node, == ptr + length
     end: *mut NodeWithMeta<Elem, Block, Meta>,
 
-    phantom: PhantomData<&'a [NodeWithMeta<Elem, Block, Meta>]>
+    phantom: PhantomData<&'a [NodeWithMeta<Elem, Block, Meta>]>,
 }
 
 impl<'outer, Elem, Block, Meta> NodeIntoIterator<'outer, Elem, Block, Meta> {
@@ -70,17 +72,17 @@ impl<'outer, Elem, Block, Meta> NodeIntoIterator<'outer, Elem, Block, Meta> {
             let node = &*self.begin as &'outer NodeWithMeta<Elem, Block, Meta>;
 
             match &node.0 {
-                TreeNode::Elem(elem) => {
-                    Some((Node::Elem(elem), &node.1))
-                }
+                TreeNode::Elem(elem) => Some((Node::Elem(elem), &node.1)),
                 TreeNode::Block(node_block) => {
                     let ptr = self.ptr as *mut NodeWithMeta<&Elem, &Block, &Meta>;
-                    let fake_iter = NodeIntoIterator { ptr, begin: ptr, end: ptr, phantom: PhantomData };
+                    let fake_iter = NodeIntoIterator {
+                        ptr,
+                        begin: ptr,
+                        end: ptr,
+                        phantom: PhantomData,
+                    };
 
-                    Some((Node::Block(
-                        &node_block.block,
-                        fake_iter,
-                    ), &node.1))
+                    Some((Node::Block(&node_block.block, fake_iter), &node.1))
                 }
             }
         }
@@ -107,13 +109,15 @@ impl<'outer, Elem, Block, Meta> Iterator for NodeIntoIterator<'outer, Elem, Bloc
                 TreeNode::Block(node_block) => {
                     let begin = self.ptr.add(node_block.start);
                     let end = self.ptr.add(node_block.end);
-                    let iter = NodeIntoIterator { ptr: self.ptr, begin, end, phantom: PhantomData };
+                    let iter = NodeIntoIterator {
+                        ptr: self.ptr,
+                        begin,
+                        end,
+                        phantom: PhantomData,
+                    };
 
                     self.begin = end;
-                    Some((Node::Block(
-                        node_block.block,
-                        iter,
-                    ), node.1))
+                    Some((Node::Block(node_block.block, iter), node.1))
                 }
             }
         }
@@ -137,11 +141,7 @@ impl<Elem, Block, Meta> Drop for RootNodeIntoIterator<'_, Elem, Block, Meta> {
             let ptr = self.iterator.ptr;
             ManuallyDrop::drop(&mut self.iterator);
 
-            let _ = Vec::<NodeWithMeta<Elem, Block, Meta>>::from_raw_parts(
-                ptr,
-                0,
-                self.capacity
-            );
+            let _ = Vec::<NodeWithMeta<Elem, Block, Meta>>::from_raw_parts(ptr, 0, self.capacity);
         }
     }
 }

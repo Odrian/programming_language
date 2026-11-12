@@ -1,8 +1,7 @@
-use lsp_types::Range;
 use linear_tree;
+use lsp_types::Range;
 
 pub use linear_tree::{build, build_no_meta};
-
 
 pub type NodeIntoIter<'a, Elem, Block> = linear_tree::NodeIntoIterator<'a, Elem, Block, Range>;
 pub type NodeIterator<'a, Elem, Block> = linear_tree::NodeIterator<'a, Elem, Block, Range>;

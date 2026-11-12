@@ -60,17 +60,23 @@ main :: () -> i32 {
 fn test_literals() {
     assert_eq!(1, get_exit_code_main_return("257 as u8 as i32"));
     assert_eq!(0, get_exit_code_main_return("((-1 as u128) + 1_u128) as i32"));
-    assert_eq!(1, get_exit_code_main_return(&format!("('a' as i32 == {}) as i32", 'a' as i32)));
-    assert_eq!(1, get_exit_code_main_return(&format!("({}_u8 as char == 'a') as i32", 'a' as i32)));
+    assert_eq!(
+        1,
+        get_exit_code_main_return(&format!("('a' as i32 == {}) as i32", 'a' as i32))
+    );
+    assert_eq!(
+        1,
+        get_exit_code_main_return(&format!("({}_u8 as char == 'a') as i32", 'a' as i32))
+    );
 
     assert_eq!(1, get_exit_code_main_return("!false as i32"));
 
     // FIXME: uncomment when fixed
-//     get_exit_code_main("\
-// a := 10000000000000000000000000000000000000000000.0000000000000000000000000000000000001_f32;
-// a := 100000000000000000000000000000000000000000000000000000000000000000000000000000001_u8;
-// return 0
-// ");
+    //     get_exit_code_main("\
+    // a := 10000000000000000000000000000000000000000000.0000000000000000000000000000000000001_f32;
+    // a := 100000000000000000000000000000000000000000000000000000000000000000000000000000001_u8;
+    // return 0
+    // ");
 }
 
 #[test]

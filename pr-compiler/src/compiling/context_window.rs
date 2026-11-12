@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use inkwell::values::{AnyValueEnum, FunctionValue, PointerValue};
 use pr_ast_linked::object::Object;
+use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 struct ValueContext<'ctx>(HashMap<Object, AnyValueEnum<'ctx>>);
@@ -31,8 +31,7 @@ impl<'ctx> ValueContextWindow<'ctx> {
         self.contexts.pop();
     }
     fn get(&self, object: Object) -> Option<&AnyValueEnum<'ctx>> {
-        self.contexts.iter().rev()
-            .find_map(|obj_con|obj_con.get(object))
+        self.contexts.iter().rev().find_map(|obj_con| obj_con.get(object))
     }
     pub fn get_pointer_unwrap(&self, object: Object) -> PointerValue<'ctx> {
         self.get(object).unwrap().into_pointer_value()

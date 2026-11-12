@@ -84,7 +84,7 @@ pub use builder::TreeBuilder;
 mod macro_builder;
 
 mod iterator;
-pub use iterator::{NodeRef, NodeIterator};
+pub use iterator::{NodeIterator, NodeRef};
 
 mod into_iter;
 pub use into_iter::{Node, NodeIntoIterator};
@@ -95,7 +95,7 @@ type NodeWithMeta<Elem, Block, Meta> = (TreeNode<Elem, Block>, Meta);
 
 #[derive(Debug, Clone)]
 pub struct LinearTree<Elem, Block, Meta> {
-    tree: Vec<NodeWithMeta<Elem, Block, Meta>>
+    tree: Vec<NodeWithMeta<Elem, Block, Meta>>,
 }
 
 /// node stored inside tree

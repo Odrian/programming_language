@@ -1,18 +1,17 @@
 use lsp_types::{Position, Range};
 use pr_common::{
-    ranged_tree::{TreeBuilder, build, build_no_meta},
     BracketType,
     error::ErrorQueue,
-    operations::*
+    operations::*,
+    ranged_tree::{TreeBuilder, build, build_no_meta},
 };
-use pr_lexer::{token::*, tokenize, TokenLinearTree};
-
+use pr_lexer::{TokenLinearTree, token::*, tokenize};
 
 fn parse(text: &str) -> Result<TokenLinearTree, ErrorQueue> {
     let mut errors = ErrorQueue::default();
     let tree = tokenize(&mut errors, text);
     if errors.has_errors() {
-        return Err(errors)
+        return Err(errors);
     }
     Ok(tree)
 }
@@ -29,7 +28,12 @@ fn assert_result(str: &str, result: TokenLinearTree) {
         Ok(actual) => actual,
         Err(err) => panic!("{err:?}"),
     };
-    assert!(actual.eq_without_meta(&result), "assertion `left == right` failed\n  left = {0:?}\n right = {1:?}", &actual, &result);
+    assert!(
+        actual.eq_without_meta(&result),
+        "assertion `left == right` failed\n  left = {0:?}\n right = {1:?}",
+        &actual,
+        &result
+    );
 }
 
 #[test]
@@ -83,18 +87,15 @@ fn test_parse_brackets() {
 
     assert_no_error("{([{(([]))}])}");
 
-    assert_result("()", build_no_meta![
-        [ BracketType::Round;
-        ]
-    ]);
-    assert_result("{}", build_no_meta![[BracketType::Curly; ]]);
     assert_result(
-        ",+",
+        "()",
         build_no_meta![
-            Token::Comma,
-            NumberOperation::Add.into(),
+            [ BracketType::Round;
+            ]
         ],
     );
+    assert_result("{}", build_no_meta![[BracketType::Curly; ]]);
+    assert_result(",+", build_no_meta![Token::Comma, NumberOperation::Add.into(),]);
 
     assert_result(
         "{:=+cat=cat}",
@@ -166,8 +167,6 @@ fn test_correct_token_position() {
 fn test_escapes() {
     assert_result(
         r#""\\ \n \t \r \0 \" \x5F""#,
-        build_no_meta![
-            Token::DoubleQuotes("\\ \n \t \r \0 \" \x5F".to_string()),
-        ],
+        build_no_meta![Token::DoubleQuotes("\\ \n \t \r \0 \" \x5F".to_string()),],
     );
 }

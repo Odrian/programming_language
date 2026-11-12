@@ -1,5 +1,5 @@
+use crate::{LinearTree, NodeBlock, NodeWithMeta, TreeNode};
 use std::mem::MaybeUninit;
-use crate::{LinearTree, TreeNode, NodeBlock, NodeWithMeta};
 
 pub struct TreeBuilder<Elem, Block, Meta> {
     tree: Vec<MaybeUninit<NodeWithMeta<Elem, Block, Meta>>>,
@@ -20,10 +20,18 @@ impl<Elem, Block, Meta> Default for TreeBuilder<Elem, Block, Meta> {
 
 impl<Elem, Block, Meta> TreeBuilder<Elem, Block, Meta> {
     pub fn new() -> Self {
-        Self { tree: Vec::default(), start: 0, steps: Vec::default()}
+        Self {
+            tree: Vec::default(),
+            start: 0,
+            steps: Vec::default(),
+        }
     }
     pub fn with_capacity(capacity: usize) -> Self {
-        Self { tree: Vec::with_capacity(capacity), start: 0, steps: Vec::default() }
+        Self {
+            tree: Vec::with_capacity(capacity),
+            start: 0,
+            steps: Vec::default(),
+        }
     }
     pub fn start_new_block(&mut self) {
         self.steps.push(BlockStart { start: self.start });
@@ -40,8 +48,12 @@ impl<Elem, Block, Meta> TreeBuilder<Elem, Block, Meta> {
         let end = self.tree.len();
         let node: &mut MaybeUninit<_> = &mut self.tree[self.start];
         node.write((
-            TreeNode::Block(NodeBlock { block, start: self.start + 1, end }),
-            meta
+            TreeNode::Block(NodeBlock {
+                block,
+                start: self.start + 1,
+                end,
+            }),
+            meta,
         ));
 
         self.start = block_start.start;
@@ -55,7 +67,7 @@ impl<Elem, Block, Meta> TreeBuilder<Elem, Block, Meta> {
         }
         // Safety: only unfinished blocks uninit, self.steps is empty, so all init
         LinearTree {
-            tree: unsafe { std::mem::transmute(self.tree) }
+            tree: unsafe { std::mem::transmute(self.tree) },
         }
     }
 }

@@ -26,7 +26,7 @@ impl ParsingState<'_, '_, '_> {
 
             let Some((token, &range)) = self.peek() else {
                 self.add_diag(SyntacticError::unknown_attribute(range, "EOF"));
-                continue
+                continue;
             };
 
             match token {
@@ -45,21 +45,25 @@ impl ParsingState<'_, '_, '_> {
                     while !state.at_end() {
                         state.parse_attribute(&mut attributes);
 
-                        if state.at_end() { break }
+                        if state.at_end() {
+                            break;
+                        }
 
-                        let Some((token_comma, &range)) = state.peek() else { unreachable!() };
+                        let Some((token_comma, &range)) = state.peek() else {
+                            unreachable!()
+                        };
 
                         if matches!(token_comma, RefNode::Elem(Token::Comma)) {
                             let _ = state.next();
                         } else {
                             state.add_diag(ExpectedEnum::Comma.diagnostic(range));
-                            continue
+                            continue;
                         }
                     }
                 }
                 RefNode::Block(block, _iter) => {
                     self.add_diag(SyntacticError::unknown_attribute(range, block.to_string()));
-                    continue
+                    continue;
                 }
             }
         }
@@ -90,9 +94,10 @@ impl ParsingState<'_, '_, '_> {
     }
 }
 
-
 enum CfgParseType {
-    Any, All, None
+    Any,
+    All,
+    None,
 }
 impl ParsingState<'_, '_, '_> {
     fn parse_cfg(&mut self) -> Result<bool, ()> {
@@ -100,8 +105,7 @@ impl ParsingState<'_, '_, '_> {
     }
 
     fn parse_cfg_recursive(&mut self, parse_type: CfgParseType) -> Result<bool, ()> {
-        let (token, range_round) = self.next_unwrap(|s|
-            ExpectedEnum::RoundBracket.diagnostic_after(s.all_range))?;
+        let (token, range_round) = self.next_unwrap(|s| ExpectedEnum::RoundBracket.diagnostic_after(s.all_range))?;
         let Node::Block(BracketType::Round, mut vec) = token else {
             self.add_diag(SyntacticError::from_text("expected cfg: (...)", range_round));
             return Err(());
@@ -110,8 +114,7 @@ impl ParsingState<'_, '_, '_> {
 
         let mut vec = Vec::new();
         loop {
-            let (token, range_str) = state.next_unwrap(|s|
-                ExpectedEnum::Name.diagnostic_after(s.all_range))?;
+            let (token, range_str) = state.next_unwrap(|s| ExpectedEnum::Name.diagnostic_after(s.all_range))?;
             let Node::Elem(Token::String(str)) = token else {
                 self.add_diag(ExpectedEnum::Name.diagnostic(range_str));
                 return Err(());
@@ -124,12 +127,8 @@ impl ParsingState<'_, '_, '_> {
                     let result = state.parse_cfg_recursive(CfgParseType::None)?;
                     !result
                 }
-                "any" => {
-                    state.parse_cfg_recursive(CfgParseType::Any)?
-                }
-                "all" => {
-                    state.parse_cfg_recursive(CfgParseType::All)?
-                }
+                "any" => state.parse_cfg_recursive(CfgParseType::Any)?,
+                "all" => state.parse_cfg_recursive(CfgParseType::All)?,
                 feature => {
                     let token = state.peek().map(|x| x.0);
 
@@ -147,8 +146,8 @@ impl ParsingState<'_, '_, '_> {
                         }
                         Some(RefNode::Elem(Token::EqualOperation(EqualOperation::Equal))) => {
                             // #cfg(name = value, ...)
-                            let (token, range_value) = state.next_unwrap(|s|
-                                ExpectedEnum::Name.diagnostic_after(s.all_range))?;
+                            let (token, range_value) =
+                                state.next_unwrap(|s| ExpectedEnum::Name.diagnostic_after(s.all_range))?;
                             let Node::Elem(Token::String(value)) = token else {
                                 state.add_diag(ExpectedEnum::Name.diagnostic(range_value));
                                 return Err(());
@@ -165,7 +164,8 @@ impl ParsingState<'_, '_, '_> {
                             let (_token, range) = state.next_unwrap(|_| unreachable!())?;
                             state.add_diag(
                                 (ExpectedEnum::Comma | ExpectedEnum::Equal | ExpectedEnum::CloseRoundBracket)
-                                    .diagnostic(range));
+                                    .diagnostic(range),
+                            );
                             return Err(());
                         }
                     }
@@ -177,21 +177,24 @@ impl ParsingState<'_, '_, '_> {
                     state.add_diag(ExpectedEnum::End.diagnostic(state.all_range));
                     return Err(());
                 }
-                return Ok(result)
+                return Ok(result);
             }
 
             vec.push(result);
 
-            if state.at_end() { break } // (...)
+            if state.at_end() {
+                break;
+            } // (...)
 
-            let (token, range_comma) = state.next_unwrap(|s|
-                ExpectedEnum::Comma.diagnostic_after(s.all_range))?;
+            let (token, range_comma) = state.next_unwrap(|s| ExpectedEnum::Comma.diagnostic_after(s.all_range))?;
             let Node::Elem(Token::Comma) = token else {
                 state.add_diag(ExpectedEnum::Comma.diagnostic(range_comma));
                 return Err(());
             };
 
-            if state.at_end() { break } // (..., )
+            if state.at_end() {
+                break;
+            } // (..., )
         }
 
         match parse_type {

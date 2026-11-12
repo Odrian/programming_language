@@ -1,26 +1,26 @@
 pub mod statement;
 
-mod parser_statements;
-mod parse_expression;
 mod parse_attributes;
-mod parse_import;
-mod parse_function;
+mod parse_expression;
 mod parse_extern;
+mod parse_function;
+mod parse_import;
 mod parse_struct;
 mod parse_type;
+mod parser_statements;
 
 mod error;
 
 use crate::error::SyntacticError;
 use lsp_types::Range;
-use pr_common::error::{Diagnostic, ErrorQueue};
 use pr_common::Target;
+use pr_common::error::{Diagnostic, ErrorQueue};
 use pr_lexer::token::{Token, TokenBlock};
 use pr_lexer::{TokenIntoIter, TokenLinearTree};
 use statement::RStatement;
 
 pub struct SyntacticResult {
-    pub statements: Vec<RStatement>
+    pub statements: Vec<RStatement>,
 }
 
 pub fn parse_ast(errors: &mut ErrorQueue, target: &Target, tokens: TokenLinearTree) -> SyntacticResult {
@@ -42,14 +42,29 @@ struct ParsingState<'e, 'a, 'b> {
     all_range: Range,
 }
 impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
-    pub fn new<'e2, 'a2, 'b2>(errors: &'e2 mut ErrorQueue, target: &'e2 Target, tokens: &'a2 mut TokenIntoIter<'b2>, all_range: Range) -> ParsingState<'e2, 'a2, 'b2> {
-        ParsingState { errors, target, tokens, all_range }
+    pub fn new<'e2, 'a2, 'b2>(
+        errors: &'e2 mut ErrorQueue,
+        target: &'e2 Target,
+        tokens: &'a2 mut TokenIntoIter<'b2>,
+        all_range: Range,
+    ) -> ParsingState<'e2, 'a2, 'b2> {
+        ParsingState {
+            errors,
+            target,
+            tokens,
+            all_range,
+        }
     }
-    pub fn new_state<'e2, 'a2, 'b2>(&'e2 mut self, tokens: &'a2 mut TokenIntoIter<'b2>, all_range: Range) -> ParsingState<'e2, 'a2, 'b2> {
+    pub fn new_state<'e2, 'a2, 'b2>(
+        &'e2 mut self,
+        tokens: &'a2 mut TokenIntoIter<'b2>,
+        all_range: Range,
+    ) -> ParsingState<'e2, 'a2, 'b2> {
         ParsingState {
             errors: self.errors,
             target: self.target,
-            tokens, all_range
+            tokens,
+            all_range,
         }
     }
     pub fn add_diag(&mut self, diagnostic: Diagnostic) {
@@ -59,11 +74,14 @@ impl<'e, 'a, 'b> ParsingState<'e, 'a, 'b> {
     pub fn next(&mut self) -> Option<RangedToken<'b>> {
         self.tokens.next()
     }
-    pub fn next_unwrap(&mut self, gen_diag: impl Fn(&mut ParsingState<'e, 'a, 'b>) -> Diagnostic) -> Result<RangedToken<'a>, ()> {
+    pub fn next_unwrap(
+        &mut self,
+        gen_diag: impl Fn(&mut ParsingState<'e, 'a, 'b>) -> Diagnostic,
+    ) -> Result<RangedToken<'a>, ()> {
         let Some((token, range)) = self.tokens.next() else {
             let diag = gen_diag(self);
             self.errors.add_diag(diag);
-            return Err(())
+            return Err(());
         };
         Ok((token, range))
     }

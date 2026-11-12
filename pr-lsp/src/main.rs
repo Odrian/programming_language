@@ -1,4 +1,4 @@
-use tower_lsp::{LspService, Server, Client};
+use tower_lsp::{Client, LspService, Server};
 
 use pr_lsp::Backend;
 

@@ -1,6 +1,6 @@
+use crate::ModuleLiningContext;
 use crate::error::LinkingError;
 use crate::object::Object;
-use crate::ModuleLiningContext;
 use pr_ast::statement::{ComptimeStatement, Statement};
 use pr_common::error::ErrorQueue;
 use pr_common::ranged::RString;
@@ -12,9 +12,11 @@ pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext)
         path_map.insert(path, file_id);
     }
 
-    let imports = context.files.iter_mut().map(|file|
-        std::mem::take(&mut file.import_statements)
-    ).collect::<Vec<_>>();
+    let imports = context
+        .files
+        .iter_mut()
+        .map(|file| std::mem::take(&mut file.import_statements))
+        .collect::<Vec<_>>();
 
     let mut new_names: Vec<Vec<(RString, Object)>> = vec![Default::default(); imports.len()];
 
@@ -22,20 +24,22 @@ pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext)
         let new_names = &mut new_names[file_id];
         let file_path = &context.file_paths[file_id];
         for import_statement in import_statements {
-            let Statement::ComptimeStatement(statement) = import_statement.value else { unreachable!() };
+            let Statement::ComptimeStatement(statement) = import_statement.value else {
+                unreachable!()
+            };
             let ComptimeStatement::Import { from, what } = statement;
 
             let path = find_file(file_path, from);
             let Some(&from_file_id) = path_map.get(&path) else {
                 errors.add_diag(LinkingError::import_no_file(path, file_path, import_statement.range));
-                continue
+                continue;
             };
             let from_file = &context.files[from_file_id];
 
             for (name, as_name) in what {
                 let Some(&object) = from_file.available_names.get(&name.value) else {
                     errors.add_diag(LinkingError::import_no_name(name.value, &path, import_statement.range));
-                    continue
+                    continue;
                 };
 
                 match as_name {
@@ -54,7 +58,10 @@ pub fn parse_imports(errors: &mut ErrorQueue, context: &mut ModuleLiningContext)
         let available_names = &mut context.files[file_id].available_names;
         for (key, value) in new_imports {
             if available_names.insert(key.value, value).is_some() {
-                errors.add_diag(LinkingError::import_global_name_overlap(key.range, &context.file_paths[file_id]))
+                errors.add_diag(LinkingError::import_global_name_overlap(
+                    key.range,
+                    &context.file_paths[file_id],
+                ))
             }
         }
     }
@@ -73,7 +80,7 @@ fn find_file(current_module: &String, from: Vec<RString>) -> String {
     parse_path(current_module.clone(), from.into_iter())
 }
 
-fn parse_path(module_path: String, from: impl Iterator<Item=RString>) -> String {
+fn parse_path(module_path: String, from: impl Iterator<Item = RString>) -> String {
     let mut path = module_path;
 
     for delta in from {

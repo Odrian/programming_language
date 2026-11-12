@@ -1,4 +1,4 @@
-use crate::{LinearTree, TreeNode, NodeBlock, NodeWithMeta};
+use crate::{LinearTree, NodeBlock, NodeWithMeta, TreeNode};
 
 /// node that returned by iterator
 #[derive(Clone)]
@@ -34,7 +34,7 @@ impl<'a, Elem, Block, Meta> NodeIterator<'a, Elem, Block, Meta> {
         Self {
             tree: &linear_tree.tree,
             start: 0,
-            end: linear_tree.tree.len()
+            end: linear_tree.tree.len(),
         }
     }
     fn new2(&self, block_data: &NodeBlock<Block>) -> Self {
@@ -63,10 +63,7 @@ impl<'a, Elem, Block, Meta> Iterator for NodeIterator<'a, Elem, Block, Meta> {
             }
             TreeNode::Block(block_data) => {
                 self.start = block_data.end;
-                Some((NodeRef::Block(
-                    &block_data.block,
-                    self.new2(block_data)
-                ), &node.1))
+                Some((NodeRef::Block(&block_data.block, self.new2(block_data)), &node.1))
             }
         }
     }

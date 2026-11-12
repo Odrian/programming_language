@@ -1,8 +1,8 @@
-use pr_common::error::ErrorQueue;
-use pr_ast::statement::{ComptimeStatement, DeclarationStatement, ExternStatement, RStatement, Statement};
+use crate::FileLinkingContext;
 use crate::error::LinkingError;
 use crate::object::{ObjType, ObjectFactory};
-use crate::FileLinkingContext;
+use pr_ast::statement::{ComptimeStatement, DeclarationStatement, ExternStatement, RStatement, Statement};
+use pr_common::error::ErrorQueue;
 
 pub fn parse_available_names(
     errors: &mut ErrorQueue,
@@ -16,19 +16,14 @@ pub fn parse_available_names(
 }
 
 /// has errors only on name overloading
-fn add_name(
-    errors: &mut ErrorQueue,
-    context: &mut FileLinkingContext,
-    factory: &mut ObjectFactory,
-    stat: RStatement,
-) {
+fn add_name(errors: &mut ErrorQueue, context: &mut FileLinkingContext, factory: &mut ObjectFactory, stat: RStatement) {
     match &stat.value {
         Statement::DeclarationStatement { name, statement } => {
             let object = factory.create_object(name.clone(), ObjType::Unknown);
             let object_option = context.available_names.insert(name.value.clone(), object);
             if object_option.is_some() {
                 errors.add_diag(LinkingError::overloading(name.clone()));
-                return
+                return;
             }
             match statement {
                 DeclarationStatement::VariableDeclaration { .. } => {
@@ -50,8 +45,8 @@ fn add_name(
             let object = factory.create_object(name.clone(), ObjType::Unknown);
             let object_option = context.available_names.insert(name.value.clone(), object);
             if object_option.is_some() {
-            errors.add_diag(LinkingError::overloading(name.clone()));
-                return
+                errors.add_diag(LinkingError::overloading(name.clone()));
+                return;
             }
             context.extern_statements.insert(object, stat);
         }
@@ -59,9 +54,13 @@ fn add_name(
             ComptimeStatement::Import { .. } => {
                 context.import_statements.push(stat);
             }
-        }
-        Statement::SetVariable { .. } | Statement::Expression(_) | Statement::If { .. }
-        | Statement::While { .. } | Statement::Return(_) | Statement::Brackets(..) => {
+        },
+        Statement::SetVariable { .. }
+        | Statement::Expression(_)
+        | Statement::If { .. }
+        | Statement::While { .. }
+        | Statement::Return(_)
+        | Statement::Brackets(..) => {
             unreachable!()
         }
     }

@@ -2,19 +2,27 @@ use super::common::*;
 
 #[test]
 fn test_abs() {
-    assert_eq!(2, get_exit_code("\
+    assert_eq!(
+        2,
+        get_exit_code(
+            "\
 #extern
 abs :: (i32) -> i32;
 
 main :: () -> i32 {
     return abs(-2);
 }
-"))
+"
+        )
+    )
 }
 
 #[test]
 fn test_printf() {
-    assert_eq!("Hello world!", run_code_stdout("\
+    assert_eq!(
+        "Hello world!",
+        run_code_stdout(
+            "\
 #extern
 printf :: (*char, ...);
 
@@ -23,13 +31,19 @@ main :: () -> i32 {
     return 0;
 }
 
-").unwrap())
+"
+        )
+        .unwrap()
+    )
 }
 
 #[cfg(target_os = "linux")]
 #[test]
 fn test_fprintf() {
-    assert_eq!("765", run_code_stdout("\
+    assert_eq!(
+        "765",
+        run_code_stdout(
+            "\
 FILE :: struct {}
 
 #extern {
@@ -43,6 +57,8 @@ main :: () -> i32 {
     return 0;
 }
 
-").unwrap())
+"
+        )
+        .unwrap()
+    )
 }
-

@@ -24,42 +24,59 @@ fn test_function_signatures() {
     assert_has_error("main :: () { return }");
 
     assert_has_error("main :: () -> i32 { return 0 } foo :: (a: void) {}");
-    assert_has_error("\
+    assert_has_error(
+        "\
 foo :: () {}
 main :: () -> i32 {
     x := foo();
     return 0
 }
-");
+",
+    );
 
-    assert_no_error("\
+    assert_no_error(
+        "\
 foo :: () {}
 main :: () -> i32 {
     foo();
     return 0
 }
-");
+",
+    );
 }
 
 #[test]
 fn test_for() {
-    assert_eq!(8, get_exit_code_main("\
+    assert_eq!(
+        8,
+        get_exit_code_main(
+            "\
     a := 0;
     for i in 0..8 {
         a += 1;
     }
     return a;
-"));
+"
+        )
+    );
 
-    assert_eq!(9, get_exit_code_main("\
+    assert_eq!(
+        9,
+        get_exit_code_main(
+            "\
     a := 0;
     for i in 0..=8 {
         a += 1;
     }
     return a;
-"));
+"
+        )
+    );
 
-    assert_eq!(9, get_exit_code_main("\
+    assert_eq!(
+        9,
+        get_exit_code_main(
+            "\
     left := 0;
     right := 8;
     a := 0;
@@ -67,13 +84,20 @@ fn test_for() {
         a += 1;
     }
     return a;
-"));
+"
+        )
+    );
 
-    assert_eq!(9, get_exit_code_main("\
+    assert_eq!(
+        9,
+        get_exit_code_main(
+            "\
     a := 0;
     for i in (8 - 8)..=(4 + 4) {
         a += 1;
     }
     return a;
-"));
+"
+        )
+    );
 }

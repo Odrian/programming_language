@@ -1,13 +1,13 @@
 use super::context_window::ValueContextWindow;
-use crate::error::LLVMError;
 use crate::CompileConfig;
+use crate::error::LLVMError;
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, StructType};
 use inkwell::values::{AnyValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue};
-use inkwell::{builder::Builder, context::Context, module::Module, AddressSpace, FloatPredicate, IntPredicate};
+use inkwell::{AddressSpace, FloatPredicate, IntPredicate, builder::Builder, context::Context, module::Module};
+use pr_ast_linked::LinkedModule;
 use pr_ast_linked::linked_statement::*;
 use pr_ast_linked::object::*;
-use pr_ast_linked::LinkedModule;
 use pr_common::operations::*;
 use pr_common::ranged::RString;
 use std::cmp::Ordering;
@@ -15,8 +15,9 @@ use std::collections::HashMap;
 
 pub fn parse_file<'ctx>(
     config: &'ctx CompileConfig,
-    context: &'ctx Context, target_data: &'ctx TargetData,
-    linked_module: LinkedModule
+    context: &'ctx Context,
+    target_data: &'ctx TargetData,
+    linked_module: LinkedModule,
 ) -> Result<Module<'ctx>, LLVMError> {
     let mut code_module_gen = CodeModuleGen::new(config, context, target_data, linked_module, "main_module");
     code_module_gen.parse_module()?;
@@ -26,23 +27,29 @@ pub fn parse_file<'ctx>(
 struct CodeModuleGen<'ctx> {
     config: &'ctx CompileConfig,
     context: &'ctx Context,
-    target_data: &'ctx TargetData,
+    _target_data: &'ctx TargetData,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
     linked_module: LinkedModule,
     current_function: Option<FunctionValue<'ctx>>,
     context_window: ValueContextWindow<'ctx>,
-    struct_context: HashMap<Object, StructType<'ctx>>
+    struct_context: HashMap<Object, StructType<'ctx>>,
 }
 impl<'ctx> CodeModuleGen<'ctx> {
-    fn new(config: &'ctx CompileConfig, context: &'ctx Context, target_data: &'ctx TargetData, linked_module: LinkedModule, name: &str) -> Self {
+    fn new(
+        config: &'ctx CompileConfig,
+        context: &'ctx Context,
+        target_data: &'ctx TargetData,
+        linked_module: LinkedModule,
+        name: &str,
+    ) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
         let context_window = ValueContextWindow::new();
         Self {
             config,
             context,
-            target_data,
+            _target_data: target_data,
             module,
             builder,
             linked_module,
@@ -78,19 +85,24 @@ impl<'ctx> CodeModuleGen<'ctx> {
                     match pointer_width {
                         32 => self.context.i32_type().into(),
                         64 => self.context.i64_type().into(),
-                        _ => panic!("unexpected pointer size: {pointer_width} bytes")
+                        _ => panic!("unexpected pointer size: {pointer_width} bytes"),
                     }
-                },
-            }
+                }
+            },
             ObjType::Float(float) => match float {
                 FloatObjType::F32 => self.context.f32_type().into(),
                 FloatObjType::F64 => self.context.f64_type().into(),
-            }
+            },
             ObjType::Struct(object) => self.struct_context.get(object).copied().unwrap().into(),
             ObjType::Function { .. } => panic!("function type can't be BasicTypeEnum"),
         }
     }
-    fn function_from(&self, returns: &ObjType, args: &[BasicMetadataTypeEnum<'ctx>], is_var_args: bool) -> FunctionType<'ctx> {
+    fn function_from(
+        &self,
+        returns: &ObjType,
+        args: &[BasicMetadataTypeEnum<'ctx>],
+        is_var_args: bool,
+    ) -> FunctionType<'ctx> {
         if returns == &ObjType::Void {
             self.context.void_type().fn_type(args, is_var_args)
         } else {
@@ -151,7 +163,9 @@ mod module_parsing {
         }
 
         fn create_global_var(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), LLVMError> {
-            let GlobalLinkedStatement::VariableDeclaration { value } = statement else { unreachable!() };
+            let GlobalLinkedStatement::VariableDeclaration { value } = statement else {
+                unreachable!()
+            };
 
             let global_type = self.parse_type(&value.value.object_type);
 
@@ -170,13 +184,20 @@ mod module_parsing {
                 return Err(LLVMError::global_with_value(self.get_object_name(object).value.clone()));
             };
             let value_type = self.parse_type(&obj_type);
-            let value = if is_zeroed { value_type.const_zero() } else { get_undef(value_type) };
+            let value = if is_zeroed {
+                value_type.const_zero()
+            } else {
+                get_undef(value_type)
+            };
             Ok(value)
         }
         fn create_function(&mut self, object: Object, statement: &GlobalLinkedStatement) {
-            let GlobalLinkedStatement::Function { args, returns, body: _ } = statement else { unreachable!() };
+            let GlobalLinkedStatement::Function { args, returns, body: _ } = statement else {
+                unreachable!()
+            };
 
-            let arguments_types: Vec<BasicMetadataTypeEnum> = args.iter().map(|obj| self.get_object_type(*obj).into()).collect();
+            let arguments_types: Vec<BasicMetadataTypeEnum> =
+                args.iter().map(|obj| self.get_object_type(*obj).into()).collect();
             let fn_type = self.function_from(returns, &arguments_types, false);
 
             let name = self.get_object_name(object);
@@ -184,7 +205,9 @@ mod module_parsing {
             self.context_window.add(object, function.into());
         }
         fn parse_function(&mut self, object: Object, statement: GlobalLinkedStatement) -> Result<(), LLVMError> {
-            let GlobalLinkedStatement::Function { args, returns: _, body } = statement else { unreachable!() };
+            let GlobalLinkedStatement::Function { args, returns: _, body } = statement else {
+                unreachable!()
+            };
             let function = self.context_window.get_function_unwrap(object);
 
             let entry = self.context.append_basic_block(function, "entry");
@@ -202,7 +225,9 @@ mod module_parsing {
             self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
-                return Err(LLVMError::llvm_verify_function_error(self.linked_module.factory.get_name(object).value.clone()));
+                return Err(LLVMError::llvm_verify_function_error(
+                    self.linked_module.factory.get_name(object).value.clone(),
+                ));
             }
             self.current_function = None;
 
@@ -210,7 +235,9 @@ mod module_parsing {
             Ok(())
         }
         fn create_extern(&mut self, object: Object, statement: GlobalLinkedStatement) {
-            let GlobalLinkedStatement::ExternStatement { statement } = statement else { unreachable!() };
+            let GlobalLinkedStatement::ExternStatement { statement } = statement else {
+                unreachable!()
+            };
 
             match statement {
                 ExternLinkedStatement::Variable { typee } => {
@@ -223,7 +250,14 @@ mod module_parsing {
                     self.context_window.add(object, global.as_any_value_enum());
                 }
                 ExternLinkedStatement::Function { typee } => {
-                    let ObjType::Function { arguments, is_vararg, returns } = typee else { unreachable!() };
+                    let ObjType::Function {
+                        arguments,
+                        is_vararg,
+                        returns,
+                    } = typee
+                    else {
+                        unreachable!()
+                    };
                     let arguments = arguments.iter().map(|a| self.parse_type(a).into()).collect::<Vec<_>>();
                     let fn_type = self.function_from(returns.as_ref(), &arguments, is_vararg);
 
@@ -257,11 +291,11 @@ mod type_parsing {
         }
 
         fn parse_struct_statement(&mut self, object: Object, statement: GlobalLinkedStatement) {
-            let GlobalLinkedStatement::Struct { fields, field_names: _ } = statement else { unreachable!() };
+            let GlobalLinkedStatement::Struct { fields, field_names: _ } = statement else {
+                unreachable!()
+            };
 
-            let fields_types: Vec<_> = fields.iter()
-                .map(|obj_type| self.parse_type(obj_type))
-                .collect();
+            let fields_types: Vec<_> = fields.iter().map(|obj_type| self.parse_type(obj_type)).collect();
 
             let struct_type = self.context.struct_type(&fields_types, false);
             self.struct_context.insert(object, struct_type);
@@ -283,7 +317,7 @@ mod declaration_parsing {
         fn parse_statements(&mut self, statements: Vec<RLinkedStatement>) -> Result<bool, LLVMError> {
             for statement in statements {
                 if self.parse_statement(statement)? {
-                    return Ok(true)
+                    return Ok(true);
                 }
             }
             Ok(false)
@@ -293,7 +327,9 @@ mod declaration_parsing {
             match statement.value {
                 LinkedStatement::Expression(expression) => {
                     if expression.value.object_type.is_void() {
-                        let LinkedExpression::FunctionCall { object, args } = expression.value.expr else { unreachable!() };
+                        let LinkedExpression::FunctionCall { object, args } = expression.value.expr else {
+                            unreachable!()
+                        };
                         self.call_function(object, args)?;
                     } else {
                         self.parse_expression(expression.value.expr)?;
@@ -305,7 +341,8 @@ mod declaration_parsing {
                     let function = self.current_function.unwrap();
                     let then_bb = self.context.append_basic_block(function, "then");
                     let merge_bb = self.context.append_basic_block(function, "merge");
-                    self.builder.build_conditional_branch(condition_value, then_bb, merge_bb)?;
+                    self.builder
+                        .build_conditional_branch(condition_value, then_bb, merge_bb)?;
 
                     self.builder.position_at_end(then_bb);
                     let has_return = self.parse_statements(body)?;
@@ -324,12 +361,13 @@ mod declaration_parsing {
 
                     self.builder.position_at_end(cond_bb);
                     let condition_value = self.parse_expression(condition.value.expr)?.unwrap().into_int_value();
-                    self.builder.build_conditional_branch(condition_value, body_bb, after_bb)?;
+                    self.builder
+                        .build_conditional_branch(condition_value, body_bb, after_bb)?;
 
                     self.builder.position_at_end(body_bb);
                     let has_return = self.parse_statements(body)?;
                     if has_return {
-                        return Ok(true)
+                        return Ok(true);
                     }
                     self.builder.build_unconditional_branch(cond_bb)?;
                     self.builder.position_at_end(after_bb);
@@ -352,7 +390,9 @@ mod declaration_parsing {
                 LinkedStatement::VariableDeclaration { object, value } => {
                     let value = self.parse_expression(value.value.expr)?.unwrap();
                     let var_type = self.get_object_type(object);
-                    let pointer = self.builder.build_alloca(var_type, &self.get_object_name(object).value)?;
+                    let pointer = self
+                        .builder
+                        .build_alloca(var_type, &self.get_object_name(object).value)?;
                     self.builder.build_store(pointer, value)?;
                     self.context_window.add(object, pointer.into());
                 }
@@ -363,15 +403,18 @@ mod declaration_parsing {
                     } else {
                         self.builder.build_return(None)?;
                     }
-                    return Ok(true)
+                    return Ok(true);
                 }
             }
             Ok(false)
         }
         fn parse_lvalue(&self, expression: RTypedExpression) -> Result<PointerValue<'ctx>, LLVMError> {
             let expression = expression.value.expr;
-            if matches!(&expression, LinkedExpression::UnaryOperation(_, op) if op.value == OneSidedOperation::Dereference) {
-                let LinkedExpression::UnaryOperation(expr, _) = expression else { unreachable!() };
+            if matches!(&expression, LinkedExpression::UnaryOperation(_, op) if op.value == OneSidedOperation::Dereference)
+            {
+                let LinkedExpression::UnaryOperation(expr, _) = expression else {
+                    unreachable!()
+                };
                 let value = self.parse_expression(expr.value.expr)?;
                 Ok(value.unwrap().into_pointer_value())
             } else {
@@ -387,21 +430,27 @@ mod declaration_parsing {
                     let pointer = self.context_window.get_pointer_unwrap(*object);
                     Ok(Some(pointer))
                 }
-                _ => Ok(None)
+                _ => Ok(None),
             }
         }
 
         fn parse_expression(&self, expression: LinkedExpression) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
             match expression {
-                LinkedExpression::FunctionCall { object, args } => {
-                    Ok(Some(self.call_function(object, args)?.unwrap()))
-                },
+                LinkedExpression::FunctionCall { object, args } => Ok(Some(self.call_function(object, args)?.unwrap())),
                 LinkedExpression::StructField { left, field_index } => {
                     let struct_value = self.parse_expression(left.value.expr)?.unwrap().into_pointer_value();
-                    let ObjType::Reference{ obj_type: struct_obj_type, is_weak: _ } = &left.value.object_type else { unreachable!() };
+                    let ObjType::Reference {
+                        obj_type: struct_obj_type,
+                        is_weak: _,
+                    } = &left.value.object_type
+                    else {
+                        unreachable!()
+                    };
                     let struct_type = self.parse_type(struct_obj_type);
 
-                    let field_pointer = self.builder.build_struct_gep(struct_type, struct_value, field_index, "get_field")?;
+                    let field_pointer =
+                        self.builder
+                            .build_struct_gep(struct_type, struct_value, field_index, "get_field")?;
                     Ok(Some(field_pointer.into()))
                 }
                 LinkedExpression::Literal(literal) => self.parse_literal(literal),
@@ -413,7 +462,10 @@ mod declaration_parsing {
                     Ok(Some(value))
                 }
                 LinkedExpression::UnaryOperation(boxed, op) => {
-                    let TypedExpression { expr: linked_expr, object_type } = boxed.value;
+                    let TypedExpression {
+                        expr: linked_expr,
+                        object_type,
+                    } = boxed.value;
                     let result = match op.value {
                         OneSidedOperation::BoolNot => {
                             let exp_parsed = self.parse_expression(linked_expr)?.unwrap();
@@ -446,15 +498,24 @@ mod declaration_parsing {
                     Ok(Some(result))
                 }
                 LinkedExpression::Operation(ex1, ex2, op) => {
-                    let TypedExpression { expr: linked_expr1, object_type: type1 } = ex1.value;
-                    let TypedExpression { expr: linked_expr2, object_type: _type2 } = ex2.value;
+                    let TypedExpression {
+                        expr: linked_expr1,
+                        object_type: type1,
+                    } = ex1.value;
+                    let TypedExpression {
+                        expr: linked_expr2,
+                        object_type: _type2,
+                    } = ex2.value;
 
                     let v1 = self.parse_expression(linked_expr1)?.unwrap();
                     let v2 = self.parse_expression(linked_expr2)?.unwrap();
                     Ok(Some(self.parse_operation(v1, v2, type1, op)?))
                 }
                 LinkedExpression::As(expression, to_obj_type) => {
-                    let TypedExpression { expr: linked_expr, object_type: was_obj_type } = expression.value;
+                    let TypedExpression {
+                        expr: linked_expr,
+                        object_type: was_obj_type,
+                    } = expression.value;
                     let ex = self.parse_expression(linked_expr)?.unwrap();
                     self.parse_as(ex, was_obj_type, to_obj_type)
                 }
@@ -463,7 +524,9 @@ mod declaration_parsing {
 
                     let struct_value = self.builder.build_alloca(struct_type, "new_struct")?;
                     for (i, field) in fields.into_iter().enumerate() {
-                        let field_ptr = self.builder.build_struct_gep(struct_type, struct_value, i as u32, "get_field")?;
+                        let field_ptr =
+                            self.builder
+                                .build_struct_gep(struct_type, struct_value, i as u32, "get_field")?;
                         let field_value = self.parse_expression(field.value.expr)?.unwrap();
                         self.builder.build_store(field_ptr, field_value)?;
                     }
@@ -474,9 +537,13 @@ mod declaration_parsing {
         }
         fn parse_literal(&self, literal: LinkedLiteralExpression) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
             match literal {
-                LinkedLiteralExpression::Undefined { obj_type, is_zeroed} => {
+                LinkedLiteralExpression::Undefined { obj_type, is_zeroed } => {
                     let value_type = self.parse_type(&obj_type);
-                    let value = if is_zeroed { value_type.const_zero() } else { get_undef(value_type) };
+                    let value = if is_zeroed {
+                        value_type.const_zero()
+                    } else {
+                        get_undef(value_type)
+                    };
                     Ok(Some(value))
                 }
                 LinkedLiteralExpression::IntLiteral(literal, object_type) => {
@@ -484,16 +551,21 @@ mod declaration_parsing {
 
                     let int_value = match int_type.get_bit_width() {
                         0..=64 => {
-                            let value = literal.parse::<u64>()
+                            let value = literal
+                                .parse::<u64>()
                                 .map_err(|err| LLVMError::parse_int_literal_error(&literal, &err.to_string()))?;
                             let max_type_value = u64::MAX >> (64 - int_type.get_bit_width());
                             if value > max_type_value {
-                                return Err(LLVMError::parse_int_literal_error(&literal, "number too large to fit in target type"))
+                                return Err(LLVMError::parse_int_literal_error(
+                                    &literal,
+                                    "number too large to fit in target type",
+                                ));
                             }
                             int_type.const_int(value, false)
                         }
                         128 => {
-                            let value = literal.parse::<u128>()
+                            let value = literal
+                                .parse::<u128>()
                                 .map_err(|err| LLVMError::parse_int_literal_error(&literal, &err.to_string()))?;
 
                             let low = value as u64;
@@ -505,7 +577,7 @@ mod declaration_parsing {
                                 int_type.const_int_arbitrary_precision(&[low, high])
                             }
                         }
-                        x => unreachable!("bit width {}", x)
+                        x => unreachable!("bit width {}", x),
                     };
                     Ok(Some(int_value.into()))
                 }
@@ -518,7 +590,10 @@ mod declaration_parsing {
                 LinkedLiteralExpression::BoolLiteral(bool) => {
                     let int_type = self.context.bool_type();
 
-                    let number = match bool { true => 1, false => 0 };
+                    let number = match bool {
+                        true => 1,
+                        false => 0,
+                    };
                     Ok(Some(int_type.const_int(number, false).into()))
                 }
                 LinkedLiteralExpression::CharLiteral(char) => {
@@ -532,7 +607,12 @@ mod declaration_parsing {
                 }
             }
         }
-        fn parse_as(&self, ex: BasicValueEnum<'ctx>, was_obj_type: ObjType, to_obj_type: ObjType) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
+        fn parse_as(
+            &self,
+            ex: BasicValueEnum<'ctx>,
+            was_obj_type: ObjType,
+            to_obj_type: ObjType,
+        ) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
             let result = match was_obj_type {
                 ObjType::Char => {
                     let ex_int = ex.into_int_value();
@@ -544,13 +624,13 @@ mod declaration_parsing {
                     let to_size = to_type.get_bit_width();
 
                     match from_size.cmp(&to_size) {
-                        Ordering::Equal => {
-                            ex
-                        }
-                        Ordering::Less => { // extend
+                        Ordering::Equal => ex,
+                        Ordering::Less => {
+                            // extend
                             self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
                         }
-                        Ordering::Greater => { // truncation
+                        Ordering::Greater => {
+                            // truncation
                             self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
                         }
                     }
@@ -566,10 +646,9 @@ mod declaration_parsing {
                         let to_size = to_type.get_bit_width();
 
                         match from_size.cmp(&to_size) {
-                            Ordering::Equal => {
-                                ex
-                            }
-                            Ordering::Less => { // extend
+                            Ordering::Equal => ex,
+                            Ordering::Less => {
+                                // extend
                                 if int_type_from.is_signed() {
                                     // example: i8 -> i16, i8 -> u16 (i8 -> i16 -> u16)
                                     self.builder.build_int_s_extend(ex_int, to_type, "int_casing")?.into()
@@ -578,7 +657,8 @@ mod declaration_parsing {
                                     self.builder.build_int_z_extend(ex_int, to_type, "int_casing")?.into()
                                 }
                             }
-                            Ordering::Greater => { // truncation
+                            Ordering::Greater => {
+                                // truncation
                                 self.builder.build_int_truncate(ex_int, to_type, "int_casing")?.into()
                             }
                         }
@@ -587,10 +667,12 @@ mod declaration_parsing {
                         let ex_int = ex.into_int_value();
                         let pointer_type = self.parse_type(&ObjType::Pointer(reference_type)).into_pointer_type();
 
-                        self.builder.build_int_to_ptr(ex_int, pointer_type, "int_to_ptr")?.into()
+                        self.builder
+                            .build_int_to_ptr(ex_int, pointer_type, "int_to_ptr")?
+                            .into()
                     }
-                    _ => unreachable!()
-                }
+                    _ => unreachable!(),
+                },
                 ObjType::Float(_) => {
                     let ex_float = ex.into_float_value();
 
@@ -600,36 +682,45 @@ mod declaration_parsing {
                     let to_size = to_obj_type.get_float_bits_or_panic();
 
                     match from_size.cmp(&to_size) {
-                        Ordering::Equal => {
-                            ex
-                        }
-                        Ordering::Less => { // extend
+                        Ordering::Equal => ex,
+                        Ordering::Less => {
+                            // extend
                             self.builder.build_float_ext(ex_float, to_type, "float_casing")?.into()
                         }
-                        Ordering::Greater => { // truncation
-                            self.builder.build_float_trunc(ex_float, to_type, "float_casing")?.into()
+                        Ordering::Greater => {
+                            // truncation
+                            self.builder
+                                .build_float_trunc(ex_float, to_type, "float_casing")?
+                                .into()
                         }
                     }
                 }
-                ObjType::Reference { is_weak: false, .. } | ObjType::Pointer(_) => {
-                    match &to_obj_type {
-                        ObjType::Pointer(_) => ex,
-                        ObjType::Integer(_) => {
-                            let ex_ptr = ex.into_pointer_value();
+                ObjType::Reference { is_weak: false, .. } | ObjType::Pointer(_) => match &to_obj_type {
+                    ObjType::Pointer(_) => ex,
+                    ObjType::Integer(_) => {
+                        let ex_ptr = ex.into_pointer_value();
 
-                            let to_type = self.parse_type(&to_obj_type).into_int_type();
+                        let to_type = self.parse_type(&to_obj_type).into_int_type();
 
-                            self.builder.build_ptr_to_int(ex_ptr, to_type, "asd")?.into()
-                        }
-                        _ => unreachable!()
+                        self.builder.build_ptr_to_int(ex_ptr, to_type, "asd")?.into()
                     }
-                }
-                ObjType::Struct(..) | ObjType::Unknown | ObjType::Void
-                | ObjType::Function { .. } | ObjType::Reference { is_weak: true, .. } => unreachable!()
+                    _ => unreachable!(),
+                },
+                ObjType::Struct(..)
+                | ObjType::Unknown
+                | ObjType::Void
+                | ObjType::Function { .. }
+                | ObjType::Reference { is_weak: true, .. } => unreachable!(),
             };
             Ok(Some(result))
         }
-        fn parse_operation(&self, v1: BasicValueEnum<'ctx>, v2: BasicValueEnum<'ctx>, type1: ObjType, op: RTwoSidedOperation) -> Result<BasicValueEnum<'ctx>, LLVMError> {
+        fn parse_operation(
+            &self,
+            v1: BasicValueEnum<'ctx>,
+            v2: BasicValueEnum<'ctx>,
+            type1: ObjType,
+            op: RTwoSidedOperation,
+        ) -> Result<BasicValueEnum<'ctx>, LLVMError> {
             let result = match op.value {
                 TwoSidedOperation::Number(num_op) => match type1 {
                     ObjType::Integer(int) => {
@@ -639,10 +730,14 @@ mod declaration_parsing {
                             NumberOperation::Add => self.builder.build_int_add(num1, num2, "add")?.into(),
                             NumberOperation::Sub => self.builder.build_int_sub(num1, num2, "sub")?.into(),
                             NumberOperation::Mul => self.builder.build_int_mul(num1, num2, "mul")?.into(),
-                            NumberOperation::Div if int.is_signed() =>  self.builder.build_int_signed_div(num1, num2, "div")?.into(),
-                            NumberOperation::Div =>                     self.builder.build_int_unsigned_div(num1, num2, "div")?.into(),
-                            NumberOperation::Rem if int.is_signed() =>  self.builder.build_int_signed_rem(num1, num2, "rem")?.into(),
-                            NumberOperation::Rem =>                     self.builder.build_int_unsigned_rem(num1, num2, "rem")?.into(),
+                            NumberOperation::Div if int.is_signed() => {
+                                self.builder.build_int_signed_div(num1, num2, "div")?.into()
+                            }
+                            NumberOperation::Div => self.builder.build_int_unsigned_div(num1, num2, "div")?.into(),
+                            NumberOperation::Rem if int.is_signed() => {
+                                self.builder.build_int_signed_rem(num1, num2, "rem")?.into()
+                            }
+                            NumberOperation::Rem => self.builder.build_int_unsigned_rem(num1, num2, "rem")?.into(),
                             NumberOperation::BitAnd => self.builder.build_and(num1, num2, "bitand")?.into(),
                             NumberOperation::BitOr => self.builder.build_or(num1, num2, "bitor")?.into(),
                         }
@@ -658,8 +753,8 @@ mod declaration_parsing {
                             NumberOperation::Rem | NumberOperation::BitAnd | NumberOperation::BitOr => unreachable!(),
                         }
                     }
-                    _ => unreachable!()
-                }
+                    _ => unreachable!(),
+                },
                 TwoSidedOperation::Bool(bool_op) => {
                     let bool1 = v1.into_int_value();
                     let bool2 = v2.into_int_value();
@@ -675,36 +770,49 @@ mod declaration_parsing {
                         let ex2 = v2.into_pointer_value();
                         let predicate = compare_to_int_compare(comp_op, false);
 
-                        self.builder.build_int_compare(predicate, ex1, ex2, "ptr_compare")?.into()
+                        self.builder
+                            .build_int_compare(predicate, ex1, ex2, "ptr_compare")?
+                            .into()
                     }
                     ObjType::Char => {
                         let ex1 = v1.into_int_value();
                         let ex2 = v2.into_int_value();
                         let predicate = compare_to_int_compare(comp_op, false);
-                        self.builder.build_int_compare(predicate, ex1, ex2, "compare_char")?.into()
+                        self.builder
+                            .build_int_compare(predicate, ex1, ex2, "compare_char")?
+                            .into()
                     }
                     ObjType::Integer(int) => {
                         let ex1 = v1.into_int_value();
                         let ex2 = v2.into_int_value();
                         let predicate = compare_to_int_compare(comp_op, int.is_signed());
-                        self.builder.build_int_compare(predicate, ex1, ex2, "compare_int")?.into()
+                        self.builder
+                            .build_int_compare(predicate, ex1, ex2, "compare_int")?
+                            .into()
                     }
                     ObjType::Float(_) => {
                         let ex1 = v1.into_float_value();
                         let ex2 = v2.into_float_value();
                         let predicate = compare_to_float_compare(comp_op);
-                        self.builder.build_float_compare(predicate, ex1, ex2, "compare_float")?.into()
+                        self.builder
+                            .build_float_compare(predicate, ex1, ex2, "compare_float")?
+                            .into()
                     }
                     ObjType::Struct(..) => unimplemented!(),
                     ObjType::Unknown | ObjType::Void | ObjType::Function { .. } => unreachable!(),
-                }
+                },
             };
             Ok(result)
         }
-        fn call_function(&self, object: Object, args: Vec<RTypedExpression>) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
-            let args: Vec<_> = args.into_iter().map(|a|
-                self.parse_expression(a.value.expr)
-            ).collect::<Result<_, _>>()?;
+        fn call_function(
+            &self,
+            object: Object,
+            args: Vec<RTypedExpression>,
+        ) -> Result<Option<BasicValueEnum<'ctx>>, LLVMError> {
+            let args: Vec<_> = args
+                .into_iter()
+                .map(|a| self.parse_expression(a.value.expr))
+                .collect::<Result<_, _>>()?;
             let args: Vec<BasicMetadataValueEnum> = args.into_iter().map(|a| a.unwrap().into()).collect(); // will be removed
 
             let function = self.context_window.get_function_unwrap(object);
@@ -718,32 +826,32 @@ mod declaration_parsing {
 const fn compare_to_int_compare(co: CompareOperator, signed: bool) -> IntPredicate {
     if signed {
         match co {
-            CompareOperator::Equal =>           IntPredicate::EQ,
-            CompareOperator::NotEqual =>        IntPredicate::NE,
-            CompareOperator::Greater =>         IntPredicate::SGT,
-            CompareOperator::GreaterEqual =>    IntPredicate::SGE,
-            CompareOperator::Less =>            IntPredicate::SLT,
-            CompareOperator::LessEqual =>       IntPredicate::SLE,
+            CompareOperator::Equal => IntPredicate::EQ,
+            CompareOperator::NotEqual => IntPredicate::NE,
+            CompareOperator::Greater => IntPredicate::SGT,
+            CompareOperator::GreaterEqual => IntPredicate::SGE,
+            CompareOperator::Less => IntPredicate::SLT,
+            CompareOperator::LessEqual => IntPredicate::SLE,
         }
     } else {
         match co {
-            CompareOperator::Equal =>           IntPredicate::EQ,
-            CompareOperator::NotEqual =>        IntPredicate::NE,
-            CompareOperator::Greater =>         IntPredicate::UGT,
-            CompareOperator::GreaterEqual =>    IntPredicate::UGE,
-            CompareOperator::Less =>            IntPredicate::ULT,
-            CompareOperator::LessEqual =>       IntPredicate::ULE,
+            CompareOperator::Equal => IntPredicate::EQ,
+            CompareOperator::NotEqual => IntPredicate::NE,
+            CompareOperator::Greater => IntPredicate::UGT,
+            CompareOperator::GreaterEqual => IntPredicate::UGE,
+            CompareOperator::Less => IntPredicate::ULT,
+            CompareOperator::LessEqual => IntPredicate::ULE,
         }
     }
 }
 
 const fn compare_to_float_compare(co: CompareOperator) -> FloatPredicate {
     match co {
-        CompareOperator::Equal =>           FloatPredicate::OEQ,
-        CompareOperator::NotEqual =>        FloatPredicate::ONE,
-        CompareOperator::Greater =>         FloatPredicate::OGT,
-        CompareOperator::GreaterEqual =>    FloatPredicate::OGE,
-        CompareOperator::Less =>            FloatPredicate::OLT,
-        CompareOperator::LessEqual =>       FloatPredicate::OLE,
+        CompareOperator::Equal => FloatPredicate::OEQ,
+        CompareOperator::NotEqual => FloatPredicate::ONE,
+        CompareOperator::Greater => FloatPredicate::OGT,
+        CompareOperator::GreaterEqual => FloatPredicate::OGE,
+        CompareOperator::Less => FloatPredicate::OLT,
+        CompareOperator::LessEqual => FloatPredicate::OLE,
     }
 }

@@ -1,9 +1,9 @@
+use pr_ast_linked::LinkedFile;
 use pr_ast_linked::linked_statement::*;
 use pr_ast_linked::object::*;
-use pr_ast_linked::LinkedFile;
+use pr_common::Target;
 use pr_common::error::ErrorQueue;
 use pr_common::operations::*;
-use pr_common::Target;
 
 fn parse(text: &str) -> Result<LinkedFile, ErrorQueue> {
     let mut errors = ErrorQueue::default();
@@ -11,12 +11,12 @@ fn parse(text: &str) -> Result<LinkedFile, ErrorQueue> {
     let target = &Target::get_current();
     let statements = pr_ast::parse_ast(&mut errors, target, tokens);
     if errors.has_errors() {
-        return Err(errors)
+        return Err(errors);
     }
     let mut file = pr_ast_linked::link_file(&mut errors, statements);
     let file = file.files.pop().unwrap().0;
     if errors.has_errors() {
-        return Err(errors)
+        return Err(errors);
     }
     Ok(file)
 }
@@ -149,12 +149,10 @@ fn test_operations() {
 fn test_as() {
     let bool_type = ["bool"];
     let int_types = [
-        "isize", "usize",
-        "i8", "i16", "i32", "i64", "i128",
-        "u8", "u16", "u32", "u64", "u128",
+        "isize", "usize", "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128",
     ];
     let float_types = ["f32", "f64"];
-    
+
     fn check_numbers(func: &dyn Fn(&str), from: &[&str], to: &[&str]) {
         for t1 in from {
             for t2 in to {
@@ -213,13 +211,24 @@ fn test_function_with_while() {
         panic!("parsing error");
     };
     assert_eq!(file.function_statement.len(), 1);
-    let (function_object, GlobalLinkedStatement::Function { args, returns, body }) = file.function_statement.into_iter().next().unwrap() else { panic!() };
+    let (function_object, GlobalLinkedStatement::Function { args, returns, body }) =
+        file.function_statement.into_iter().next().unwrap()
+    else {
+        panic!()
+    };
 
     assert!(matches!(returns, ObjType::DEFAULT_INTEGER), "{returns:?}");
 
     let function_type = file.factory.get_type(function_object);
     assert!(matches!(function_type, ObjType::Function { .. }));
-    let ObjType::Function { arguments, is_vararg, returns } = function_type else { unreachable!() };
+    let ObjType::Function {
+        arguments,
+        is_vararg,
+        returns,
+    } = function_type
+    else {
+        unreachable!()
+    };
     assert!(!is_vararg);
     assert_eq!(arguments, &vec![ObjType::DEFAULT_INTEGER]);
     assert_eq!(returns.as_ref(), &ObjType::DEFAULT_INTEGER);
@@ -230,26 +239,61 @@ fn test_function_with_while() {
 
     let mut body_iter = body.into_iter();
 
-    let LinkedStatement::VariableDeclaration { object: var1, value: value1 } = body_iter.next().unwrap().value else { panic!() };
-    let LinkedExpression::Variable(value1) = value1.value.expr else { panic!() };
+    let LinkedStatement::VariableDeclaration {
+        object: var1,
+        value: value1,
+    } = body_iter.next().unwrap().value
+    else {
+        panic!()
+    };
+    let LinkedExpression::Variable(value1) = value1.value.expr else {
+        panic!()
+    };
 
-    let LinkedStatement::While { condition, body: mut while_body } = body_iter.next().unwrap().value else { panic!() };
-    let LinkedExpression::Operation(left, right, op) = condition.value.expr else { panic!() };
-    let LinkedExpression::Variable(condition_var) = left.value.expr else { panic!() };
-    
-    let LinkedExpression::Literal(LinkedLiteralExpression::IntLiteral(zero, _)) = right.value.expr else { panic!() };
+    let LinkedStatement::While {
+        condition,
+        body: mut while_body,
+    } = body_iter.next().unwrap().value
+    else {
+        panic!()
+    };
+    let LinkedExpression::Operation(left, right, op) = condition.value.expr else {
+        panic!()
+    };
+    let LinkedExpression::Variable(condition_var) = left.value.expr else {
+        panic!()
+    };
+
+    let LinkedExpression::Literal(LinkedLiteralExpression::IntLiteral(zero, _)) = right.value.expr else {
+        panic!()
+    };
     assert_eq!(zero, "0");
 
     assert_eq!(op.value, CompareOperator::NotEqual.into());
 
-    let LinkedStatement::Return(option_return) = body_iter.next().unwrap().value else { panic!() };
-    let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().value.expr else { panic!() };
+    let LinkedStatement::Return(option_return) = body_iter.next().unwrap().value else {
+        panic!()
+    };
+    let LinkedExpression::Variable(c_var) = option_return.as_ref().unwrap().value.expr else {
+        panic!()
+    };
     assert_eq!(file.factory.get_name(c_var).value, "c");
 
     assert_eq!(while_body.len(), 1);
-    let LinkedStatement::SetVariable { what, value: value2, op: Option::None } = while_body.pop().unwrap().value else { panic!() };
-    let LinkedExpression::Variable(var2) = what.value.expr else { panic!() };
-    let LinkedExpression::Variable(value2) = value2.value.expr else { panic!() };
+    let LinkedStatement::SetVariable {
+        what,
+        value: value2,
+        op: Option::None,
+    } = while_body.pop().unwrap().value
+    else {
+        panic!()
+    };
+    let LinkedExpression::Variable(var2) = what.value.expr else {
+        panic!()
+    };
+    let LinkedExpression::Variable(value2) = value2.value.expr else {
+        panic!()
+    };
     // arg = b
     // var1 = c
     // value1 = b

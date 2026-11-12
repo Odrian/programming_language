@@ -4,12 +4,16 @@ use std::hash::Hash;
 pub struct DependencyResolver<Key: Eq + Hash + Copy> {
     queue: VecDeque<Key>,
     waiting_for: HashMap<Key, HashSet<Key>>, // {a, {b..}} - a need b to compile
-    waiting_rev: HashMap<Key, HashSet<Key>>,     // {b, {a..}} - a need b to compile
+    waiting_rev: HashMap<Key, HashSet<Key>>, // {b, {a..}} - a need b to compile
 }
 
 impl<Key: Eq + Hash + Copy> Default for DependencyResolver<Key> {
     fn default() -> Self {
-        Self { queue: Default::default(), waiting_for: Default::default(), waiting_rev: Default::default() }
+        Self {
+            queue: Default::default(),
+            waiting_for: Default::default(),
+            waiting_rev: Default::default(),
+        }
     }
 }
 
@@ -17,14 +21,14 @@ impl<Key: Eq + Hash + Copy> DependencyResolver<Key> {
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty() && self.waiting_for.is_empty() && self.waiting_rev.is_empty()
     }
-    pub fn add(&mut self, keys: impl IntoIterator<Item=Key>) {
+    pub fn add(&mut self, keys: impl IntoIterator<Item = Key>) {
         self.queue.extend(keys);
     }
     /// error: return dependency cycle
     pub fn next(&mut self) -> Result<Option<Key>, Key> {
         let result = self.queue.pop_front();
         if result.is_none() && !self.waiting_for.is_empty() {
-            return Err(self.get_dependency_cycle())
+            return Err(self.get_dependency_cycle());
         }
         Ok(result)
     }

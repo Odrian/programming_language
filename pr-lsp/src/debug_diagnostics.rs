@@ -1,10 +1,10 @@
-use std::fmt::Debug;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Range};
+use pr_ast::SyntacticResult;
+use pr_ast::statement::*;
 use pr_common::ranged::Ranged;
 use pr_common::ranged_tree::NodeRef;
-use pr_ast::statement::*;
-use pr_ast::SyntacticResult;
 use pr_lexer::{TokenIter, TokenLinearTree};
+use std::fmt::Debug;
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Range};
 
 #[allow(dead_code)]
 pub fn token_diag(tokens: &TokenLinearTree) -> Vec<Diagnostic> {
@@ -23,7 +23,7 @@ pub fn statement_diag(statements: &SyntacticResult) -> Vec<Diagnostic> {
 }
 
 struct DebugDiagnostics<'a> {
-    diagnostics: &'a mut Vec<Diagnostic>
+    diagnostics: &'a mut Vec<Diagnostic>,
 }
 
 impl DebugDiagnostics<'_> {
@@ -55,12 +55,8 @@ impl DebugDiagnostics<'_> {
                     start1.character += 1;
                     let mut end1 = range.end;
                     end1.character -= 1;
-                    self.hint_diag(
-                        bracket.to_open_string().to_string(),
-                        Range::new(range.start, start1));
-                    self.hint_diag(
-                        bracket.to_close_string().to_string(),
-                        Range::new(end1, range.end));
+                    self.hint_diag(bracket.to_open_string().to_string(), Range::new(range.start, start1));
+                    self.hint_diag(bracket.to_close_string().to_string(), Range::new(end1, range.end));
                     self.token_diags(body)
                 }
                 NodeRef::Elem(token) => {
@@ -71,7 +67,11 @@ impl DebugDiagnostics<'_> {
     }
 
     fn statements_diags(&mut self, statements: &Vec<RStatement>) {
-        for RStatement { value: statement, range } in statements {
+        for RStatement {
+            value: statement,
+            range,
+        } in statements
+        {
             match statement {
                 Statement::ComptimeStatement(comp) => match comp {
                     ComptimeStatement::Import { from, what } => {
@@ -81,7 +81,7 @@ impl DebugDiagnostics<'_> {
                             self.hint_ranged_option(r);
                         })
                     }
-                }
+                },
                 Statement::DeclarationStatement { name, statement } => {
                     self.hint_ranged(name);
                     match statement {
@@ -98,11 +98,10 @@ impl DebugDiagnostics<'_> {
                             self.typee_diag_option(returns);
                             self.statements_diags(body);
                         }
-                        DeclarationStatement::Struct { fields } =>
-                            fields.iter().for_each(|(name, typee)| {
-                                self.hint_ranged(name);
-                                self.typee_diag(typee);
-                            }),
+                        DeclarationStatement::Struct { fields } => fields.iter().for_each(|(name, typee)| {
+                            self.hint_ranged(name);
+                            self.typee_diag(typee);
+                        }),
                     }
                 }
                 Statement::ExternStatement { statement: ext } => match ext {
@@ -110,12 +109,17 @@ impl DebugDiagnostics<'_> {
                         self.hint_ranged(name);
                         self.typee_diag(typee);
                     }
-                    ExternStatement::Function { name, args, is_vararg: _, returns } => {
+                    ExternStatement::Function {
+                        name,
+                        args,
+                        is_vararg: _,
+                        returns,
+                    } => {
                         self.hint_ranged(name);
                         args.iter().for_each(|typee| self.typee_diag(typee));
                         self.typee_diag_option(returns);
                     }
-                }
+                },
 
                 Statement::SetVariable { what, value, op } => {
                     self.expr_diags(what);
@@ -123,10 +127,8 @@ impl DebugDiagnostics<'_> {
                     self.hint_ranged_option(op);
                 }
 
-                Statement::Brackets(body) =>
-                    self.statements_diags(body),
-                Statement::Expression(expr) =>
-                    self.expr_diags(&expr.clone().add_range(*range)),
+                Statement::Brackets(body) => self.statements_diags(body),
+                Statement::Expression(expr) => self.expr_diags(&expr.clone().add_range(*range)),
                 Statement::If { condition, body } => {
                     self.statements_diags(body);
                     self.expr_diags(condition)
@@ -135,8 +137,7 @@ impl DebugDiagnostics<'_> {
                     self.statements_diags(body);
                     self.expr_diags(condition)
                 }
-                Statement::Return(returns) =>
-                    returns.iter().for_each(|r| self.expr_diags(r)),
+                Statement::Return(returns) => returns.iter().for_each(|r| self.expr_diags(r)),
             }
         }
     }
@@ -161,8 +162,7 @@ impl DebugDiagnostics<'_> {
                 self.hint_ranged(field);
             }
 
-            Expression::Literal(_) =>
-                self.hint_ranged(expr),
+            Expression::Literal(_) => self.hint_ranged(expr),
             Expression::StructConstruct { struct_name, fields } => {
                 self.hint_ranged(struct_name);
                 fields.iter().for_each(|(name, value)| {
@@ -171,10 +171,8 @@ impl DebugDiagnostics<'_> {
                 });
             }
 
-            Expression::Variable(str) =>
-                self.hint_ranged(str),
-            Expression::RoundBracket(expr) =>
-                self.expr_diags(expr),
+            Expression::Variable(str) => self.hint_ranged(str),
+            Expression::RoundBracket(expr) => self.expr_diags(expr),
             Expression::FunctionCall { object, args } => {
                 self.hint_ranged(object);
                 args.iter().for_each(|e| self.expr_diags(e));

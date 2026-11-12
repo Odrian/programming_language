@@ -24,7 +24,7 @@ impl Target {
             "target_os" => self.target_os,
 
             "target_arch" => self.target_arch,
-            _ => return None
+            _ => return None,
         };
         Some(value == expect)
     }
@@ -33,11 +33,10 @@ impl Target {
             "linux" => self.target_os == "linux",
             "macos" => self.target_os == "macos",
             "windows" => self.target_os == "windows",
-            _ => return None
+            _ => return None,
         };
         Some(result)
     }
-
 }
 
 #[allow(non_camel_case_types)]

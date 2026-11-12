@@ -9,8 +9,14 @@ fn test_struct_declarations() {
 
     assert_ne!(None, test_global("A :: struct { x: u32, x: u32 }").err());
 
-    assert_eq!(None, test_global("A :: struct { x: i32, y: i32, } B :: struct { a: A }").err());
-    assert_eq!(None, test_global("A :: struct { x: i32, y: i32, } B :: struct { a: A }").err());
+    assert_eq!(
+        None,
+        test_global("A :: struct { x: i32, y: i32, } B :: struct { a: A }").err()
+    );
+    assert_eq!(
+        None,
+        test_global("A :: struct { x: i32, y: i32, } B :: struct { a: A }").err()
+    );
 
     assert_eq!(None, test_global("A :: struct { b: *B } B :: struct { a:  A }").err());
     assert_eq!(None, test_global("A :: struct { b: *B } B :: struct { a: *A }").err());
@@ -26,7 +32,10 @@ fn test_struct_declarations() {
 
 #[test]
 fn test_simple_struct() {
-    assert_eq!(15, get_exit_code("\
+    assert_eq!(
+        15,
+        get_exit_code(
+            "\
 A :: struct {
     x: i32,
     y: i32,
@@ -40,9 +49,14 @@ main :: () -> i32 {
     y : i32 = a.y;
     return x + y;
 }
-"));
+"
+        )
+    );
 
-    assert_eq!(15, get_exit_code("\
+    assert_eq!(
+        15,
+        get_exit_code(
+            "\
 A :: struct {
     x: i32,
     y: i32,
@@ -64,9 +78,14 @@ get_sum :: (a: A) -> i32 {
 main :: () -> i32 {
     return get_sum(new_a());
 }
-"));
+"
+        )
+    );
 
-    assert_eq!(3, get_exit_code("\
+    assert_eq!(
+        3,
+        get_exit_code(
+            "\
 A :: struct {
     x: i32,
     y: i32,
@@ -83,12 +102,17 @@ main :: () -> i32 {
     y : i32 = b.y;
     return x + y;
 }
-"));
+"
+        )
+    );
 }
 
 #[test]
 fn test_fibonachi_with_struct() {
-    assert_eq!(55, get_exit_code("\
+    assert_eq!(
+        55,
+        get_exit_code(
+            "\
 swap :: (a: &i32, b: &i32) {
     temp : i32 = a;
     a = b;
@@ -124,5 +148,7 @@ get_n_fib :: (i: i32) -> i32 {
 main :: () -> i32 {
     return get_n_fib(10);
 }
-"));
+"
+        )
+    );
 }

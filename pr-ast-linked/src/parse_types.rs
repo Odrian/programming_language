@@ -1,8 +1,8 @@
+use crate::ModuleLiningContext;
 use crate::dependency_resolver::DependencyResolver;
 use crate::error::LinkingError;
 use crate::linked_statement::GlobalLinkedStatement;
-use crate::object::{parse_primitive_type, ObjType, Object};
-use crate::ModuleLiningContext;
+use crate::object::{ObjType, Object, parse_primitive_type};
 use pr_ast::statement::{DeclarationStatement, RStatement, RTypee, Statement, Typee};
 use pr_common::error::{Diagnostic, ErrorQueue};
 use pr_common::ranged::RString;
@@ -18,7 +18,7 @@ struct TypeResolver<'c> {
     errors: &'c mut ErrorQueue,
     context: &'c mut ModuleLiningContext,
     statements: HashMap<Object, (RStatement, usize)>,
-    dependency_resolver: DependencyResolver<Object>
+    dependency_resolver: DependencyResolver<Object>,
 }
 
 impl<'c> TypeResolver<'c> {
@@ -59,17 +59,27 @@ impl TypeResolver<'_> {
             Ok(v) => v,
             Err(err_object) => {
                 let (statement, _file_id) = self.statements.get(&err_object).unwrap();
-                let Statement::DeclarationStatement { name, statement: _ } = &statement.value else { unreachable!() };
+                let Statement::DeclarationStatement { name, statement: _ } = &statement.value else {
+                    unreachable!()
+                };
                 self.errors.add_diag(LinkingError::dependency_cycle(name.clone()));
-                return Err(())
+                return Err(());
             }
         };
-        let Some(object) = object_option else { return Ok(()) };
+        let Some(object) = object_option else {
+            return Ok(());
+        };
 
         let (statement, file_id) = self.statements.get(&object).unwrap();
         let file_id = *file_id;
 
-        let Statement::DeclarationStatement { name: struct_name, statement: DeclarationStatement::Struct { fields }} = &statement.value else { unreachable!() };
+        let Statement::DeclarationStatement {
+            name: struct_name,
+            statement: DeclarationStatement::Struct { fields },
+        } = &statement.value
+        else {
+            unreachable!()
+        };
 
         let mut dependencies = Vec::new();
         let mut linked_fields = Vec::with_capacity(fields.len());
@@ -80,21 +90,23 @@ impl TypeResolver<'_> {
                 Ok(k) => k,
                 Err(diag) => {
                     self.errors.add_diag(diag);
-                    return Err(())
+                    return Err(());
                 }
             };
             linked_fields.push(obj_type);
             let previous_name = field_names.insert(name.value.clone(), index as u32);
             if previous_name.is_some() {
-                self.errors.add_diag(
-                    LinkingError::struct_field_name_collision(struct_name.clone(), name.value.clone()));
-                return Err(())
+                self.errors.add_diag(LinkingError::struct_field_name_collision(
+                    struct_name.clone(),
+                    name.value.clone(),
+                ));
+                return Err(());
             }
         }
 
         if !dependencies.is_empty() {
             self.dependency_resolver.add_dependency(object, dependencies);
-            return Ok(())
+            return Ok(());
         }
 
         self.dependency_resolver.key_done(object);
@@ -107,20 +119,26 @@ impl TypeResolver<'_> {
         Ok(())
     }
     /// return [ObjType::Unknown] if it needs dependency and update [dependencies]
-    fn parse_type(&self, typee: &RTypee, file_id: usize, dependencies: &mut Vec<Object>, is_ref: bool) -> Result<ObjType, Diagnostic> {
+    fn parse_type(
+        &self,
+        typee: &RTypee,
+        file_id: usize,
+        dependencies: &mut Vec<Object>,
+        is_ref: bool,
+    ) -> Result<ObjType, Diagnostic> {
         match &typee.value {
             Typee::String(string) => {
                 if let Some(object_type) = parse_primitive_type(string) {
-                    return Ok(object_type)
+                    return Ok(object_type);
                 }
                 let file = &self.context.files[file_id];
 
                 let Some(&object) = file.available_names.get(string) else {
-                    return Err(LinkingError::name_not_found(RString::new(string.clone(), typee.range)))
+                    return Err(LinkingError::name_not_found(RString::new(string.clone(), typee.range)));
                 };
 
                 if !self.statements.contains_key(&object) {
-                    return Err(LinkingError::name_not_found(RString::new(string.clone(), typee.range)))
+                    return Err(LinkingError::name_not_found(RString::new(string.clone(), typee.range)));
                 }
 
                 if is_ref || self.context.type_statements.contains_key(&object) {

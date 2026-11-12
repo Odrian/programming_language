@@ -1,14 +1,14 @@
-use std::process::{Command, ExitStatus, Stdio};
-use clap::builder::OsStr;
 use clap::Parser;
-use pr_compiler::{Args, compile_file, CompileConfig};
-use pr_common::error::{DiagnosticString, ErrorQueue};
+use clap::builder::OsStr;
 use pr_common::Target;
+use pr_common::error::{DiagnosticString, ErrorQueue};
+use pr_compiler::{Args, CompileConfig, compile_file};
+use std::process::{Command, ExitStatus, Stdio};
 
 use tempfile::TempDir;
 
 fn compile_text(text: &str) -> Result<(TempDir, Command), ErrorQueue> {
-   let temp_dir = tempfile::tempdir().expect("can't create temp dir");
+    let temp_dir = tempfile::tempdir().expect("can't create temp dir");
 
     let main_txt_path = temp_dir.path().join("main.pr");
     std::fs::write(&main_txt_path, text).expect("can't write to temp file");
@@ -29,15 +29,15 @@ fn compile_text(text: &str) -> Result<(TempDir, Command), ErrorQueue> {
             let command = Command::new(out_path);
             Ok((temp_dir, command))
         }
-        Err(()) => Err(errors)
+        Err(()) => Err(errors),
     }
 }
 
 fn unwrap_code(exit_status: &ExitStatus) -> Result<i32, ErrorQueue> {
     let Some(code) = exit_status.code() else {
-        return Err(ErrorQueue::new_single_diag(DiagnosticString::from_text(
-            "process was terminated by a signal"
-        ).to_diag0()))
+        return Err(ErrorQueue::new_single_diag(
+            DiagnosticString::from_text("process was terminated by a signal").to_diag0(),
+        ));
     };
     Ok(code)
 }
@@ -59,9 +59,9 @@ pub fn run_code_stdout(text: &str) -> Result<String, ErrorQueue> {
     let output = command.output().unwrap();
     let code = unwrap_code(&output.status)?;
     if code != 0 {
-        return Err(ErrorQueue::new_single_diag(DiagnosticString::new(format!(
-            "exit code {code}"
-        )).to_diag0()))
+        return Err(ErrorQueue::new_single_diag(
+            DiagnosticString::new(format!("exit code {code}")).to_diag0(),
+        ));
     }
 
     let out_text = String::from_utf8_lossy(&output.stdout);
@@ -73,7 +73,7 @@ pub fn get_exit_code(text: &str) -> i32 {
 
     match result {
         Ok(value) => value,
-        Err(err) => panic!("{err:?}")
+        Err(err) => panic!("{err:?}"),
     }
 }
 
@@ -89,7 +89,10 @@ pub fn assert_no_error(text: &str) {
 pub fn get_exit_code_main(text: &str) -> i32 {
     let program = "\
 main :: () -> i32 {
-    ".to_owned() + text + "
+    "
+    .to_owned()
+        + text
+        + "
 }
 ";
     get_exit_code(&program)
@@ -100,12 +103,14 @@ pub fn get_exit_code_main_return(text: &str) -> i32 {
 }
 
 pub fn test_global(global: &str) -> Result<(), ErrorQueue> {
-    let program = format!("\
+    let program = format!(
+        "\
 main :: () -> i32 {{
     return 0;
 }}
 
 {global}
-");
+"
+    );
     run_code(&program).map(|_| ())
 }

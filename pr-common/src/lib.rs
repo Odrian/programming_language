@@ -1,9 +1,9 @@
 mod target;
 pub use target::Target;
 
+mod bracket_type;
 pub mod error;
 pub mod ranged;
-mod bracket_type;
 pub use bracket_type::BracketType;
 
 pub mod operations;

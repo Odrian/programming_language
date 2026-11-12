@@ -1,22 +1,19 @@
+use pr_common::{BracketType, operations::*};
 use std::fmt::{Display, Formatter};
-use pr_common::{
-    BracketType,
-    operations::*,
-};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
     Keyword(TokenKeyword),
-    String(String),             // any String
-    NumberLiteral(String),      // any String starting with a digit
-    Semicolon,                  // ;
-    Dot,                        // .
-    DoubleDot,                  // ..
-    Comma,                      // ,
-    Colon,                      // :
-    DoubleColon,                // ::
-    Arrow,                      // ->
-    Hashtag,                    // #
+    String(String),        // any String
+    NumberLiteral(String), // any String starting with a digit
+    Semicolon,             // ;
+    Dot,                   // .
+    DoubleDot,             // ..
+    Comma,                 // ,
+    Colon,                 // :
+    DoubleColon,           // ::
+    Arrow,                 // ->
+    Hashtag,               // #
 
     EqualOperation(EqualOperation),
     Operation(TwoSidedOperation),
@@ -30,7 +27,9 @@ pub type TokenBlock = BracketType;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TokenKeyword {
-    If, While, For,
+    If,
+    While,
+    For,
     Return,
     Import,
 }
@@ -38,8 +37,8 @@ pub enum TokenKeyword {
 /// `TwoSidedOperation` must not change type
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum EqualOperation {
-    Equal,                      // =
-    ColonEqual,                 // :=
+    Equal,                             // =
+    ColonEqual,                        // :=
     OperationEqual(TwoSidedOperation), // _=
 }
 

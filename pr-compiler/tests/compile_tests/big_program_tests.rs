@@ -6,26 +6,41 @@ fn test_simplest() {
 
     assert_eq!(3, get_exit_code_main_return("1 + 2"));
 
-    assert_eq!(7, get_exit_code_main("\
+    assert_eq!(
+        7,
+        get_exit_code_main(
+            "\
 a := 7;
 return a
-"));
+"
+        )
+    );
 
-    assert_eq!(9, get_exit_code_main("\
+    assert_eq!(
+        9,
+        get_exit_code_main(
+            "\
 a := 7;
 a = 9;
 return a
-"));
+"
+        )
+    );
 
-    assert_has_error("\
+    assert_has_error(
+        "\
 main :: () -> i32 {
     x := 0;
     x = 0.0;
     return 0
 }
-");
+",
+    );
 
-    assert_eq!(12, get_exit_code("\
+    assert_eq!(
+        12,
+        get_exit_code(
+            "\
 foo :: () -> i32 {
     return 12
 }
@@ -33,7 +48,9 @@ foo :: () -> i32 {
 main :: () -> i32 {
     return foo()
 }
-"));
+"
+        )
+    );
 
     assert_eq!(10, get_exit_code_main_return("8|3&6"));
     assert_eq!(10, get_exit_code_main_return("3&6|8"));
@@ -102,16 +119,24 @@ main :: () -> i32 {
 
 #[test]
 fn test_global() {
-    assert_eq!(10, get_exit_code("\
+    assert_eq!(
+        10,
+        get_exit_code(
+            "\
 count : i32;
 
 main :: () -> i32 {
     count = 10;
     return count;
 }
-"));
+"
+        )
+    );
 
-    assert_eq!(17, get_exit_code("\
+    assert_eq!(
+        17,
+        get_exit_code(
+            "\
 count: i32;
 
 add :: (n: i32) {
@@ -123,9 +148,14 @@ main :: () -> i32 {
     add(7);
     return count;
 }
-"));
+"
+        )
+    );
 
-    assert_eq!(17, get_exit_code("\
+    assert_eq!(
+        17,
+        get_exit_code(
+            "\
 count: i32;
 
 foo :: (n: i32) -> i32 {
@@ -136,5 +166,7 @@ main :: () -> i32 {
     count = 10;
     return foo(7)
 }
-"));
+"
+        )
+    );
 }

@@ -2,14 +2,19 @@ use crate::error::{ExpectedEnum, SyntacticError};
 use crate::statement::*;
 use crate::{Node, ParsingState, RefNode};
 use lsp_types::Range;
+use pr_common::BracketType;
 use pr_common::operations::*;
 use pr_common::ranged::RString;
-use pr_common::BracketType;
-use pr_lexer::token::*;
 use pr_lexer::TokenIntoIter;
+use pr_lexer::token::*;
 
 impl ParsingState<'_, '_, '_> {
-    pub fn parse_statements(&mut self, mut tokens: TokenIntoIter<'_>, range: Range, is_global: bool) -> Vec<RStatement> {
+    pub fn parse_statements(
+        &mut self,
+        mut tokens: TokenIntoIter<'_>,
+        range: Range,
+        is_global: bool,
+    ) -> Vec<RStatement> {
         let mut state = self.new_state(&mut tokens, range);
         state.parse_statements_inplace(is_global)
     }
@@ -20,7 +25,9 @@ impl ParsingState<'_, '_, '_> {
             let result = self.parse_statement(is_global, &mut statements);
 
             if result.is_err() {
-                while let Some((token, _range)) = self.peek() && !matches!(token, RefNode::Elem(Token::Semicolon)) {
+                while let Some((token, _range)) = self.peek()
+                    && !matches!(token, RefNode::Elem(Token::Semicolon))
+                {
                     let _ = self.next();
                 }
                 let _ = self.next();
@@ -33,11 +40,7 @@ impl ParsingState<'_, '_, '_> {
         let attributes = self.parse_attributes();
 
         // skip on #cfg(false)
-        let result = if attributes.is_cgf_skip {
-            &mut vec![]
-        } else {
-            result
-        };
+        let result = if attributes.is_cgf_skip { &mut vec![] } else { result };
 
         if attributes.is_extern {
             return self.parse_extern(is_global, result);
@@ -45,7 +48,7 @@ impl ParsingState<'_, '_, '_> {
 
         if self.at_end() {
             self.add_diag(SyntacticError::unexpected_end(self.all_range));
-            return Err(())
+            return Err(());
         }
 
         let (token, range0) = self.next_unwrap(|_| unreachable!())?;
@@ -54,11 +57,10 @@ impl ParsingState<'_, '_, '_> {
                 TokenKeyword::If | TokenKeyword::While => {
                     let condition = self.parse_expression(true)?;
 
-                    let (token, range_br) = self.next_unwrap(|s|
-                        ExpectedEnum::CurlyBracket.diagnostic(s.all_range))?;
+                    let (token, range_br) = self.next_unwrap(|s| ExpectedEnum::CurlyBracket.diagnostic(s.all_range))?;
                     let Node::Block(BracketType::Curly, vec) = token else {
                         self.add_diag(ExpectedEnum::CurlyBracket.diagnostic(range_br));
-                        return Err(())
+                        return Err(());
                     };
                     let body = self.parse_statements(vec, range_br, false);
 
@@ -71,16 +73,14 @@ impl ParsingState<'_, '_, '_> {
                     Ok(())
                 }
                 TokenKeyword::For => {
-                    let (token, range) = self.next_unwrap(|s|
-                        ExpectedEnum::Name.diagnostic_after(s.all_range))?;
+                    let (token, range) = self.next_unwrap(|s| ExpectedEnum::Name.diagnostic_after(s.all_range))?;
                     let Node::Elem(Token::String(name)) = token else {
                         self.add_diag(ExpectedEnum::Name.diagnostic(range));
                         return Err(());
                     };
                     let name = RString::new(name, range);
 
-                    let (token, range) = self.next_unwrap(|s|
-                        ExpectedEnum::In_KW.diagnostic_after(s.all_range))?;
+                    let (token, range) = self.next_unwrap(|s| ExpectedEnum::In_KW.diagnostic_after(s.all_range))?;
                     if !matches!(token, Node::Elem(Token::String(s)) if s == "in") {
                         self.add_diag(ExpectedEnum::In_KW.diagnostic(range));
                         return Err(());
@@ -88,16 +88,16 @@ impl ParsingState<'_, '_, '_> {
 
                     let from_value = self.parse_expression_without_ops(true, true)?;
 
-                    let (token, range) = self.next_unwrap(|s|
-                        ExpectedEnum::DoubleDot.diagnostic_after(s.all_range))?;
+                    let (token, range) = self.next_unwrap(|s| ExpectedEnum::DoubleDot.diagnostic_after(s.all_range))?;
                     if !matches!(token, Node::Elem(Token::DoubleDot)) {
                         self.add_diag(ExpectedEnum::DoubleDot.diagnostic(range));
                         return Err(());
                     };
 
-                    let compare_op: TwoSidedOperation = if let Some(
-                        (RefNode::Elem(Token::EqualOperation(EqualOperation::Equal)), _range)
-                    ) = self.peek()
+                    let compare_op: TwoSidedOperation = if let Some((
+                        RefNode::Elem(Token::EqualOperation(EqualOperation::Equal)),
+                        _range,
+                    )) = self.peek()
                     {
                         let _ = self.next();
                         CompareOperator::LessEqual.into()
@@ -107,8 +107,8 @@ impl ParsingState<'_, '_, '_> {
 
                     let to_value = self.parse_expression_without_ops(true, true)?;
 
-                    let (token, range) = self.next_unwrap(|s|
-                        ExpectedEnum::CurlyBracket.diagnostic_after(s.all_range))?;
+                    let (token, range) =
+                        self.next_unwrap(|s| ExpectedEnum::CurlyBracket.diagnostic_after(s.all_range))?;
                     let Node::Block(BracketType::Curly, body) = token else {
                         self.add_diag(ExpectedEnum::CurlyBracket.diagnostic(range));
                         return Err(());
@@ -116,20 +116,25 @@ impl ParsingState<'_, '_, '_> {
 
                     let body = self.parse_statements(body, range, false);
 
-                    result.push(Statement::new_for(
-                        Statement::new_variable(name.clone(), None, from_value).add_no_range(),
-                        Expression::new_operation(
-                            Expression::Variable(name.clone()).add_no_range(),
-                            to_value,
-                            compare_op.add_no_range(),
-                        ).add_no_range(),
-                        body,
-                        Statement::new_set(
-                            Expression::Variable(name).add_no_range(),
-                            Expression::from(LiteralExpression::NumberLiteral("1".to_string())).add_no_range(),
-                            Some(TwoSidedOperation::from(NumberOperation::Add).add_no_range())
-                        ).add_no_range()
-                    ).add_no_range());
+                    result.push(
+                        Statement::new_for(
+                            Statement::new_variable(name.clone(), None, from_value).add_no_range(),
+                            Expression::new_operation(
+                                Expression::Variable(name.clone()).add_no_range(),
+                                to_value,
+                                compare_op.add_no_range(),
+                            )
+                            .add_no_range(),
+                            body,
+                            Statement::new_set(
+                                Expression::Variable(name).add_no_range(),
+                                Expression::from(LiteralExpression::NumberLiteral("1".to_string())).add_no_range(),
+                                Some(TwoSidedOperation::from(NumberOperation::Add).add_no_range()),
+                            )
+                            .add_no_range(),
+                        )
+                        .add_no_range(),
+                    );
                     Ok(())
                 }
                 TokenKeyword::Return => {
@@ -150,14 +155,16 @@ impl ParsingState<'_, '_, '_> {
                     if !is_global {
                         self.add_diag(SyntacticError::new_local_global("import", range0));
                         let _ = self.parse_import(range0, &mut Vec::new());
-                        return Err(())
+                        return Err(());
                     }
                     self.parse_import(range0, result)?;
                     Ok(())
                 }
-            }
+            },
             Node::Elem(Token::String(_)) => {
-                let Node::Elem(Token::String(string)) = token else { unreachable!() };
+                let Node::Elem(Token::String(string)) = token else {
+                    unreachable!()
+                };
                 let string = RString::new(string, range0);
                 self.parse_statement2(string, result, is_global)
             }
@@ -171,7 +178,7 @@ impl ParsingState<'_, '_, '_> {
                 if is_global {
                     self.add_diag(SyntacticError::from_text("unexpected global brackets", range0));
                     let _ = self.parse_statements(body, range0, false);
-                    return Err(())
+                    return Err(());
                 }
 
                 let body = self.parse_statements(body, range0, false);
@@ -204,20 +211,19 @@ impl ParsingState<'_, '_, '_> {
                 let (_, range) = self.next_unwrap(|_| unreachable!())?;
 
                 let Some((token, range)) = self.peek() else {
-                    self.add_diag((ExpectedEnum::RoundBracket | ExpectedEnum::Struct_KW)
-                        .diagnostic(range));
-                    return Err(())
+                    self.add_diag((ExpectedEnum::RoundBracket | ExpectedEnum::Struct_KW).diagnostic(range));
+                    return Err(());
                 };
                 match token {
                     RefNode::Block(BracketType::Round, _) => {
                         if !is_global {
                             self.add_diag(SyntacticError::new_local_global("function", name.range));
                             let _ = self.parse_function(name, &mut Vec::new());
-                            return Err(())
+                            return Err(());
                         }
 
                         self.parse_function(name, result)
-                    },
+                    }
                     RefNode::Elem(Token::String(string)) if string == "struct" => {
                         if !is_global {
                             self.add_diag(SyntacticError::new_local_global("struct", name.range));
@@ -228,19 +234,18 @@ impl ParsingState<'_, '_, '_> {
                         self.parse_struct(name, result)
                     }
                     _ => {
-                        self.add_diag((ExpectedEnum::RoundBracket | ExpectedEnum::Struct_KW)
-                            .diagnostic(*range));
+                        self.add_diag((ExpectedEnum::RoundBracket | ExpectedEnum::Struct_KW).diagnostic(*range));
                         Err(())
                     }
                 }
-            },
+            }
             RefNode::Elem(Token::Colon) => {
                 // name :
                 let (_, range) = self.next_unwrap(|_| unreachable!())?;
                 let typee = self.parse_type(range)?;
 
-                let (token, _) = self.next_unwrap(|s|
-                    (ExpectedEnum::Equal | ExpectedEnum::Semicolon).diagnostic(s.all_range))?;
+                let (token, _) =
+                    self.next_unwrap(|s| (ExpectedEnum::Equal | ExpectedEnum::Semicolon).diagnostic(s.all_range))?;
                 if matches!(token, Node::Elem(Token::Semicolon)) {
                     let expression: Expression = LiteralExpression::Undefined { is_zeroed: true }.into();
                     let expression = expression.add_no_range();
@@ -261,7 +266,7 @@ impl ParsingState<'_, '_, '_> {
                 let statement = Statement::new_variable(name, Some(typee), expression);
                 result.push(statement.add_range(range_st));
                 Ok(())
-            },
+            }
             RefNode::Elem(Token::EqualOperation(EqualOperation::ColonEqual)) => {
                 let _ = self.next();
 
@@ -272,7 +277,7 @@ impl ParsingState<'_, '_, '_> {
                 let statement = Statement::new_variable(name, None, expression2);
                 result.push(statement.add_range(range_st));
                 Ok(())
-            },
+            }
             _ => {
                 if is_global {
                     self.add_diag(SyntacticError::from_text("global expression", name.range));
@@ -290,12 +295,14 @@ impl ParsingState<'_, '_, '_> {
     fn parse_statement3(&mut self, result: &mut Vec<RStatement>, left: RExpression) -> Result<(), ()> {
         let Some((token, _range)) = self.peek() else {
             result.push(Statement::Expression(left.value).add_range(left.range));
-            return Ok(())
+            return Ok(());
         };
 
         match token {
             RefNode::Elem(Token::EqualOperation(..)) => {
-                let Some((Node::Elem(Token::EqualOperation(equal_operation)), range0)) = self.next() else { unreachable!() };
+                let Some((Node::Elem(Token::EqualOperation(equal_operation)), range0)) = self.next() else {
+                    unreachable!()
+                };
 
                 // name _=
                 let expression2 = self.parse_expression(false)?;
@@ -305,7 +312,7 @@ impl ParsingState<'_, '_, '_> {
                 let statement = match equal_operation {
                     EqualOperation::ColonEqual => {
                         self.add_diag(SyntacticError::incorrect_variable_definition(range0));
-                        return Err(())
+                        return Err(());
                     }
                     EqualOperation::Equal => Statement::new_set(left, expression2, None),
                     EqualOperation::OperationEqual(op) => {
@@ -318,11 +325,13 @@ impl ParsingState<'_, '_, '_> {
 
             RefNode::Block(BracketType::Round, _) => {
                 // name(..)
-                let Some((_, range_bracket)) = self.peek() else { unreachable!() };
+                let Some((_, range_bracket)) = self.peek() else {
+                    unreachable!()
+                };
 
                 let Expression::Variable(name) = left.value else {
                     self.add_diag(SyntacticError::incorrect_call(left.range));
-                    return Err(())
+                    return Err(());
                 };
 
                 let range_call = Range::new(name.range.start, range_bracket.end);

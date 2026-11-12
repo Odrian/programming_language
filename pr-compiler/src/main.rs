@@ -1,7 +1,7 @@
 use clap::Parser;
-use pr_common::error::ErrorQueue;
 use pr_common::Target;
-use pr_compiler::{compile_src, Args, CompileConfig};
+use pr_common::error::ErrorQueue;
+use pr_compiler::{Args, CompileConfig, compile_src};
 use std::path::PathBuf;
 
 fn main() {
@@ -20,9 +20,10 @@ fn main() {
     match result {
         Ok(_unit) => {
             println!("compiled");
-        },
+        }
         Err(_unit) => {
             eprintln!("not compiled due to error");
-        },
+            std::process::exit(1);
+        }
     }
 }

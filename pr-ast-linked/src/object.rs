@@ -14,9 +14,16 @@ pub enum ObjType {
     Integer(IntObjType),
     Float(FloatObjType),
     Pointer(Box<Self>),
-    Reference { obj_type: Box<Self>, is_weak: bool },
+    Reference {
+        obj_type: Box<Self>,
+        is_weak: bool,
+    },
     Struct(Object),
-    Function { arguments: Vec<Self>, is_vararg: bool, returns: Box<Self> },
+    Function {
+        arguments: Vec<Self>,
+        is_vararg: bool,
+        returns: Box<Self>,
+    },
 }
 impl ObjType {
     pub const BOOL: Self = Self::Integer(IntObjType::Bool);
@@ -27,10 +34,16 @@ impl ObjType {
         Self::Pointer(Box::new(obj_type))
     }
     pub fn new_reference(obj_type: ObjType) -> Self {
-        Self::Reference { obj_type: Box::new(obj_type), is_weak: false }
+        Self::Reference {
+            obj_type: Box::new(obj_type),
+            is_weak: false,
+        }
     }
     pub fn new_weak_reference(obj_type: ObjType) -> Self {
-        Self::Reference { obj_type: Box::new(obj_type), is_weak: true }
+        Self::Reference {
+            obj_type: Box::new(obj_type),
+            is_weak: true,
+        }
     }
 
     pub fn is_void(&self) -> bool {
@@ -55,12 +68,18 @@ impl ObjType {
     /// check that self and other are &T and *T or *T and &T
     pub fn is_different_pointers(&self, other: &ObjType) -> bool {
         let left = match self {
-            Self::Reference { obj_type, is_weak: false } => obj_type,
+            Self::Reference {
+                obj_type,
+                is_weak: false,
+            } => obj_type,
             Self::Pointer(obj_type) => obj_type,
             _ => return false,
         };
         let right = match other {
-            Self::Reference { obj_type, is_weak: false } => obj_type,
+            Self::Reference {
+                obj_type,
+                is_weak: false,
+            } => obj_type,
             Self::Pointer(obj_type) => obj_type,
             _ => return false,
         };
@@ -98,14 +117,25 @@ pub fn parse_primitive_type(string: &str) -> Option<ObjType> {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum FloatObjType {
-    F32, F64
+    F32,
+    F64,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum IntObjType {
     Bool,
-    U8, U16, U32, U64, U128, USize,
-    I8, I16, I32, I64, I128, ISize,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    USize,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    ISize,
 }
 
 impl IntObjType {
@@ -113,7 +143,10 @@ impl IntObjType {
         ObjType::Integer(self)
     }
     pub const fn is_signed(&self) -> bool {
-        matches!(self, Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::I128 | Self::ISize)
+        matches!(
+            self,
+            Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::I128 | Self::ISize
+        )
     }
     pub fn is_bool(&self) -> bool {
         self == &Self::Bool

@@ -8,16 +8,28 @@ pub type RTypee = Ranged<Typee>;
 pub type RExpression = Ranged<Expression>;
 
 impl Statement {
-    pub fn add_range(self, range: Range) -> RStatement { RStatement { value: self, range } }
-    pub fn add_no_range(self) -> RStatement { self.add_range(Range::default()) }
+    pub fn add_range(self, range: Range) -> RStatement {
+        RStatement { value: self, range }
+    }
+    pub fn add_no_range(self) -> RStatement {
+        self.add_range(Range::default())
+    }
 }
 impl Typee {
-    pub fn add_range(self, range: Range) -> RTypee { RTypee { value: self, range } }
-    pub fn add_no_range(self) -> RTypee { self.add_range(Range::default()) }
+    pub fn add_range(self, range: Range) -> RTypee {
+        RTypee { value: self, range }
+    }
+    pub fn add_no_range(self) -> RTypee {
+        self.add_range(Range::default())
+    }
 }
 impl Expression {
-    pub fn add_range(self, range: Range) -> RExpression { RExpression { value: self, range } }
-    pub fn add_no_range(self) -> RExpression { self.add_range(Range::default()) }
+    pub fn add_range(self, range: Range) -> RExpression {
+        RExpression { value: self, range }
+    }
+    pub fn add_no_range(self) -> RExpression {
+        self.add_range(Range::default())
+    }
 }
 
 pub fn new_unary_expr(expression: RExpression, op: ROneSidedOperation) -> RExpression {
@@ -25,32 +37,58 @@ pub fn new_unary_expr(expression: RExpression, op: ROneSidedOperation) -> RExpre
     Expression::new_unary_operation(expression, op).add_range(range)
 }
 
-
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Statement {
     ComptimeStatement(ComptimeStatement),
-    DeclarationStatement { name: RString, statement: DeclarationStatement },
-    ExternStatement { statement: ExternStatement },
+    DeclarationStatement {
+        name: RString,
+        statement: DeclarationStatement,
+    },
+    ExternStatement {
+        statement: ExternStatement,
+    },
 
-    SetVariable { what: RExpression, value: RExpression, op: Option<RTwoSidedOperation> },
+    SetVariable {
+        what: RExpression,
+        value: RExpression,
+        op: Option<RTwoSidedOperation>,
+    },
 
     Brackets(Vec<RStatement>),
     Expression(Expression),
-    If { condition: RExpression, body: Vec<RStatement> },
-    While { condition: RExpression, body: Vec<RStatement> },
+    If {
+        condition: RExpression,
+        body: Vec<RStatement>,
+    },
+    While {
+        condition: RExpression,
+        body: Vec<RStatement>,
+    },
     Return(Option<RExpression>),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum DeclarationStatement {
-    VariableDeclaration { typee: Option<RTypee>, value: RExpression },
-    Function { args: Vec<(RString, RTypee)>, returns: Option<RTypee>, body: Vec<RStatement> },
-    Struct { fields: Vec<(RString, RTypee)> },
+    VariableDeclaration {
+        typee: Option<RTypee>,
+        value: RExpression,
+    },
+    Function {
+        args: Vec<(RString, RTypee)>,
+        returns: Option<RTypee>,
+        body: Vec<RStatement>,
+    },
+    Struct {
+        fields: Vec<(RString, RTypee)>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ComptimeStatement {
-    Import { from: Vec<RString>, what: Vec<(RString, Option<RString>)> },
+    Import {
+        from: Vec<RString>,
+        what: Vec<(RString, Option<RString>)>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -58,14 +96,23 @@ pub enum Expression {
     Operation(Box<RExpression>, Box<RExpression>, RTwoSidedOperation),
     UnaryOperation(Box<RExpression>, ROneSidedOperation),
     As(Box<RExpression>, RTypee),
-    StructField { left: Box<RExpression>, field: RString },
+    StructField {
+        left: Box<RExpression>,
+        field: RString,
+    },
 
     Literal(LiteralExpression),
-    StructConstruct { struct_name: RString, fields: Vec<(RString, RExpression)> },
+    StructConstruct {
+        struct_name: RString,
+        fields: Vec<(RString, RExpression)>,
+    },
 
     Variable(RString),
     RoundBracket(Box<RExpression>),
-    FunctionCall { object: RString, args: Vec<RExpression> },
+    FunctionCall {
+        object: RString,
+        args: Vec<RExpression>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -86,8 +133,16 @@ pub enum Typee {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ExternStatement {
-    Variable { name: RString, typee: RTypee },
-    Function { name: RString, args: Vec<RTypee>, is_vararg: bool, returns: Option<RTypee> },
+    Variable {
+        name: RString,
+        typee: RTypee,
+    },
+    Function {
+        name: RString,
+        args: Vec<RTypee>,
+        is_vararg: bool,
+        returns: Option<RTypee>,
+    },
 }
 
 impl Typee {
@@ -102,13 +157,15 @@ impl Typee {
     }
 }
 
-
 impl Statement {
     pub const fn new_extern(statement: ExternStatement) -> Self {
         Self::ExternStatement { statement }
     }
     pub const fn new_variable(name: RString, typee: Option<RTypee>, value: RExpression) -> Self {
-        Self::DeclarationStatement { name, statement: DeclarationStatement::VariableDeclaration { typee, value } }
+        Self::DeclarationStatement {
+            name,
+            statement: DeclarationStatement::VariableDeclaration { typee, value },
+        }
     }
     pub const fn new_set(what: RExpression, value: RExpression, op: Option<RTwoSidedOperation>) -> Self {
         Self::SetVariable { what, value, op }
@@ -119,32 +176,32 @@ impl Statement {
     pub const fn new_while(condition: RExpression, body: Vec<RStatement>) -> Self {
         Self::While { condition, body }
     }
-    pub const fn new_function(name: RString, args: Vec<(RString, RTypee)>, returns: Option<RTypee>, body: Vec<RStatement>) -> Self {
-        Self::DeclarationStatement { name, statement: DeclarationStatement::Function { args, returns, body } }
+    pub const fn new_function(
+        name: RString,
+        args: Vec<(RString, RTypee)>,
+        returns: Option<RTypee>,
+        body: Vec<RStatement>,
+    ) -> Self {
+        Self::DeclarationStatement {
+            name,
+            statement: DeclarationStatement::Function { args, returns, body },
+        }
     }
     pub const fn new_import(from: Vec<RString>, what: Vec<(RString, Option<RString>)>) -> Self {
         Self::ComptimeStatement(ComptimeStatement::Import { from, what })
     }
     pub const fn new_struct(name: RString, fields: Vec<(RString, RTypee)>) -> Self {
-        Self::DeclarationStatement { name, statement: DeclarationStatement::Struct { fields } }
+        Self::DeclarationStatement {
+            name,
+            statement: DeclarationStatement::Struct { fields },
+        }
     }
     pub const fn new_brackets(body: Vec<RStatement>) -> Self {
         Self::Brackets(body)
     }
-    pub fn new_for(
-        before: RStatement,
-        cond: RExpression,
-        mut body: Vec<RStatement>,
-        inc: RStatement,
-    ) -> Self {
+    pub fn new_for(before: RStatement, cond: RExpression, mut body: Vec<RStatement>, inc: RStatement) -> Self {
         body.push(inc);
-        Statement::new_brackets(vec![
-            before,
-            Statement::new_while(
-                cond,
-                body,
-            ).add_no_range()
-        ])
+        Statement::new_brackets(vec![before, Statement::new_while(cond, body).add_no_range()])
     }
 }
 
@@ -165,7 +222,10 @@ impl Expression {
         Self::FunctionCall { object, args }
     }
     pub fn new_dot(left: RExpression, field: RString) -> Self {
-        Self::StructField { left: Box::new(left), field }
+        Self::StructField {
+            left: Box::new(left),
+            field,
+        }
     }
 }
 
@@ -178,20 +238,21 @@ impl From<LiteralExpression> for Expression {
 // ----- Display implementation -----
 
 fn to_string_with_tabs<T: ToString>(statements: &[T]) -> String {
-    let string = statements.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+    let string = statements
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
     "    ".to_owned() + string.replace('\n', "\n    ").as_str()
 }
-
 
 impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::SetVariable { what, value, op } => {
-                match op {
-                    Some(op) => write!(f, "{what} {op}= {value}"),
-                    None => write!(f, "{what} = {value}"),
-                }
-            }
+            Self::SetVariable { what, value, op } => match op {
+                Some(op) => write!(f, "{what} {op}= {value}"),
+                None => write!(f, "{what} = {value}"),
+            },
             Self::Brackets(body) => {
                 let inside = to_string_with_tabs(body);
                 write!(f, "{{\n{inside}\n}}")
@@ -207,19 +268,15 @@ impl fmt::Display for Statement {
                 let inside = to_string_with_tabs(body);
                 write!(f, "while {condition} {{\n{inside}\n}}")
             }
-            Self::Return(exp) => {
-                match exp {
-                    Some(exp) => write!(f, "return {exp}"),
-                    None => write!(f, "return")
-                }
-            }
-            Self::DeclarationStatement { name, statement} => match statement {
-                DeclarationStatement::VariableDeclaration { typee, value } => {
-                    match typee {
-                        Some(typee) => write!(f, "{name} : {typee} = {value}"),
-                        None => write!(f, "{name} := {value}"),
-                    }
-                }
+            Self::Return(exp) => match exp {
+                Some(exp) => write!(f, "return {exp}"),
+                None => write!(f, "return"),
+            },
+            Self::DeclarationStatement { name, statement } => match statement {
+                DeclarationStatement::VariableDeclaration { typee, value } => match typee {
+                    Some(typee) => write!(f, "{name} : {typee} = {value}"),
+                    None => write!(f, "{name} := {value}"),
+                },
                 DeclarationStatement::Function { args, returns, body } => {
                     let args: Vec<String> = args.iter().map(|s| format!("{}: {}", s.0, s.1)).collect();
                     let args = args.join(", ");
@@ -228,19 +285,26 @@ impl fmt::Display for Statement {
                     write!(f, "{name} :: ({args}) -> {returns} {{\n{inside}\n}}")
                 }
                 DeclarationStatement::Struct { fields } => {
-                    let fields = fields.iter().map(|(field_name, field_typee)|
-                        format!("  {field_name}: {field_typee}\n")
-                    ).collect::<String>();
+                    let fields = fields
+                        .iter()
+                        .map(|(field_name, field_typee)| format!("  {field_name}: {field_typee}\n"))
+                        .collect::<String>();
                     write!(f, "{name} :: struct {{\n{fields}}}")
                 }
-            }
+            },
             Self::ExternStatement { statement } => write!(f, "{statement}"),
             Self::ComptimeStatement(statement) => match statement {
                 ComptimeStatement::Import { from, what } => {
                     let from = from.iter().map(|x| x.value.clone()).collect::<Vec<_>>().join("::");
-                    let what = what.iter().map(|(name, as_name)| {
-                        format!("{name}{}", as_name.as_ref().map_or("".to_string(), |s| format!(" as {s}")))
-                    }).collect::<Vec<_>>();
+                    let what = what
+                        .iter()
+                        .map(|(name, as_name)| {
+                            format!(
+                                "{name}{}",
+                                as_name.as_ref().map_or("".to_string(), |s| format!(" as {s}"))
+                            )
+                        })
+                        .collect::<Vec<_>>();
                     let what = {
                         if what.len() == 1 {
                             what[0].clone()
@@ -250,7 +314,7 @@ impl fmt::Display for Statement {
                     };
                     write!(f, "use {from}::{what}")
                 }
-            }
+            },
         }
     }
 }
@@ -261,10 +325,17 @@ impl fmt::Display for ExternStatement {
             ExternStatement::Variable { name, typee } => {
                 write!(f, "{name}: {typee};")
             }
-            ExternStatement::Function { name, args, is_vararg, returns } => {
+            ExternStatement::Function {
+                name,
+                args,
+                is_vararg,
+                returns,
+            } => {
                 let mut args_str = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
                 if *is_vararg {
-                    if args.is_empty() { unreachable!() }
+                    if args.is_empty() {
+                        unreachable!()
+                    }
                     args_str += ", ...";
                 }
                 match returns {
@@ -284,7 +355,7 @@ impl fmt::Display for Expression {
             }
             Self::Operation(a, b, op) => {
                 write!(f, "({a} {op} {b})")
-            },
+            }
             Self::UnaryOperation(ex, op) => {
                 write!(f, "{op}{ex}")
             }
@@ -298,10 +369,14 @@ impl fmt::Display for Expression {
                 let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
                 write!(f, "{name} ({args})")
             }
-            Self::StructConstruct { struct_name: name, fields } => {
-                let fields = fields.iter().map(|(field_name, field_value)| {
-                    format!("    {field_name}: {field_value},\n")
-                }).collect::<String>();
+            Self::StructConstruct {
+                struct_name: name,
+                fields,
+            } => {
+                let fields = fields
+                    .iter()
+                    .map(|(field_name, field_value)| format!("    {field_name}: {field_value},\n"))
+                    .collect::<String>();
                 write!(f, "{name} {{\n{fields}}}")
             }
         }
@@ -314,12 +389,12 @@ impl fmt::Display for LiteralExpression {
             Self::Undefined { is_zeroed } => match is_zeroed {
                 false => write!(f, "---"),
                 true => write!(f, "#zeroed"),
-            }
+            },
             Self::NumberLiteral(number) => write!(f, "{number}"),
             Self::BoolLiteral(value) => match value {
                 true => write!(f, "true"),
                 false => write!(f, "false"),
-            }
+            },
             Self::CharLiteral(char) => write!(f, "'{}'", *char as char),
             Self::StringLiteral(str) => write!(f, "\"{str}\""),
         }
@@ -335,4 +410,3 @@ impl fmt::Display for Typee {
         }
     }
 }
-

@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use crate::error::LinkingError;
+use crate::object::Object;
 use pr_common::error::Diagnostic;
 use pr_common::ranged::RString;
-use crate::object::Object;
-use crate::error::LinkingError;
+use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 struct ObjectsContext(HashMap<String, Object>);
@@ -23,7 +23,9 @@ pub struct ObjectContextWindow {
 
 impl ObjectContextWindow {
     pub fn new(global_context: HashMap<String, Object>) -> Self {
-        Self { contexts: vec![ObjectsContext(global_context)]}
+        Self {
+            contexts: vec![ObjectsContext(global_context)],
+        }
     }
     pub fn step_in(&mut self) {
         self.contexts.push(ObjectsContext::default());
@@ -33,13 +35,12 @@ impl ObjectContextWindow {
         self.contexts.pop();
     }
     pub fn get(&self, name: &String) -> Option<Object> {
-        self.contexts.iter().rev()
-            .find_map(|obj_con|obj_con.get(name))
+        self.contexts.iter().rev().find_map(|obj_con| obj_con.get(name))
     }
     pub fn get_or_error(&self, name: &RString) -> Result<Object, Diagnostic> {
         match self.get(&name.value) {
             Some(obj) => Ok(obj),
-            None => Err(LinkingError::name_not_found(name.clone()))
+            None => Err(LinkingError::name_not_found(name.clone())),
         }
     }
     pub fn add(&mut self, name: RString, object: Object) {

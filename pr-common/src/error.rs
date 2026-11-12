@@ -15,7 +15,11 @@ impl DiagnosticString {
         Diagnostic::new(None, self.message, DiagnosticSeverity::ERROR)
     }
     pub fn to_diag1(self, position: Position) -> Diagnostic {
-        Diagnostic::new(Some(Range::new(position, position)), self.message, DiagnosticSeverity::ERROR)
+        Diagnostic::new(
+            Some(Range::new(position, position)),
+            self.message,
+            DiagnosticSeverity::ERROR,
+        )
     }
     pub fn to_diag(self, range: Range) -> Diagnostic {
         Diagnostic::new(Some(range), self.message, DiagnosticSeverity::ERROR)
@@ -31,7 +35,11 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn new(range: Option<Range>, message: String, severity: DiagnosticSeverity) -> Self {
-        Self { range, severity, message }
+        Self {
+            range,
+            severity,
+            message,
+        }
     }
     pub fn new_hint(range: Range, message: String) -> Self {
         Self::new(Some(range), message, DiagnosticSeverity::HINT)
@@ -83,14 +91,15 @@ impl ErrorQueue {
         self.vec.iter().any(|diag| diag.severity == DiagnosticSeverity::ERROR)
     }
     pub fn to_lsp_diagnostics(self) -> Vec<lsp_types::Diagnostic> {
-        self.vec.into_iter().map(|d|
-            lsp_types::Diagnostic {
+        self.vec
+            .into_iter()
+            .map(|d| lsp_types::Diagnostic {
                 range: d.range.unwrap_or(Range::default()),
                 severity: Some(d.severity),
                 message: d.message,
                 ..Default::default()
-            }
-        ).collect()
+            })
+            .collect()
     }
 }
 

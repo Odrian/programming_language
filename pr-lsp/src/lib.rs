@@ -1,18 +1,18 @@
+use pr_common::Target;
 use pr_common::error::ErrorQueue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tower_lsp::Client;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
-use tower_lsp::Client;
-use pr_common::Target;
 
 mod debug_diagnostics;
 
 pub struct Backend {
     pub target: Target,
     pub client: Client,
-    pub files:  Arc<RwLock<HashMap<Url, File>>>,
+    pub files: Arc<RwLock<HashMap<Url, File>>>,
 }
 
 #[derive(Hash)]
@@ -33,13 +33,22 @@ impl Backend {
 
 impl Backend {
     async fn update_file(&self, uri: Url, version: i32, text: &str) {
-        self.client.log_message(MessageType::INFO, format!("update file {uri}")).await;
+        self.client
+            .log_message(MessageType::INFO, format!("update file {uri}"))
+            .await;
 
         let mut files = self.files.write().await;
-        if let Some(file) = files.get(&uri) && file.version > version {
-
+        if let Some(file) = files.get(&uri)
+            && file.version > version
+        {
         } else {
-            files.insert(uri, File { version, text: text.to_string() });
+            files.insert(
+                uri,
+                File {
+                    version,
+                    text: text.to_string(),
+                },
+            );
         }
     }
 
@@ -53,7 +62,8 @@ impl Backend {
         let tokens = pr_lexer::tokenize(&mut errors, text);
         #[cfg(feature = "debug-tokens")]
         {
-            self.send_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens)).await;
+            self.send_diagnostics(uri.clone(), debug_diagnostics::token_diag(&tokens))
+                .await;
             return;
         }
 
@@ -61,7 +71,8 @@ impl Backend {
         let statements = pr_ast::parse_ast(&mut errors, &self.target, tokens);
         #[cfg(feature = "debug-statements")]
         {
-            self.send_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements)).await;
+            self.send_diagnostics(uri.clone(), debug_diagnostics::statement_diag(&statements))
+                .await;
             return;
         }
 
@@ -77,13 +88,11 @@ impl tower_lsp::LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Options(
-                    TextDocumentSyncOptions {
-                        open_close: Some(true),
-                        change: Some(TextDocumentSyncKind::FULL),
-                        ..Default::default()
-                    },
-                )),
+                text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
+                    open_close: Some(true),
+                    change: Some(TextDocumentSyncKind::FULL),
+                    ..Default::default()
+                })),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
                     trigger_characters: Some(vec![".".to_string()]),
@@ -94,7 +103,7 @@ impl tower_lsp::LanguageServer for Backend {
             },
             server_info: Some(ServerInfo {
                 name: "pr lsp".to_owned(),
-                version: Some(LSP_VERSION.to_string())
+                version: Some(LSP_VERSION.to_string()),
             }),
         })
     }
@@ -103,14 +112,18 @@ impl tower_lsp::LanguageServer for Backend {
         self.client.log_message(MessageType::INFO, "pr LSP initialized").await;
     }
 
-    async fn shutdown(&self) -> Result<()> { Ok(()) }
+    async fn shutdown(&self) -> Result<()> {
+        Ok(())
+    }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let text_doc = params.text_document;
         let lang_id = text_doc.language_id;
         let uri = text_doc.uri;
 
-        self.client.log_message(MessageType::INFO, format!("open {lang_id} __ {uri}")).await;
+        self.client
+            .log_message(MessageType::INFO, format!("open {lang_id} __ {uri}"))
+            .await;
 
         tokio::join!(
             self.update_file(uri.clone(), text_doc.version, &text_doc.text),

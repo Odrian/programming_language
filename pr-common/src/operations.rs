@@ -14,14 +14,21 @@ pub type ROneSidedOperation = Ranged<OneSidedOperation>;
 pub type RTwoSidedOperation = Ranged<TwoSidedOperation>;
 
 impl OneSidedOperation {
-    pub fn add_range(self, range: Range) -> ROneSidedOperation { ROneSidedOperation { value: self, range } }
-    pub fn add_no_range(self) -> ROneSidedOperation { self.add_range(Range::default()) }
+    pub fn add_range(self, range: Range) -> ROneSidedOperation {
+        ROneSidedOperation { value: self, range }
+    }
+    pub fn add_no_range(self) -> ROneSidedOperation {
+        self.add_range(Range::default())
+    }
 }
 impl TwoSidedOperation {
-    pub fn add_range(self, range: Range) -> RTwoSidedOperation { RTwoSidedOperation { value: self, range } }
-    pub fn add_no_range(self) -> RTwoSidedOperation { self.add_range(Range::default()) }
+    pub fn add_range(self, range: Range) -> RTwoSidedOperation {
+        RTwoSidedOperation { value: self, range }
+    }
+    pub fn add_no_range(self) -> RTwoSidedOperation {
+        self.add_range(Range::default())
+    }
 }
-
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum TwoSidedOperation {
@@ -63,7 +70,6 @@ impl NumberOperation {
     }
 }
 
-
 impl TwoSidedOperation {
     pub const fn get_prior(&self) -> u8 {
         // same as in rust
@@ -86,11 +92,11 @@ impl TwoSidedOperation {
                 NumberOperation::Add | NumberOperation::Sub => Prior::Add,
                 NumberOperation::BitAnd => Prior::BitAnd,
                 NumberOperation::BitOr => Prior::BitOr,
-            }
+            },
             Self::Bool(bool_op) => match bool_op {
                 BoolOperation::And => Prior::BoolAnd,
                 BoolOperation::Or => Prior::BoolOr,
-            }
+            },
         };
         prior as u8
     }
@@ -101,7 +107,6 @@ impl CompareOperator {
         matches!(self, Self::Equal | Self::NotEqual)
     }
 }
-
 
 impl From<NumberOperation> for TwoSidedOperation {
     fn from(value: NumberOperation) -> Self {
@@ -137,14 +142,14 @@ impl fmt::Display for TwoSidedOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let op_char = match self {
             Self::Number(num_op) => match num_op {
-                NumberOperation::Add =>     "+",
-                NumberOperation::Sub =>     "-",
-                NumberOperation::Mul =>     "*",
-                NumberOperation::Div =>     "/",
-                NumberOperation::Rem =>     "%",
-                NumberOperation::BitOr =>   "|",
-                NumberOperation::BitAnd =>  "&",
-            }
+                NumberOperation::Add => "+",
+                NumberOperation::Sub => "-",
+                NumberOperation::Mul => "*",
+                NumberOperation::Div => "/",
+                NumberOperation::Rem => "%",
+                NumberOperation::BitOr => "|",
+                NumberOperation::BitAnd => "&",
+            },
             Self::Compare(comp_op) => match comp_op {
                 CompareOperator::Equal => "==",
                 CompareOperator::NotEqual => "!=",
@@ -152,11 +157,11 @@ impl fmt::Display for TwoSidedOperation {
                 CompareOperator::GreaterEqual => ">=",
                 CompareOperator::Less => "<",
                 CompareOperator::LessEqual => "<=",
-            }
+            },
             Self::Bool(bool_op) => match bool_op {
                 BoolOperation::And => "&&",
                 BoolOperation::Or => "||",
-            }
+            },
         };
         write!(f, "{op_char}")
     }

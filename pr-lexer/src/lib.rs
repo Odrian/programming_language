@@ -1,7 +1,7 @@
 pub mod token;
 
-mod parser_tokens;
 mod error;
+mod parser_tokens;
 
 use pr_common::error::ErrorQueue;
 use token::{Token, TokenBlock};

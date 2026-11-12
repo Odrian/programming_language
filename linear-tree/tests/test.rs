@@ -1,4 +1,4 @@
-use linear_tree::{LinearTree, Node, NodeRef, TreeBuilder, build_no_meta, NodeIntoIterator};
+use linear_tree::{LinearTree, Node, NodeIntoIterator, NodeRef, TreeBuilder, build_no_meta};
 
 struct Elem {
     data: usize,
@@ -6,7 +6,12 @@ struct Elem {
 }
 
 impl Elem {
-    fn from(data: usize) -> Self { Self { data, _ptr: Box::new(1) } }
+    fn from(data: usize) -> Self {
+        Self {
+            data,
+            _ptr: Box::new(1),
+        }
+    }
 }
 
 struct Block {
@@ -14,11 +19,16 @@ struct Block {
     _ptr: Box<usize>,
 }
 impl Block {
-    fn from(data: usize) -> Self { Self { data, _ptr: Box::new(1) } }
+    fn from(data: usize) -> Self {
+        Self {
+            data,
+            _ptr: Box::new(1),
+        }
+    }
 }
 
 struct TreeCollector {
-    vec: Vec<usize>
+    vec: Vec<usize>,
 }
 impl TreeCollector {
     fn consume(tree: &LinearTree<Elem, Block, ()>) -> Vec<usize> {
@@ -26,7 +36,7 @@ impl TreeCollector {
         self0.collect(tree.iter());
         self0.vec
     }
-    fn collect<'a>(&mut self, nodes: impl Iterator<Item=(NodeRef<'a, Elem, Block, ()>, &'a ())>) {
+    fn collect<'a>(&mut self, nodes: impl Iterator<Item = (NodeRef<'a, Elem, Block, ()>, &'a ())>) {
         for node in nodes {
             match node.0 {
                 NodeRef::Elem(elem) => {
@@ -80,9 +90,13 @@ fn test_into_iter() {
     let mut iter = tree.into_iter();
     let iter = iter.iterator();
     let _ = iter.next().unwrap();
-    let (Node::Block(_block, mut sub_iter), _) = iter.next().unwrap() else { unreachable!() };
+    let (Node::Block(_block, mut sub_iter), _) = iter.next().unwrap() else {
+        unreachable!()
+    };
     let _ = sub_iter.next().unwrap();
-    let (Node::Block(_block, mut sub_iter2), _) = sub_iter.next().unwrap() else { unreachable!() };
+    let (Node::Block(_block, mut sub_iter2), _) = sub_iter.next().unwrap() else {
+        unreachable!()
+    };
     let _ = sub_iter2.next().unwrap();
     drop(sub_iter2);
     drop(sub_iter);
@@ -90,7 +104,7 @@ fn test_into_iter() {
 }
 
 struct IntoTreeCollector {
-    vec: Vec<usize>
+    vec: Vec<usize>,
 }
 impl IntoTreeCollector {
     fn consume(tree: LinearTree<Elem, Block, ()>) -> Vec<usize> {

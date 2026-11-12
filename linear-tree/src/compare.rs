@@ -1,5 +1,5 @@
-use crate::{LinearTree, NodeRef};
 use crate::iterator::NodeIterator;
+use crate::{LinearTree, NodeRef};
 
 impl<Elem: Eq, Block: Eq, Meta: Eq> Eq for LinearTree<Elem, Block, Meta> {}
 impl<Elem: PartialEq, Block: PartialEq, Meta: PartialEq> PartialEq for LinearTree<Elem, Block, Meta> {
@@ -27,15 +27,12 @@ impl<Elem: PartialEq, Block: PartialEq, Meta: PartialEq> NodeIterator<'_, Elem, 
 impl<Elem: PartialEq, Block: PartialEq, Meta: PartialEq> NodeRef<'_, Elem, Block, Meta> {
     pub fn eq(self, other: Self) -> bool {
         match (self, other) {
-            (NodeRef::Elem(elem1), NodeRef::Elem(elem2)) =>
-                elem1 == elem2,
-            (NodeRef::Block(block1, iter1), NodeRef::Block(block2, iter2)) =>
-                block1 == block2 && iter1.eq(iter2),
-            _ => false
+            (NodeRef::Elem(elem1), NodeRef::Elem(elem2)) => elem1 == elem2,
+            (NodeRef::Block(block1, iter1), NodeRef::Block(block2, iter2)) => block1 == block2 && iter1.eq(iter2),
+            _ => false,
         }
     }
 }
-
 
 impl<Elem: PartialEq, Block: PartialEq, Meta> LinearTree<Elem, Block, Meta> {
     pub fn eq_without_meta(&self, other: &Self) -> bool {
@@ -62,11 +59,11 @@ impl<Elem: PartialEq, Block: PartialEq, Meta> NodeIterator<'_, Elem, Block, Meta
 impl<Elem: PartialEq, Block: PartialEq, Meta> NodeRef<'_, Elem, Block, Meta> {
     pub fn eq_without_meta(self, other: Self) -> bool {
         match (self, other) {
-            (NodeRef::Elem(elem1), NodeRef::Elem(elem2)) =>
-                elem1 == elem2,
-            (NodeRef::Block(block1, iter1), NodeRef::Block(block2, iter2)) =>
-                block1 == block2 && iter1.eq_without_meta(iter2),
-            _ => false
+            (NodeRef::Elem(elem1), NodeRef::Elem(elem2)) => elem1 == elem2,
+            (NodeRef::Block(block1, iter1), NodeRef::Block(block2, iter2)) => {
+                block1 == block2 && iter1.eq_without_meta(iter2)
+            }
+            _ => false,
         }
     }
 }
