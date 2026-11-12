@@ -1,5 +1,5 @@
 mod target;
-pub use target::Target;
+pub use target::{Target, TargetArch, TargetOs};
 
 mod bracket_type;
 pub mod error;

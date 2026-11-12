@@ -13,6 +13,7 @@ use inkwell::{
 use pr_ast_linked::LinkedModule;
 use pr_ast_linked::linked_statement::GlobalLinkedStatement;
 use pr_ast_linked::object::{IntObjType, ObjType};
+use pr_common::TargetArch;
 use std::path::Path;
 use std::process::Command;
 
@@ -28,9 +29,8 @@ const TARGET_INIT_CONFIG: InitializationConfig = InitializationConfig {
 /// previous steps guarantees that every used variables is valid
 pub fn parse_to_llvm(config: &CompileConfig, linked_module: LinkedModule) -> Result<(), LLVMError> {
     match config.target.target_arch {
-        "aarch64" => Target::initialize_aarch64(&TARGET_INIT_CONFIG),
-        "x86_64" => Target::initialize_x86(&TARGET_INIT_CONFIG),
-        arch => panic!("unsupported target: {}", arch),
+        TargetArch::Aarch64 => Target::initialize_aarch64(&TARGET_INIT_CONFIG),
+        TargetArch::X86_64 => Target::initialize_x86(&TARGET_INIT_CONFIG),
     }
     let context = Context::create();
 
