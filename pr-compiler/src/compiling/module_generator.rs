@@ -32,6 +32,7 @@ struct CodeModuleGen<'ctx> {
     _target_data: &'ctx TargetData,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
+    alloca_builder: Builder<'ctx>,
     linked_module: LinkedModule,
     current_function: Option<FunctionValue<'ctx>>,
     context_window: ValueContextWindow<'ctx>,
@@ -47,6 +48,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
     ) -> Self {
         let module = context.create_module(name);
         let builder = context.create_builder();
+        let alloca_builder = context.create_builder();
         let context_window = ValueContextWindow::new();
         Self {
             config,
@@ -54,6 +56,7 @@ impl<'ctx> CodeModuleGen<'ctx> {
             _target_data: target_data,
             module,
             builder,
+            alloca_builder,
             linked_module,
             current_function: None,
             context_window,
@@ -63,6 +66,10 @@ impl<'ctx> CodeModuleGen<'ctx> {
 }
 
 impl<'ctx> CodeModuleGen<'ctx> {
+    fn build_entry_alloca(&self, value_type: BasicTypeEnum<'ctx>, name: &str) -> Result<PointerValue<'ctx>, LLVMError> {
+        Ok(self.alloca_builder.build_alloca(value_type, name)?)
+    }
+
     fn get_object_name(&self, object: Object) -> &RString {
         self.linked_module.factory.get_name(object)
     }
@@ -213,18 +220,24 @@ mod module_parsing {
             let function = self.context_window.get_function_unwrap(object);
 
             let entry = self.context.append_basic_block(function, "entry");
+            let body_block = self.context.append_basic_block(function, "body");
+
             self.builder.position_at_end(entry);
+            let entry_branch = self.builder.build_unconditional_branch(body_block)?;
+            self.builder.position_at_end(body_block);
+            self.alloca_builder.position_before(&entry_branch);
+
             self.context_window.step_in();
+            self.current_function = Some(function);
 
             for (index, object) in args.into_iter().enumerate() {
                 let arg_value = function.get_nth_param(index as u32).expect("checked above");
                 let arg_type = self.get_object_type(object);
-                let pointer = self.builder.build_alloca(arg_type, &format!("arg{index}"))?;
+                let pointer = self.build_entry_alloca(arg_type, &format!("arg{index}"))?;
                 self.builder.build_store(pointer, arg_value)?;
                 self.context_window.add(object, pointer.into());
             }
 
-            self.current_function = Some(function);
             self.parse_function_body(body)?;
             if !function.verify(true) {
                 return Err(LLVMError::llvm_verify_function_error(
@@ -421,9 +434,7 @@ mod declaration_parsing {
                 LinkedStatement::VariableDeclaration { object, value } => {
                     let value = self.parse_expression(value.value.expr)?.expect("checked above");
                     let var_type = self.get_object_type(object);
-                    let pointer = self
-                        .builder
-                        .build_alloca(var_type, &self.get_object_name(object).value)?;
+                    let pointer = self.build_entry_alloca(var_type, &self.get_object_name(object).value)?;
                     self.builder.build_store(pointer, value)?;
                     self.context_window.add(object, pointer.into());
                 }
@@ -519,7 +530,7 @@ mod declaration_parsing {
                             } else {
                                 let exp_parsed = self.parse_expression(linked_expr)?.expect("checked above");
                                 let exp_type = self.parse_type(&object_type);
-                                let ptr_value = self.builder.build_alloca(exp_type, "alloca")?;
+                                let ptr_value = self.build_entry_alloca(exp_type, "alloca")?;
                                 self.builder.build_store(ptr_value, exp_parsed)?;
                                 ptr_value.into()
                             }
@@ -558,7 +569,7 @@ mod declaration_parsing {
                 LinkedExpression::StructConstruct { object, fields } => {
                     let struct_type = *self.struct_context.get(&object).expect("checked above");
 
-                    let struct_value = self.builder.build_alloca(struct_type, "new_struct")?;
+                    let struct_value = self.build_entry_alloca(struct_type.into(), "new_struct")?;
                     for (i, field) in fields.into_iter().enumerate() {
                         let field_ptr =
                             self.builder
