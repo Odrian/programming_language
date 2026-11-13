@@ -1,4 +1,10 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
+set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command"]
+
+check:
+    cargo fmt --all
+    cargo check --workspace --all-targets --quiet
+    cargo clippy --workspace --all-targets --quiet -- -D warnings
 
 ci:
     cargo fmt --all

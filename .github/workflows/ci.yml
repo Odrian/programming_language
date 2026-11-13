@@ -24,18 +24,23 @@ jobs:
             os: linux
           - runner_os: macos-latest
             os: macos
-#          - runner_os: windows-latest
-#            os: windows
+          - runner_os: windows-2022
+            os: windows
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
-          toolchain: stable
+          components: rustfmt, clippy
           rustflags: ""
+
+      - name: Setup just
+        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
+        with:
+          just-version: '1.51.0'
 
       - name: Install LLVM 21 on Ubuntu
         if: matrix.os == 'linux'
@@ -53,7 +58,7 @@ jobs:
 
       - name: Cache Homebrew downloads
         if: matrix.os == 'macos'
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             ~/Library/Caches/Homebrew/downloads                                                                                                                              
@@ -72,23 +77,18 @@ jobs:
           echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=$LLVM_PREFIX/bin/llvm-config" >> "$GITHUB_ENV"
 
-#      - name: Install LLVM 21 on Windows
-#        if: matrix.llvm_os == 'windows'
-#        shell: pwsh
-#        run: |
-#          $version = "21.1.8"
-#          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/clang+llvm-$version-x86_64-pc-windows-msvc.tar.xz"
-#
-#          Invoke-WebRequest -Uri $url -OutFile llvm.tar.xz
-#          tar -xf llvm.tar.xz
-#
-#          $root = Get-ChildItem -Directory | Where-Object { $_.Name -like "clang+llvm-$version*" } | Select-Object -First 1
-#          if (-not $root) { throw "LLVM archive directory not found" }
-#
-#          "LLVM_SYS_211_PREFIX=$($root.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-#          "LLVM_CONFIG_PATH=$($root.FullName)\bin\llvm-config.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-#          "$($root.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Cache LLVM SDK on Windows
+        if: matrix.os == 'windows'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/llvm-21.1.8
+          key: windows-2022-llvm-21.1.8-x64-${{ hashFiles('.github/scripts/setup-windows-llvm.ps1') }}
 
-      - name: Run tests
-        shell: bash
-        run: cargo test --all
+      - name: Prepare LLVM and MSVC on Windows
+        if: matrix.os == 'windows'
+        shell: pwsh
+        timeout-minutes: 30
+        run: ./.github/scripts/setup-windows-llvm.ps1 -InstallDir "$env:RUNNER_TEMP/llvm-21.1.8"
+
+      - name: Run CI
+        run: just ci

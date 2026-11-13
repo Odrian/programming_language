@@ -8,8 +8,10 @@ fn test_operation_order() {
     assert_eq!(13, get_exit_code_main_return("2 * 2 + 3 * 3"));
     assert_eq!(22, get_exit_code_main_return("2 * 2 + 3 * 3 + 1 * 7 + 1 + 1"));
 
-    assert_eq!(256 - 2, get_exit_code_main_return("-1 - 1"));
-    assert_eq!(256 - 2, get_exit_code_main_return("-1 as i32 - 1"));
+    // Unix exposes only the low byte; Windows preserves the full exit code.
+    let negative_two_exit_code = if cfg!(windows) { -2 } else { 256 - 2 };
+    assert_eq!(negative_two_exit_code, get_exit_code_main_return("-1 - 1"));
+    assert_eq!(negative_two_exit_code, get_exit_code_main_return("-1 as i32 - 1"));
 }
 
 #[test]
